@@ -1,0 +1,211 @@
+.type-signature-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: 276px;
+}
+
+.type-signature-top-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: center;
+    height: 32px;
+}
+
+.right-section {
+    display: flex;
+    gap: 8px;
+}
+
+.type-signature-preview-section {
+    flex: 1 1 auto;
+}
+
+.type-signature-input-section,
+.type-signature-font-section,
+.type-signature-preview-section {
+    display: flex;
+    flex-direction: column;
+}
+
+.type-signature-input-section label,
+.type-signature-font-section label,
+.type-signature-preview-section label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+}
+
+.type-signature-input {
+    padding: 8px;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+    height: 32px;
+    width: 200px;
+}
+
+.type-signature-input:focus {
+    outline: none;
+    border-color: #00aeff;
+}
+
+/* Restricted mode styling */
+.type-signature-restricted {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.type-signature-input-large {
+    width: 100%;
+    height: 32px;
+    padding: 8px;
+    border-radius: 8px;
+}
+
+.type-signature-hint {
+    color: #666;
+    font-size: 12px;
+    padding-left: 4px;
+}
+
+.type-signature-font-select {
+    padding: 0 8px;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    background: white;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    height: 32px;
+    width: 150px;
+}
+
+.type-signature-font-select:focus {
+    outline: none;
+    border-color: #00aeff;
+}
+
+/* Style Buttons (Bold, Italic) */
+.type-signature-style-btn {
+    height: 32px;
+    width: 32px;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    color: #333;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    padding: 0;
+}
+
+.type-signature-style-btn:hover {
+    background: #f0f0f0;
+    border-color: #00aeff;
+}
+
+.type-signature-style-btn.active {
+    background: #00aeff;
+    border-color: #00aeff;
+    color: white;
+}
+
+/* Font Size Select */
+.type-signature-size-section {
+    display: flex;
+}
+
+.type-signature-size-select {
+    padding: 0 8px;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    background: white;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    height: 32px;
+    width: 80px;
+}
+
+.type-signature-size-select:focus {
+    outline: none;
+    border-color: #00aeff;
+}
+
+.type-signature-preview {
+    min-height: 120px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 auto;
+}
+
+.type-signature-preview-text {
+    font-size: 48px;
+    color: #000;
+    user-select: none;
+}
+
+.type-signature-preview-placeholder {
+    color: #999;
+    font-size: 16px;
+}
+
+.type-signature-clear-btn {
+    align-self: flex-end;
+    height: 32px;
+    padding: 0 24px;
+    border: 1px solid #00aeff;
+    border-radius: 4px;
+    background: #00aeff;
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.type-signature-clear-btn:hover:not(:disabled) {
+    background: #0088cc;
+    border-color: #0088cc;
+}
+
+.type-signature-clear-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #ccc;
+    border-color: #ccc;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .type-signature-container {
+        padding: 15px;
+        gap: 20px;
+    }
+
+    .type-signature-preview {
+        min-height: 100px;
+        padding: 15px;
+    }
+
+    .type-signature-preview-text {
+        font-size: 36px;
+    }
+
+    .type-signature-preview-placeholder {
+        font-size: 14px;
+    }
+}

@@ -1,0 +1,196 @@
+.draw-signature-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.draw-signature-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 32px;
+    border-radius: 8px;
+    gap: 12px;
+}
+
+.draw-signature-toolbar-left,
+.draw-signature-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.draw-toolbar-btn {
+    height: 32px;
+    width: 32px;
+    padding: 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    color: #333;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.draw-toolbar-btn:hover:not(:disabled) {
+    background: #00aeff;
+    border-color: #00aeff;
+    color: white;
+}
+
+.draw-toolbar-btn.active {
+    background: #00aeff;
+    border-color: #00aeff;
+    color: white;
+}
+
+.draw-toolbar-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.draw-toolbar-divider {
+    width: 1px;
+    height: 24px;
+    background: #ddd;
+}
+
+.draw-toolbar-size-group {
+    display: flex;
+    gap: 4px;
+}
+
+.draw-toolbar-size-btn {
+    height: 32px;
+    width: 32px;
+    padding: 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.draw-toolbar-size-btn:hover {
+    background: #f0f0f0;
+    border-color: #00aeff;
+}
+
+.draw-toolbar-size-btn.active {
+    background: #e6f7ff;
+    border-color: #00aeff;
+}
+
+.size-indicator {
+    background: #333;
+    border-radius: 50%;
+}
+
+.size-small {
+    width: 4px;
+    height: 4px;
+}
+
+.size-medium {
+    width: 8px;
+    height: 8px;
+}
+
+.size-large {
+    width: 12px;
+    height: 12px;
+}
+
+.draw-signature-canvas-wrapper {
+    position: relative;
+    width: 100%;
+    height: 232px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    background: white;
+    overflow: hidden;
+}
+
+.draw-signature-canvas {
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+    display: block;
+}
+
+.draw-signature-placeholder {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #999;
+    font-size: 16px;
+    pointer-events: none;
+    user-select: none;
+}
+
+.draw-signature-clear-btn {
+    align-self: flex-end;
+    height: 32px;
+    padding: 0 24px;
+    border: 1px solid #00aeff;
+    border-radius: 4px;
+    background: #00aeff;
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.draw-signature-clear-btn:hover:not(:disabled) {
+    background: #0088cc;
+    border-color: #0088cc;
+}
+
+.draw-signature-clear-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #ccc;
+    border-color: #ccc;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .draw-signature-container {
+        gap: 10px;
+    }
+
+    .draw-signature-toolbar {
+        padding: 6px;
+        gap: 8px;
+    }
+
+    .draw-signature-toolbar-left,
+    .draw-signature-toolbar-right {
+        gap: 6px;
+    }
+
+    .draw-toolbar-btn,
+    .draw-toolbar-size-btn {
+        height: 28px;
+        width: 28px;
+    }
+
+    .draw-signature-canvas-wrapper {
+        height: 250px;
+    }
+
+    .draw-signature-placeholder {
+        font-size: 14px;
+    }
+}
