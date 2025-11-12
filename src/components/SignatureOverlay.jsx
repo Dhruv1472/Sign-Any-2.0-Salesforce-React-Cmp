@@ -16,7 +16,17 @@ import "./SignatureOverlay.css";
  */
 const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onDelete, isSubmitted, sessionSignedKeys, canvasDimensions }) => {
     // Filter signatures for this page and exclude hidden ones
-    const pageSignatures = signatures.filter((sig) => sig.pageNumber === pageNumber && (sig.priority == priority || sig.signed));
+    const pageSignatures = signatures
+        .filter((sig) => {
+            if (sig.priority != priority) {
+                return false;
+            }
+            return sig?.fields?.some((field) => field.pageNumber === pageNumber && !field.filled);
+        })
+        .reduce((arr, sig) => {
+            const fields = sig.fields.filter((f) => f.pageNumber === pageNumber && !f.filled);
+            return [...arr, ...fields];
+        }, []);
 
     if (pageSignatures.length === 0) {
         return null;

@@ -56,6 +56,22 @@ function App() {
     };
 
     // Refresh access token using client credentials
+    // Helper to update access token in the url and component state so refresh persists across reloads
+    const updateUrlAccessToken = (token) => {
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set("act", token);
+            // Replace the current history entry without reloading
+            window.history.replaceState({}, document.title, url.toString());
+
+            // Keep salesforceConfig state in sync if present
+            setSalesforceConfig((prev) => (prev ? { ...prev, accessToken: token } : prev));
+        } catch (err) {
+            console.warn("Could not update URL access token:", err);
+        }
+    };
+
+    // Refresh access token using client credentials
     const refreshAccessToken = async (instanceUrl, clientId, clientSecret) => {
         try {
             const tokenUrl = `${instanceUrl}/services/oauth2/token`;
@@ -78,7 +94,14 @@ function App() {
             }
 
             const data = await response.json();
-            return data.access_token;
+            const newToken = data.access_token;
+
+            // Persist the refreshed token in the URL and component state so reloads keep using it
+            if (newToken) {
+                updateUrlAccessToken(newToken);
+            }
+
+            return newToken;
         } catch (error) {
             console.error("Error refreshing access token:", error);
             throw error;
@@ -91,7 +114,7 @@ function App() {
             let currentToken = accessToken;
 
             // Salesforce REST API endpoint to get Document__c record
-            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/XCED__Document__c/${documentId}`;
+            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/Document__c/${documentId}`;
 
             let response = await fetch(apiUrl, {
                 method: "GET",
@@ -121,11 +144,11 @@ function App() {
             }
 
             const documentData = await response.json();
-            const contentVersionId = documentData.XCED__ContentVersion_Id__c;
-            const signatureDataJson = documentData.XCED__SignatureData__c;
+            const contentVersionId = documentData.Uploaded_Document_Id__c;
+            const signatureDataJson = documentData.Signing_Details__c;
 
             if (!contentVersionId) {
-                throw new Error("ContentVersion_Id__c field is empty in Document__c record");
+                throw new Error("Uploaded_Document_Id__c field is empty in Document__c record");
             }
 
             // Parse signature data if available
@@ -134,7 +157,7 @@ function App() {
                 try {
                     parsedSignatureData = JSON.parse(signatureDataJson);
                 } catch (parseError) {
-                    console.warn("Failed to parse SignatureData__c:", parseError);
+                    console.warn("Failed to parse Signing_Details__c:", parseError);
                 }
             }
 
@@ -213,7 +236,7 @@ function App() {
             let currentToken = accessToken;
 
             // Salesforce REST API endpoint to update Document__c record
-            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/XCED__Document__c/${documentId}`;
+            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/Document__c/${documentId}`;
 
             // Convert signature data to JSON string
             const signatureDataJson = JSON.stringify(signatureData);
@@ -225,7 +248,7 @@ function App() {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    XCED__SignatureData__c: signatureDataJson,
+                    Signing_Details__c: signatureDataJson,
                 }),
             });
 
@@ -242,7 +265,7 @@ function App() {
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
-                        XCED__SignatureData__c: signatureDataJson,
+                        Signing_Details__c: signatureDataJson,
                     }),
                 });
             }
@@ -435,14 +458,17 @@ function App() {
 
     // Handle Save & Submit
     const handleSaveAndSubmit = async () => {
-        // Validate if all signatures are signed
-        const unsignedSignatures = signatureData.filter((sig) => !sig.signed && sig.priority == urlPriority);
+        // Validate if all signature fields are filled for current priority
+        const unfilledFields = signatureData
+            .filter(sig => sig.priority == urlPriority)
+            .flatMap(sig => sig.fields || [])
+            .filter(field => !field.filled);
 
-        if (unsignedSignatures.length > 0) {
+        if (unfilledFields.length > 0) {
             // Show error toast
             setToast({
                 isVisible: true,
-                message: `Please complete all signatures. ${unsignedSignatures.length} signature(s) remaining.`,
+                message: `Please complete all signatures. ${unfilledFields.length} signature(s) remaining.`,
                 type: "error",
             });
         } else {
@@ -456,15 +482,17 @@ function App() {
                 const pdfDoc = await PDFDocument.load(originalPdfBytes);
                 const pages = pdfDoc.getPages();
 
-                // Get all signed signatures grouped by page
-                const signedSignatures = signatureData.filter((sig) => sig.signed && sig.imageUrl);
+                // Get all filled signature fields across all signatures
+                const filledFields = signatureData
+                    .flatMap(sig => sig.fields || [])
+                    .filter(field => field.filled && field.imageUrl);
 
-                // Process each signature
-                for (const signature of signedSignatures) {
+                // Process each signature field
+                for (const field of filledFields) {
                     try {
-                        const pageIndex = signature.pageNumber - 1; // Convert to 0-indexed
+                        const pageIndex = field.pageNumber - 1; // Convert to 0-indexed
                         if (pageIndex < 0 || pageIndex >= pages.length) {
-                            console.warn(`Invalid page number ${signature.pageNumber} for signature ${signature.index}`);
+                            console.warn(`Invalid page number ${field.pageNumber} for field ${field.index}`);
                             continue;
                         }
 
@@ -472,24 +500,24 @@ function App() {
                         const { width: pageWidth, height: pageHeight } = page.getSize();
 
                         // Convert base64 image to bytes
-                        const imageBytes = await fetch(signature.imageUrl).then((res) => res.arrayBuffer());
+                        const imageBytes = await fetch(field.imageUrl).then((res) => res.arrayBuffer());
 
                         // Embed image in PDF (supports PNG and JPEG)
                         let image;
-                        if (signature.imageUrl.startsWith("data:image/png")) {
+                        if (field.imageUrl.startsWith("data:image/png")) {
                             image = await pdfDoc.embedPng(imageBytes);
-                        } else if (signature.imageUrl.startsWith("data:image/jpeg") || signature.imageUrl.startsWith("data:image/jpg")) {
+                        } else if (field.imageUrl.startsWith("data:image/jpeg") || field.imageUrl.startsWith("data:image/jpg")) {
                             image = await pdfDoc.embedJpg(imageBytes);
                         } else {
                             // Default to PNG
                             image = await pdfDoc.embedPng(imageBytes);
                         }
 
-                        // Use percentage-based coordinates from the signature data
-                        const pdfX = (signature.xPercent / 100) * pageWidth;
-                        const pdfY = pageHeight - ((signature.yPercent / 100) * pageHeight) - ((signature.heightPercent / 100) * pageHeight);
-                        const pdfWidth = (signature.widthPercent / 100) * pageWidth;
-                        const pdfHeight = (signature.heightPercent / 100) * pageHeight;
+                        // Use percentage-based coordinates from the field data
+                        const pdfX = (field.xPercent / 100) * pageWidth;
+                        const pdfY = pageHeight - ((field.yPercent / 100) * pageHeight) - ((field.heightPercent / 100) * pageHeight);
+                        const pdfWidth = (field.widthPercent / 100) * pageWidth;
+                        const pdfHeight = (field.heightPercent / 100) * pageHeight;
 
                         // Draw the image on the page
                         page.drawImage(image, {
@@ -499,7 +527,7 @@ function App() {
                             height: pdfHeight,
                         });
                     } catch (error) {
-                        console.error("Error adding signature to PDF:", signature.index, error);
+                        console.error("Error adding signature to PDF:", field.index, error);
                     }
                 }
 
@@ -509,10 +537,15 @@ function App() {
                 // Upload to Salesforce if config is available
                 if (salesforceConfig) {
                     // Determine FirstPublishLocationId
-                    const firstPublishLocationId = documentRecord?.XCED__Record_Id__c || salesforceConfig.recordId;
+                    const firstPublishLocationId = documentRecord?.Record_Id__c || salesforceConfig.recordId;
+
+                    // Check if all fields are filled before uploading
+                    const allFieldsFilled = signatureData.every(sig => 
+                        (sig.fields || []).every(field => field.filled)
+                    );
 
                     // Upload signed PDF as ContentVersion
-                    if (!signatureData.some(sig => !sig.signed)) {
+                    if (allFieldsFilled) {
                         await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
                     }
 
@@ -569,38 +602,40 @@ function App() {
     // Check if Save & Submit button should be shown
     const shouldShowSaveButton = () => {
         // If already submitted in this session, hide button
-        
         if (isSubmitted) {
-            console.log(1);
             return false;
         }
 
-        // Get signatures for current priority
-        const currentPrioritySignatures = signatureData.filter((sig) => sig.priority == urlPriority);
-        const initialPrioritySignatures = initialSignatureData.filter((sig) => sig.priority == urlPriority);
+        // Get all fields for current priority from all signatures
+        const currentPriorityFields = signatureData
+            .filter((sig) => sig.priority == urlPriority)
+            .flatMap(sig => sig.fields || []);
+            
+        const initialPriorityFields = initialSignatureData
+            .filter((sig) => sig.priority == urlPriority)
+            .flatMap(sig => sig.fields || []);
 
-        // If no signatures for current priority, hide button
-        if (currentPrioritySignatures.length === 0) {
-            console.log(signatureData, urlPriority);
+        // If no fields for current priority, hide button
+        if (currentPriorityFields.length === 0) {
             return false;
         }
 
-        // Check if all signatures for current priority were already signed initially
-        const allInitiallySigned = initialPrioritySignatures.every((sig) => sig.signed);
+        // Check if all fields for current priority were already filled initially
+        const allInitiallyFilled = initialPriorityFields.every((field) => field.filled);
         
-        if (allInitiallySigned) {
+        if (allInitiallyFilled) {
             // Check if there are any changes from initial state
-            const hasChanges = currentPrioritySignatures.some((currentSig) => {
-                const initialSig = initialPrioritySignatures.find((s) => s.index === currentSig.index);
+            const hasChanges = currentPriorityFields.some((currentField) => {
+                const initialField = initialPriorityFields.find((f) => f.index === currentField.index);
                 // Check if imageUrl has changed
-                return !initialSig || currentSig.imageUrl !== initialSig.imageUrl;
+                return !initialField || currentField.imageUrl !== initialField.imageUrl;
             });
             
             // Only show button if there are changes
             return hasChanges;
         }
 
-        // Show button if not all were initially signed (user needs to complete signing)
+        // Show button if not all were initially filled (user needs to complete signing)
         return true;
     };
 
