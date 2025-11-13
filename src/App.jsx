@@ -613,7 +613,7 @@ function App() {
             .flatMap(sig => sig.fields || [])
             .filter(field => !field.filled);
 
-        if (unsignedSignatures.length > 0) {
+        if (unfilledFields.length > 0) {
             // Show error toast
             setToast({
                 isVisible: true,
