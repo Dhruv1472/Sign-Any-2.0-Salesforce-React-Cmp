@@ -20,50 +20,32 @@ export const isFieldEntry = (entry) => {
 
 /**
  * Update signature data when a signature is added
- * Works with nested structure where each signature has a fields array
+ * Only updates entries that are signatures; optionally restrict by expectedType
  */
-export const updateSignatureWithImage = (signatures, fieldIndex, imageUrl) => {
+export const updateSignatureWithImage = (signatures, index, imageUrl, expectedType) => {
+    const expected = normalizeType(expectedType);
     return signatures.map((sig) => {
-        // Check if this signature contains the field with the given index
-        const fieldToUpdate = sig.fields?.find(f => f.index === fieldIndex);
-        
-        if (fieldToUpdate) {
-            // Update the specific field within this signature
-            return {
-                ...sig,
-                fields: sig.fields.map(field => 
-                    field.index === fieldIndex 
-                        ? { ...field, filled: true, imageUrl } 
-                        : field
-                )
-            };
+        const sigType = normalizeType(sig.type);
+        const typeMatches = expected ? sigType === expected : true;
+        if (sig.index === index && isSignatureEntry(sig) && typeMatches) {
+            return { ...sig, signed: true, imageUrl };
         }
-        
         return sig;
     });
 };
 
 /**
  * Update signature data when a signature is deleted
- * Works with nested structure where each signature has a fields array
+ * Only updates entries that are signatures; optionally restrict by expectedType
  */
-export const deleteSignatureImage = (signatures, fieldIndex) => {
+export const deleteSignatureImage = (signatures, index, expectedType) => {
+    const expected = normalizeType(expectedType);
     return signatures.map((sig) => {
-        // Check if this signature contains the field with the given index
-        const fieldToDelete = sig.fields?.find(f => f.index === fieldIndex);
-        
-        if (fieldToDelete) {
-            // Update the specific field within this signature
-            return {
-                ...sig,
-                fields: sig.fields.map(field => 
-                    field.index === fieldIndex 
-                        ? { ...field, filled: false, imageUrl: null } 
-                        : field
-                )
-            };
+        const sigType = normalizeType(sig.type);
+        const typeMatches = expected ? sigType === expected : true;
+        if (sig.index === index && isSignatureEntry(sig) && typeMatches) {
+            return { ...sig, signed: false, imageUrl: null };
         }
-        
         return sig;
     });
 };

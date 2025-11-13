@@ -21,10 +21,10 @@ const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onDelete, 
             if (sig.priority != priority) {
                 return false;
             }
-            return sig?.fields?.some((field) => field.pageNumber === pageNumber && !field.filled);
+            return sig?.fields?.some((field) => field.pageNumber === pageNumber );
         })
         .reduce((arr, sig) => {
-            const fields = sig.fields.filter((f) => f.pageNumber === pageNumber && !f.filled);
+            const fields = sig.fields.filter((f) => f.pageNumber === pageNumber );
             return [...arr, ...fields];
         }, []);
 
@@ -51,7 +51,7 @@ const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onDelete, 
                             width: `${signature.widthPercent}%`,
                             height: `${signature.heightPercent}%`,
                         }}>
-                        <SignatureButton signature={signature} onSign={onSign} onDelete={onDelete} canDelete={canDelete} />
+                        <SignatureButton signature={{ ...signature, disabled: isSubmitted }} onSign={onSign} onDelete={onDelete} canDelete={canDelete} />
                     </div>
                 );
             })}
