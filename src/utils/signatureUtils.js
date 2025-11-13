@@ -21,15 +21,33 @@ export const isFieldEntry = (entry) => {
 /**
  * Update signature data when a signature is added
  * Only updates entries that are signatures; optionally restrict by expectedType
+ * Now supports nested fields structure
  */
 export const updateSignatureWithImage = (signatures, index, imageUrl, expectedType) => {
     const expected = normalizeType(expectedType);
     return signatures.map((sig) => {
+        // Check if this signature has the index directly
         const sigType = normalizeType(sig.type);
         const typeMatches = expected ? sigType === expected : true;
         if (sig.index === index && isSignatureEntry(sig) && typeMatches) {
             return { ...sig, signed: true, imageUrl };
         }
+        
+        // Check if this signature has fields array with the matching index
+        if (sig.fields && Array.isArray(sig.fields)) {
+            const hasMatchingField = sig.fields.some(field => field.index === index);
+            if (hasMatchingField) {
+                return {
+                    ...sig,
+                    fields: sig.fields.map(field => 
+                        field.index === index 
+                            ? { ...field, filled: true, imageUrl } 
+                            : field
+                    )
+                };
+            }
+        }
+        
         return sig;
     });
 };
@@ -37,15 +55,33 @@ export const updateSignatureWithImage = (signatures, index, imageUrl, expectedTy
 /**
  * Update signature data when a signature is deleted
  * Only updates entries that are signatures; optionally restrict by expectedType
+ * Now supports nested fields structure
  */
 export const deleteSignatureImage = (signatures, index, expectedType) => {
     const expected = normalizeType(expectedType);
     return signatures.map((sig) => {
+        // Check if this signature has the index directly
         const sigType = normalizeType(sig.type);
         const typeMatches = expected ? sigType === expected : true;
         if (sig.index === index && isSignatureEntry(sig) && typeMatches) {
             return { ...sig, signed: false, imageUrl: null };
         }
+        
+        // Check if this signature has fields array with the matching index
+        if (sig.fields && Array.isArray(sig.fields)) {
+            const hasMatchingField = sig.fields.some(field => field.index === index);
+            if (hasMatchingField) {
+                return {
+                    ...sig,
+                    fields: sig.fields.map(field => 
+                        field.index === index 
+                            ? { ...field, filled: false, imageUrl: null } 
+                            : field
+                    )
+                };
+            }
+        }
+        
         return sig;
     });
 };

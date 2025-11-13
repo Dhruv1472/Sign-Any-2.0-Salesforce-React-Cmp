@@ -639,9 +639,9 @@ function App() {
                 // Process each signature field
                 for (const field of filledFieldsNew) {
                     try {
-                        const pageIndex = signature.pageNumber - 1; // Convert to 0-indexed
+                        const pageIndex = field.pageNumber - 1; // Convert to 0-indexed
                         if (pageIndex < 0 || pageIndex >= pages.length) {
-                            console.warn(`Invalid page number ${signature.pageNumber} for signature ${signature.index}`);
+                            console.warn(`Invalid page number ${field.pageNumber} for field ${field.index}`);
                             continue;
                         }
 
@@ -653,9 +653,9 @@ function App() {
 
                         // Embed image in PDF (supports PNG and JPEG)
                         let image;
-                        if (signature.imageUrl.startsWith("data:image/png")) {
+                        if (field.imageUrl.startsWith("data:image/png")) {
                             image = await pdfDoc.embedPng(imageBytes);
-                        } else if (signature.imageUrl.startsWith("data:image/jpeg") || signature.imageUrl.startsWith("data:image/jpg")) {
+                        } else if (field.imageUrl.startsWith("data:image/jpeg") || field.imageUrl.startsWith("data:image/jpg")) {
                             image = await pdfDoc.embedJpg(imageBytes);
                         } else {
                             // Default to PNG
@@ -676,7 +676,7 @@ function App() {
                             height: pdfHeight,
                         });
                     } catch (error) {
-                        console.error("Error adding signature to PDF:", signature.index, error);
+                        console.error("Error adding signature to PDF:", field.index, error);
                     }
                 }
 
@@ -815,11 +815,44 @@ function App() {
 						const documentName = documentRecord.DocumentName__c || documentRecord.Name || "";
 						const orgId = orgIdState || "";
 						const documentPages = documentRecord.Number_of_Pages__c ? String(documentRecord.Number_of_Pages__c) : "";
-						// Signatures summary
+						
+						// Signatures summary - handle both flat and nested field structures
 						const sigs = Array.isArray(signatureData) ? signatureData : [];
-						const totalSignatures = sigs.length;
-						const signedCount = sigs.filter(s => s.signed && (s.imageUrl || s.imagePresent)).length;
+						
+						// Flatten all signature fields from nested structure
+						const allSignatureFields = [];
+						sigs.forEach((sig, sigIdx) => {
+							if (sig.fields && Array.isArray(sig.fields)) {
+								// New nested structure - extract fields
+								sig.fields.forEach((field, fieldIdx) => {
+									allSignatureFields.push({
+										index: field.index ?? `${sig.index ?? sigIdx}-${fieldIdx}`,
+										imagePresent: Boolean(field.filled && field.imageUrl),
+										ipAddress: sig.ipAddress || field.ipAddress || "",
+										timeStamp: sig.signedTime || field.signedTime || sig.timeStamp || field.timeStamp || "",
+										signeeName: sig.name || field.name || sig.signeeName || field.signeeName || "",
+										signeeEmail: sig.email || field.email || sig.signeeEmail || field.signeeEmail || "",
+										imageUrl: field.imageUrl || null,
+									});
+								});
+							} else {
+								// Old flat structure - use signature directly
+								allSignatureFields.push({
+									index: sig.index ?? sigIdx,
+									imagePresent: Boolean(sig.signed && (sig.imageUrl || sig.imagePresent)),
+									ipAddress: sig.ipAddress || "",
+									timeStamp: sig.signedTime || sig.timeStamp || "",
+									signeeName: sig.name || sig.signeeName || "",
+									signeeEmail: sig.email || sig.signeeEmail || "",
+									imageUrl: sig.imageUrl || null,
+								});
+							}
+						});
+						
+						const totalSignatures = allSignatureFields.length;
+						const signedCount = allSignatureFields.filter(s => s.imagePresent).length;
 						const pendingCount = totalSignatures - signedCount;
+						
 						return {
 							createdDate,
 							modifiedDate,
@@ -834,15 +867,7 @@ function App() {
 							totalSignatures,
 							signedCount,
 							pendingCount,
-							signatures: sigs.map((s, idx) => ({
-								index: s.index ?? idx,
-								imagePresent: Boolean(s.signed && (s.imageUrl || s.imagePresent)),
-								ipAddress: s.ipAddress || "",
-								timeStamp: s.signedTime || s.timeStamp || "",
-								signeeName: s.name || s.signeeName || "",
-								signeeEmail: s.email || s.signeeEmail || "",
-								imageUrl: s.imageUrl || null,
-							})),
+							signatures: allSignatureFields,
 						};
 					};
 					const data = buildAuditData();

@@ -11,7 +11,7 @@ import "./SignatureButton.css";
  * @param {boolean} canDelete - Whether the delete button should be shown
  */
 const SignatureButton = ({ signature, onSign, onDelete, canDelete = false }) => {
-    const { key, buttonName, width, signed, imageUrl, disabled } = signature;
+    const { key, buttonName, width, signed, filled, imageUrl, disabled } = signature;
 
     const handleSignClick = () => {
         if (!disabled && onSign) {
@@ -26,10 +26,13 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false }) => 
         }
     };
 
-    // If signature is already signed, show the image
-    if (signed && imageUrl) {
+    // Check if signature/field is completed (supports both 'signed' and 'filled' properties)
+    const isCompleted = signed || filled;
+
+    // If signature is already signed/filled, show the image
+    if (isCompleted && imageUrl) {
         return (
-            <div className={`signature-image-container ${signed ? "signed" : ""}`}>
+            <div className={`signature-image-container ${isCompleted ? "signed" : ""}`}>
                 <img src={imageUrl} alt={`Signature-${key}`} className="signature-image" style={{ width: `${width}px` }} />
                 {canDelete && (
                     <button className="signature-delete-btn" onClick={handleDeleteClick} title="Delete signature">
