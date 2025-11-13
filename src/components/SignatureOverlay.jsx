@@ -34,24 +34,27 @@ const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onDelete, 
 
     return (
         <div className="signature-overlay">
-            {pageSignatures.map((signature) => {
+            {pageSignatures.map((field, idx) => {
+                // Use field.index as key, fallback to index if not available
+                const uniqueKey = field.index ?? `field-${pageNumber}-${idx}`;
+                
                 // Show delete button only if:
                 // 1. Document hasn't been submitted AND
                 // 2. Signature was signed in current session (not pre-existing)
-                const canDelete = !isSubmitted && sessionSignedKeys.has(signature.index);
+                const canDelete = !isSubmitted && sessionSignedKeys.has(field.index);
 
                 return (
                     <div
-                        key={signature.index}
+                        key={uniqueKey}
                         className="signature-position"
                         style={{
                             position: "absolute",
-                            left: `${signature.xPercent}%`,
-                            top: `${signature.yPercent}%`,
-                            width: `${signature.widthPercent}%`,
-                            height: `${signature.heightPercent}%`,
+                            left: `${field.xPercent}%`,
+                            top: `${field.yPercent}%`,
+                            width: `${field.widthPercent}%`,
+                            height: `${field.heightPercent}%`,
                         }}>
-                        <SignatureButton signature={{ ...signature, disabled: isSubmitted }} onSign={onSign} onDelete={onDelete} canDelete={canDelete} />
+                        <SignatureButton signature={{ ...field, disabled: isSubmitted }} onSign={onSign} onDelete={onDelete} canDelete={canDelete} />
                     </div>
                 );
             })}
