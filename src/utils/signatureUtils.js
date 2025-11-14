@@ -23,7 +23,7 @@ export const isFieldEntry = (entry) => {
  * Only updates entries that are signatures; optionally restrict by expectedType
  * Now supports nested fields structure
  */
-export const updateSignatureWithImage = (signatures, index, imageUrl, expectedType) => {
+export const updateSignatureWithImage = (signatures, index, imageUrl, expectedType, signerObject = null) => {
     const expected = normalizeType(expectedType);
     return signatures.map((sig) => {
         // Check if this signature has the index directly
@@ -37,14 +37,24 @@ export const updateSignatureWithImage = (signatures, index, imageUrl, expectedTy
         if (sig.fields && Array.isArray(sig.fields)) {
             const hasMatchingField = sig.fields.some(field => field.index === index);
             if (hasMatchingField) {
-                return {
-                    ...sig,
-                    fields: sig.fields.map(field => 
-                        field.index === index 
-                            ? { ...field, filled: true, imageUrl } 
-                            : field
-                    )
-                };
+                // If signerObject is provided, verify this is the correct signer
+                // by matching priority or email
+                let isCorrectSigner = true;
+                if (signerObject) {
+                    // Match by priority (strict equality) or by email
+                    isCorrectSigner = (sig.priority === signerObject.priority) || (sig.email === signerObject.email);
+                }
+                
+                if (isCorrectSigner) {
+                    return {
+                        ...sig,
+                        fields: sig.fields.map(field => 
+                            field.index === index 
+                                ? { ...field, filled: true, imageUrl } 
+                                : field
+                        )
+                    };
+                }
             }
         }
         
@@ -57,7 +67,7 @@ export const updateSignatureWithImage = (signatures, index, imageUrl, expectedTy
  * Only updates entries that are signatures; optionally restrict by expectedType
  * Now supports nested fields structure
  */
-export const deleteSignatureImage = (signatures, index, expectedType) => {
+export const deleteSignatureImage = (signatures, index, expectedType, signerObject = null) => {
     const expected = normalizeType(expectedType);
     return signatures.map((sig) => {
         // Check if this signature has the index directly
@@ -71,14 +81,24 @@ export const deleteSignatureImage = (signatures, index, expectedType) => {
         if (sig.fields && Array.isArray(sig.fields)) {
             const hasMatchingField = sig.fields.some(field => field.index === index);
             if (hasMatchingField) {
-                return {
-                    ...sig,
-                    fields: sig.fields.map(field => 
-                        field.index === index 
-                            ? { ...field, filled: false, imageUrl: null } 
-                            : field
-                    )
-                };
+                // If signerObject is provided, verify this is the correct signer
+                // by matching priority or email
+                let isCorrectSigner = true;
+                if (signerObject) {
+                    // Match by priority (strict equality) or by email
+                    isCorrectSigner = (sig.priority === signerObject.priority) || (sig.email === signerObject.email);
+                }
+                
+                if (isCorrectSigner) {
+                    return {
+                        ...sig,
+                        fields: sig.fields.map(field => 
+                            field.index === index 
+                                ? { ...field, filled: false, imageUrl: null } 
+                                : field
+                        )
+                    };
+                }
             }
         }
         

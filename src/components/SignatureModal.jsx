@@ -33,7 +33,7 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
 
     const handleSave = () => {
         if (signatureData && onSave) {
-            onSave(signatureData, signature);
+            onSave(signatureData, signature, activeTab);
             handleClose();
         }
     };
@@ -87,7 +87,7 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
                     ) : (
                         <>
                             {activeTab === TABS.DRAW && <DrawSignature onChange={handleSignatureChange} clearTrigger={clearTrigger} />}
-                            {activeTab === TABS.TYPE && <TypeSignature onChange={handleSignatureChange} clearTrigger={clearTrigger} signatureType={signatureType} />}
+                            {activeTab === TABS.TYPE && <TypeSignature onChange={handleSignatureChange} clearTrigger={clearTrigger} signatureType={signatureType} defaultValue={signature?.defaultValue || ""} maxTextLength={signature?.maxLength || 50} />}
                             {activeTab === TABS.UPLOAD && <UploadSignature onChange={handleSignatureChange} clearTrigger={clearTrigger} />}
                         </>
                     )}
