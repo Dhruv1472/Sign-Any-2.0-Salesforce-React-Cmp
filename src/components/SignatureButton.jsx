@@ -26,9 +26,9 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false }) => 
         }
     };
 
-    // Check if signature/field is completed (supports both 'signed' and 'filled' properties)
+    // Check both 'signed' (old structure) and 'filled' (new nested structure)
     const isCompleted = signed || filled;
-
+    
     // If signature is already signed/filled, show the image
     if (isCompleted && imageUrl) {
         return (
