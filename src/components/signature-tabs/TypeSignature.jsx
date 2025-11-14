@@ -20,8 +20,8 @@ import "./TypeSignature.css";
  * @param {number} fontSizeStep - Step increment for font sizes
  * @param {number} maxTextLength - Maximum number of characters allowed
  */
-const TypeSignature = ({ onChange, clearTrigger, signatureType = "signature", hideBold = false, hideItalic = false, hideFontStyle = false, hideFontSize = false, availableFonts = ["Brush Script MT", "Lucida Handwriting", "Courier New", "Dancing Script", "Great Vibes"], defaultFontStyle = "Brush Script MT", defaultFontSize = 48, minFontSize = 2, maxFontSize = 100, fontSizeStep = 2, maxTextLength = 50 }) => {
-    const [text, setText] = useState("");
+const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", signatureType = "signature", hideBold = false, hideItalic = false, hideFontStyle = false, hideFontSize = false, availableFonts = ["Brush Script MT", "Lucida Handwriting", "Courier New", "Dancing Script", "Great Vibes"], defaultFontStyle = "Brush Script MT", defaultFontSize = 48, minFontSize = 2, maxFontSize = 100, fontSizeStep = 2, maxTextLength = 50 }) => {
+    const [text, setText] = useState(defaultValue || "");
     const [selectedFont, setSelectedFont] = useState(defaultFontStyle);
     const [isBold, setIsBold] = useState(false);
     const [isItalic, setIsItalic] = useState(false);
@@ -36,13 +36,13 @@ const TypeSignature = ({ onChange, clearTrigger, signatureType = "signature", hi
     // Clear text when clearTrigger changes
     useEffect(() => {
         if (clearTrigger > 0) {
-            setText("");
+            setText(defaultValue || "");
             setIsBold(false);
             setIsItalic(false);
             setFontSize(defaultFontSize);
             setSelectedFont(defaultFontStyle);
         }
-    }, [clearTrigger, defaultFontSize, defaultFontStyle]);
+    }, [clearTrigger, defaultFontSize, defaultFontStyle, defaultValue]);
 
     useEffect(() => {
         if (!text.trim()) {
@@ -130,6 +130,11 @@ const TypeSignature = ({ onChange, clearTrigger, signatureType = "signature", hi
                             {/* Text Input */}
                             <div className="type-signature-input-section">
                                 <input id="signature-text" type="text" className="type-signature-input" value={text} onChange={handleTextChange} placeholder={getPlaceholder()} autoFocus maxLength={maxTextLength} />
+                                {maxTextLength && maxTextLength < 100 && (
+                                    <div className="type-signature-char-counter" style={{ fontSize: '11px', color: '#666', marginTop: '4px', textAlign: 'right' }}>
+                                        {text.length} / {maxTextLength} characters
+                                    </div>
+                                )}
                             </div>
                         </div>
 

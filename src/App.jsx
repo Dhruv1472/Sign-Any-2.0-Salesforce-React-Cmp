@@ -120,9 +120,9 @@ function App() {
     const fetchDocumentRecord = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
-
+            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(`SELECT Id, Uploaded_Document_Id__c, Signing_Details__c, Status__c, CreatedDate,CreatedBy.Name, CreatedBy.Email, Email_Subject__c, Document_Name__c FROM Document__c WHERE Id='${documentId}' LIMIT 1`)}`;
             // Salesforce REST API endpoint to get Document__c record
-            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/Document__c/${documentId}`;
+            // const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(objQuery)}`;
 
             let response = await fetch(apiUrl, {
                 method: "GET",
@@ -151,7 +151,9 @@ function App() {
                 throw new Error(`Failed to fetch Document record: ${response.status} ${response.statusText}`);
             }
 
-            const documentData = await response.json();
+            let documentData = await response.json();
+            documentData = documentData.records[0];
+            console.log('documentData', documentData);
             const contentVersionId = documentData.Uploaded_Document_Id__c;
             const signatureDataJson = documentData.Signing_Details__c;
 
@@ -167,20 +169,48 @@ function App() {
                     const parsedData = JSON.parse(signatureDataJson);
                     if (Array.isArray(parsedData)) {
                         parsedData.forEach((entry) => {
-                            const typeLower = typeof entry.type === "string" ? entry.type.toLowerCase() : "";
-                            const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(typeLower);
-                            const isSignatureType = ["signature"].includes(typeLower) || (!isFieldType && !entry.fieldType);
-                            if (isFieldType) {
-                                parsedFieldData.push({
-                                    ...entry,
-                                    fieldType: typeLower,
-                                    filled: Boolean(entry.filled),
+                            // Check if entry has nested fields (new structure)
+                            if (entry.fields && Array.isArray(entry.fields)) {
+                                // Process nested fields
+                                entry.fields.forEach((field) => {
+                                    const typeLower = typeof field.type === "string" ? field.type.toLowerCase() : "";
+                                    const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(typeLower);
+                                    const isSignatureType = ["signature"].includes(typeLower) || (!isFieldType && !field.fieldType);
+                                    
+                                    if (isFieldType) {
+                                        parsedFieldData.push({
+                                            ...field,
+                                            fieldType: typeLower,
+                                            filled: Boolean(field.filled),
+                                            // Attach signer info to field
+                                            signerPriority: entry.priority,
+                                            signerEmail: entry.email,
+                                            signerName: entry.name,
+                                        });
+                                    } else if (isSignatureType) {
+                                        parsedSignatureData.push({
+                                            ...entry,
+                                            signed: Boolean(entry.signed),
+                                        });
+                                    }
                                 });
-                            } else if (isSignatureType) {
-                                parsedSignatureData.push({
-                                    ...entry,
-                                    signed: Boolean(entry.signed),
-                                });
+                            } else {
+                                // Old flat structure (backward compatibility)
+                                const typeLower = typeof entry.type === "string" ? entry.type.toLowerCase() : "";
+                                const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(typeLower);
+                                const isSignatureType = ["signature"].includes(typeLower) || (!isFieldType && !entry.fieldType);
+                                if (isFieldType) {
+                                    parsedFieldData.push({
+                                        ...entry,
+                                        fieldType: typeLower,
+                                        filled: Boolean(entry.filled),
+                                    });
+                                } else if (isSignatureType) {
+                                    parsedSignatureData.push({
+                                        ...entry,
+                                        signed: Boolean(entry.signed),
+                                    });
+                                }
                             }
                         });
                     }
@@ -427,7 +457,7 @@ function App() {
         const parsedPriority = priority ? parseInt(priority, 10) : 1;
         setUrlPriority(parsedPriority);
 
-        if (accessToken && recordId && instanceUrl) {
+        if (recordId && instanceUrl) {
             // Store Salesforce config for later use
             setSalesforceConfig({ accessToken, recordId, instanceUrl, clientId, clientSecret });
 
@@ -506,19 +536,66 @@ function App() {
     };
 
     // Handle signature save from modal
-    const handleSignatureSave = (imageData, signature) => {
+    const handleSignatureSave = async (imageData, signature, signatureType) => {
         // Validate that this is actually a signature, not a field
         if (signature.fieldType) {
             console.error("Attempted to save signature image to a field:", signature);
             return;
         }
-        
-        console.log("Signature saved:", signature.index);
-        const updatedSignatures = updateSignatureWithImage(signatureData, signature.index, imageData, signature.type);
-        setSignatureData(updatedSignatures);
 
-        // Track that this signature was signed in the current session
-        setSessionSignedKeys((prev) => new Set(prev).add(signature.index));
+        try {
+            // 1. Get user's public IP address
+            const ipRes = await fetch('https://api.ipify.org?format=json');
+            const ipData = await ipRes.json();
+            const ipAddress = ipData.ip;
+
+            const timeStamp = new Date().toLocaleString();
+            
+            // Get the parent signer object (attached in handleSignatureClick)
+            const signerObject = signature._parentSigner;
+            
+            // 2. Update signatures array with image and ipAddress, passing signer object for correct matching
+            let updatedSignatures = updateSignatureWithImage(signatureData, signature.index, imageData, signature.type, signerObject);
+            
+            // 3. Insert ipAddress in the correct signer's fields only
+            updatedSignatures = updatedSignatures.map(sig => {
+                // Only update the fields if this is the correct signer
+                if (sig.fields && Array.isArray(sig.fields)) {
+                    const isCorrectSigner = signerObject && (sig.priority === signerObject.priority || sig.email === signerObject.email);
+                    if (isCorrectSigner) {
+                        return {
+                            ...sig,
+                            fields: sig.fields.map(field => {
+                                if (field.index === signature.index) {
+                                    return {
+                                        ...field,
+                                        ipAddress,
+                                        timeStamp,
+                                        signatureType,      
+                                        filled: true        
+                                    };
+                                }
+                                return field;
+                            })
+                        };
+                    }
+                }
+                return sig;
+            });
+
+            setSignatureData(updatedSignatures);
+            setSessionSignedKeys((prev) => new Set(prev).add(signature.index));
+        } catch (e) {
+            console.warn("Could not fetch IP address:", e);
+            // Fallback: Just update without IP
+            
+            // Get the parent signer object (attached in handleSignatureClick)
+            const signerObject = signature._parentSigner;
+            
+            const updatedSignatures = updateSignatureWithImage(signatureData, signature.index, imageData, signature.type, signerObject);
+            setSignatureData(updatedSignatures);
+            setSessionSignedKeys((prev) => new Set(prev).add(signature.index));
+        }
     };
 
     // Handle modal close
@@ -530,7 +607,11 @@ function App() {
     // Handle signature deletion
     const handleSignatureDelete = (signature) => {
         console.log("Delete signature:", signature);
-        const updatedSignatures = deleteSignatureImage(signatureData, signature.index, signature.type);
+        
+        // Get the parent signer object (attached in handleSignatureClick)
+        const signerObject = signature._parentSigner;
+        
+        const updatedSignatures = deleteSignatureImage(signatureData, signature.index, signature.type, signerObject);
         setSignatureData(updatedSignatures);
 
         // Remove from session signed keys
@@ -792,29 +873,12 @@ function App() {
 						// Document information
 						const createdDate = documentRecord.CreatedDate ? new Date(documentRecord.CreatedDate) : null;
 						const modifiedDate = documentRecord.LastModifiedDate ? new Date(documentRecord.LastModifiedDate) : null;
-						let emailSubject = "";
-						try {
-							if (documentRecord.Emails__c) {
-								const emailObj = JSON.parse(documentRecord.Emails__c);
-								emailSubject = emailObj.Subject || "";
-							}
-						} catch (e) {
-							// ignore parse errors
-						}
-						let ownerName = "";
-						let ownerEmail = "";
-						try {
-							if (documentRecord.User_Details__c) {
-								const userObj = JSON.parse(documentRecord.User_Details__c);
-								ownerName = userObj.Name || "";
-								ownerEmail = userObj.Email || "";
-							}
-						} catch (e) {
-							// ignore parse errors
-						}
-						const documentName = documentRecord.DocumentName__c || documentRecord.Name || "";
+						let emailSubject = documentRecord.Email_Subject__c || null;
+						let ownerName = documentRecord.CreatedBy.Name || null;
+						let ownerEmail = documentRecord.CreatedBy.Email || null;
+
+						const documentName = documentRecord.Document_Name__c || documentRecord.Name || "";
 						const orgId = orgIdState || "";
-						const documentPages = documentRecord.Number_of_Pages__c ? String(documentRecord.Number_of_Pages__c) : "";
 						
 						// Signatures summary - handle both flat and nested field structures
 						const sigs = Array.isArray(signatureData) ? signatureData : [];
@@ -824,18 +888,20 @@ function App() {
 						sigs.forEach((sig, sigIdx) => {
 							if (sig.fields && Array.isArray(sig.fields)) {
 								// New nested structure - extract fields
-								sig.fields.forEach((field, fieldIdx) => {
-									allSignatureFields.push({
-										index: field.index ?? `${sig.index ?? sigIdx}-${fieldIdx}`,
-										imagePresent: Boolean(field.filled && field.imageUrl),
-										ipAddress: sig.ipAddress || field.ipAddress || "",
-										timeStamp: sig.signedTime || field.signedTime || sig.timeStamp || field.timeStamp || "",
-										signeeName: sig.name || field.name || sig.signeeName || field.signeeName || "",
-										signeeEmail: sig.email || field.email || sig.signeeEmail || field.signeeEmail || "",
-										imageUrl: field.imageUrl || null,
-									});
-								});
-							} else {
+								sig.fields
+                                .filter(f => (f.type || f.fieldType) === "signature")
+                                .forEach((field, fieldIdx) => {
+                                    allSignatureFields.push({
+                                        index: field.index ?? `${sig.index ?? sigIdx}-${fieldIdx}`,
+                                        imagePresent: Boolean(field.filled && field.imageUrl),
+                                        ipAddress: sig.ipAddress || field.ipAddress || "",
+                                        timeStamp: sig.signedTime || field.signedTime || sig.timeStamp || field.timeStamp || "",
+                                        signeeName: sig.name || field.name || sig.signeeName || field.signeeName || "",
+                                        signeeEmail: sig.email || field.email || sig.signeeEmail || field.signeeEmail || "",
+                                        imageUrl: field.imageUrl || null,
+                                    });
+                                });
+							} else if ((sig.type || sig.fieldType) === "signature") {
 								// Old flat structure - use signature directly
 								allSignatureFields.push({
 									index: sig.index ?? sigIdx,
@@ -863,7 +929,6 @@ function App() {
 							orgId,
 							documentId: documentRecord.Id,
 							documentStatus: pendingCount > 0 ? "Pending" : "Signed",
-							documentPages,
 							totalSignatures,
 							signedCount,
 							pendingCount,
@@ -1007,7 +1072,7 @@ function App() {
 							infoYRFromBottom -= lineHeight;
 							writeKV(rightX, infoYRFromBottom, "Document Status:", data.documentStatus);
 							infoYRFromBottom -= lineHeight;
-							writeKV(rightX, infoYRFromBottom, "Document Pages:", data.documentPages);
+							writeKV(rightX, infoYRFromBottom, "Document Pages:", totalPages);
 
 							currentYFromTop += docInfoBoxHeight + sectionSpacing;
 							currentYFromBottom = PH - currentYFromTop;
@@ -1072,6 +1137,7 @@ function App() {
 							const padding = Math.max(6, PW * 0.008);
 							const imgColW = Math.max(120, PW * 0.18);
 							const statusColW = Math.max(70, PW * 0.1);
+                            const signatureTypeColW = Math.max(70, PW * 0.1);
 							const internalGaps = padding * 3;
 							const remW = totalTblW - (imgColW + statusColW + internalGaps);
 							const sigDetailsColW = Math.max(120, Math.floor(remW / 2));
@@ -1092,7 +1158,7 @@ function App() {
 								height: tableHeaderHeight, 
 								color: darkBlue 
 							});
-							const header = ["Signature", "Status", "Signature Details", "User Details"];
+							const header = ["Signature", "Signature Type", "Signature Details", "User Details"];
 							const headerSizes = [imgColW, statusColW, sigDetailsColW, userColW];
 							const headerTextSize = Math.max(9, PH * 0.011);
 							for (let i = 0; i < header.length; i++) {
@@ -1123,8 +1189,10 @@ function App() {
                             for (const sign of signaturesToDraw) {
 								if (rowsDrawn >= maxRowsPerPage) break;
 
-                                const status = sign.imagePresent ? "SIGNED" : "PENDING";
-                                const statusColor = sign.imagePresent ? green : orange;
+                                // const status = sign.imagePresent ? "SIGNED" : "PENDING";
+                                // const statusColor = sign.imagePresent ? green : orange;
+                                console.log('sign signatureType', sign.signatureType);
+                                const signatureType = sign.signatureType || "--";
 
 								// Draw signature thumbnail if available
                                 if (sign.imagePresent && sign.imageUrl) {
@@ -1177,12 +1245,21 @@ function App() {
 								// Status (centered)
 								const statusW = font.widthOfTextAtSize(status, rowTextSize);
 								const statusX = colXs[1] + (statusColW - statusW) / 2;
-								drawText(status, { 
-									x: statusX, 
-									y: rowYFromBottom - (rowHeight / 2) - (rowTextSize / 3) + 50, 
-									size: rowTextSize, 
-									color: statusColor 
-								});
+								// drawText(status, { 
+								// 	x: statusX, 
+								// 	y: rowYFromBottom - (rowHeight / 2) - (rowTextSize / 3) + 50, 
+								// 	size: rowTextSize, 
+								// 	color: statusColor 
+								// });
+                                const typeW = font.widthOfTextAtSize(signatureType, rowTextSize);
+                                const typeX = colXs[1] + (signatureTypeColW - typeW) / 2;
+                                drawText(signatureType, { 
+                                    x: typeX, 
+                                    y: rowYFromBottom - (rowHeight / 2) - (rowTextSize / 3) + 50, 
+                                    size: rowTextSize,
+                                    color: gray
+                                });
+
 
 								// Signature details
                                 const signedOn = sign.timeStamp || new Date().toLocaleString();
@@ -1282,6 +1359,7 @@ function App() {
 								const padding = Math.max(6, PW * 0.008);
 								const imgColW = Math.max(120, PW * 0.18);
 								const statusColW = Math.max(70, PW * 0.1);
+								const signatureTypeColW = Math.max(70, PW * 0.1);
 								const internalGaps = padding * 3;
 								const remW = totalTblW - (imgColW + statusColW + internalGaps);
 								const sigDetailsColW = Math.max(120, Math.floor(remW / 2));
@@ -1301,7 +1379,7 @@ function App() {
 									height: tableHeaderHeight, 
 									color: darkBlue 
 								});
-								const header = ["Signature", "Status", "Signature Details", "User Details"];
+								const header = ["Signature", "Signature Type", "Signature Details", "User Details"];
 								const headerSizes = [imgColW, statusColW, sigDetailsColW, userColW];
 								const headerTextSize = Math.max(9, PH * 0.011);
 								for (let i = 0; i < header.length; i++) {
@@ -1333,6 +1411,7 @@ function App() {
                                 for (const sign of signaturesToDraw) {
                                     const status = sign.imagePresent ? "SIGNED" : "PENDING";
                                     const statusColor = sign.imagePresent ? green : orange;
+                                    const signatureType = sign.signatureType || "--";
 
 									// Draw signature thumbnail if available
                                     if (sign.imagePresent && sign.imageUrl) {
@@ -1382,12 +1461,20 @@ function App() {
 
 									const statusW = font.widthOfTextAtSize(status, rowTextSize);
 									const statusX = colXs[1] + (statusColW - statusW) / 2;
-									drawText(status, { 
-										x: statusX, 
-										y: rowYFromBottom - (rowHeight / 2) - (rowTextSize / 3), 
-										size: rowTextSize, 
-										color: statusColor 
-									});
+									// drawText(status, { 
+									// 	x: statusX, 
+									// 	y: rowYFromBottom - (rowHeight / 2) - (rowTextSize / 3), 
+									// 	size: rowTextSize, 
+									// 	color: statusColor 
+									// });
+                                    const typeW = font.widthOfTextAtSize(signatureType, rowTextSize);
+                                    const typeX = colXs[1] + (signatureTypeColW - typeW) / 2;
+                                    drawText(signatureType, { 
+                                        x: typeX, 
+                                        y: rowYFromBottom - (rowHeight / 2) - (rowTextSize / 3) + 50, 
+                                        size: rowTextSize,
+                                        color: gray
+                                    });
 
                                     const signedOn = sign.timeStamp || new Date().toLocaleString();
                                     const sigDetails = sign.imagePresent ? `IP: ${sign.ipAddress || "--"}` : "--";

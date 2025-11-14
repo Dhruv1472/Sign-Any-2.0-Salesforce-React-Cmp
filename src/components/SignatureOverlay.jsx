@@ -24,7 +24,7 @@ const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onDelete, 
             return sig?.fields?.some((field) => field.pageNumber === pageNumber );
         })
         .reduce((arr, sig) => {
-            const fields = sig.fields.filter((f) => f.pageNumber === pageNumber );
+            const fields = sig.fields.filter((f) => f.pageNumber === pageNumber ).map(f => ({...f,_parentSigner: sig}));
             return [...arr, ...fields];
         }, []);
 
