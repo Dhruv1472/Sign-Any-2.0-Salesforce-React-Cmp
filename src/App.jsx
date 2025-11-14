@@ -116,6 +116,167 @@ function App() {
         }
     };
 
+    // Fetch all Signature__c records for a document
+    const fetchSignatureRecords = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+        try {
+            let currentToken = accessToken;
+            const query = `SELECT Id, Field_Index__c, Signing_Details__c FROM Signature__c WHERE Document__c = '${documentId}'`;
+            
+            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
+            
+            let response = await fetch(apiUrl, {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${currentToken}`,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            // If token expired (401), try to refresh it
+            if (response.status === 401 && clientId && clientSecret) {
+                console.log("Access token expired, attempting to refresh...");
+                currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
+
+                // Retry the request with new token
+                response = await fetch(apiUrl, {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                        "Content-Type": "application/json",
+                    },
+                });
+            }
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch Signature records: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return data.records || [];
+        } catch (error) {
+            console.error("Error fetching Signature records:", error);
+            return [];
+        }
+    };
+
+    // Create or update Signature__c records
+    const upsertSignatureRecords = async (documentId, signatureData, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+        try {
+            let currentToken = accessToken;
+
+            // Extract all fields with imageUrl from signatureData
+            const fieldsWithImages = [];
+            signatureData.forEach((sig) => {
+                if (sig.fields && Array.isArray(sig.fields)) {
+                    sig.fields.forEach((field) => {
+                        if (field.filled && field.imageUrl) {
+                            fieldsWithImages.push({
+                                fieldIndex: field.index,
+                                imageUrl: field.imageUrl,
+                                ipAddress: field.ipAddress || "",
+                                timestamp: field.timestamp || field.signedTime || "",
+                            });
+                        }
+                    });
+                }
+            });
+
+            // First, fetch existing Signature__c records to get their IDs
+            const existingRecords = await fetchSignatureRecords(documentId, currentToken, instanceUrl, clientId, clientSecret);
+            const existingMap = new Map();
+            existingRecords.forEach((record) => {
+                existingMap.set(record.Field_Index__c, record.Id);
+            });
+
+            // Prepare records for upsert (create or update)
+            const recordsToUpsert = [];
+            for (const field of fieldsWithImages) {
+                const signingDetails = JSON.stringify({
+                    imageUrl: field.imageUrl,
+                    ipAddress: field.ipAddress,
+                    timestamp: field.timestamp,
+                });
+
+                const recordData = {
+                    Document__c: documentId,
+                    Field_Index__c: field.fieldIndex,
+                    Signing_Details__c: signingDetails,
+                };
+
+                // If record exists, add Id for update
+                const existingId = existingMap.get(field.fieldIndex);
+                if (existingId) {
+                    recordData.Id = existingId;
+                }
+
+                recordsToUpsert.push(recordData);
+            }
+
+            if (recordsToUpsert.length === 0) {
+                console.log("No signature records to upsert");
+                return true;
+            }
+
+            console.log("recordsToUpsert==> ", recordsToUpsert);
+
+            // Use Promise.all to create/update records individually
+            const upsertPromises = recordsToUpsert.map(async (record) => {
+                const isUpdate = !!record.Id;
+                const method = isUpdate ? "PATCH" : "POST";
+                const apiUrl = isUpdate 
+                    ? `${instanceUrl}/services/data/v65.0/sobjects/Signature__c/${record.Id}`
+                    : `${instanceUrl}/services/data/v65.0/sobjects/Signature__c`;
+
+                // Remove Id from body if updating (Id is in URL)
+                const body = isUpdate ? { ...record } : record;
+                if (isUpdate) {
+                    delete body.Id;
+                }
+
+                let response = await fetch(apiUrl, {
+                    method: method,
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(body),
+                });
+
+                // If token expired (401), try to refresh it
+                if (response.status === 401 && clientId && clientSecret) {
+                    console.log("Access token expired, attempting to refresh...");
+                    currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
+
+                    // Retry the request with new token
+                    response = await fetch(apiUrl, {
+                        method: method,
+                        headers: {
+                            Authorization: `Bearer ${currentToken}`,
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify(body),
+                    });
+                }
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Failed to ${isUpdate ? 'update' : 'create'} Signature record (Field Index: ${record.Field_Index__c}): ${response.status} ${response.statusText} - ${errorText}`);
+                }
+
+                const result = await response.json();
+                return result;
+            });
+
+            // Execute all upsert operations in parallel
+            const results = await Promise.all(upsertPromises);
+            console.log("Signature records upserted successfully:", results);
+            return true;
+        } catch (error) {
+            console.error("Error upserting Signature records:", error);
+            throw error;
+        }
+    };
+
     // Fetch Document__c record to get ContentVersion ID
     const fetchDocumentRecord = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
@@ -218,6 +379,59 @@ function App() {
                     console.warn("Failed to parse Signing_Details__c:", parseError);
                 }
             }
+
+            // Fetch Signature__c records to get imageUrl data
+            const signatureRecords = await fetchSignatureRecords(documentId, currentToken, instanceUrl, clientId, clientSecret);
+            
+            console.log("Fetched Signature__c records:", signatureRecords);
+            
+            // Create a map of fieldIndex -> signature data
+            // Store with both string and number keys to handle type mismatches
+            const signatureMap = new Map();
+            signatureRecords.forEach((record) => {
+                try {
+                    const sigDetails = JSON.parse(record.Signing_Details__c);
+                    const fieldIndex = record.Field_Index__c;
+                    // Store with original value (string)
+                    signatureMap.set(fieldIndex, sigDetails);
+                    // Also store with number if it's numeric
+                    if (!isNaN(fieldIndex)) {
+                        signatureMap.set(Number(fieldIndex), sigDetails);
+                    }
+                    // Also store with string if it's a number
+                    signatureMap.set(String(fieldIndex), sigDetails);
+                    console.log(`Mapped field index ${fieldIndex} to signature data:`, sigDetails);
+                } catch (e) {
+                    console.warn(`Failed to parse Signature record ${record.Id}:`, e);
+                }
+            });
+
+            // Merge imageUrl data back into parsedSignatureData fields
+            parsedSignatureData = parsedSignatureData.map((sig) => {
+                if (sig.fields && Array.isArray(sig.fields)) {
+                    return {
+                        ...sig,
+                        fields: sig.fields.map((field) => {
+                            console.log(`Looking up signature data for field index: ${field.index} (type: ${typeof field.index})`);
+                            const sigData = signatureMap.get(field.index);
+                            if (sigData) {
+                                console.log(`Found signature data for field ${field.index}:`, sigData);
+                                return {
+                                    ...field,
+                                    imageUrl: sigData.imageUrl || null,
+                                    ipAddress: sigData.ipAddress || field.ipAddress || "",
+                                    timestamp: sigData.timestamp || field.timestamp || "",
+                                    filled: Boolean(sigData.imageUrl), // Set filled based on imageUrl presence
+                                };
+                            } else {
+                                console.log(`No signature data found for field ${field.index}`);
+                            }
+                            return field;
+                        }),
+                    };
+                }
+                return sig;
+            });
 
             return { contentVersionId, currentToken, documentData, signatureData: parsedSignatureData, fieldData: parsedFieldData};
         } catch (error) {
@@ -335,11 +549,29 @@ function App() {
         try {
             let currentToken = accessToken;
 
+            // Step 1: Save imageUrl data to Signature__c records
+            await upsertSignatureRecords(documentId, signatureData, currentToken, instanceUrl, clientId, clientSecret);
+
+            // Step 2: Remove imageUrl from signature data before saving to Document__c
+            const sanitizedSignatureData = signatureData.map((sig) => {
+                if (sig.fields && Array.isArray(sig.fields)) {
+                    return {
+                        ...sig,
+                        fields: sig.fields.map((field) => {
+                            // eslint-disable-next-line no-unused-vars
+                            const { imageUrl, ...fieldWithoutImage } = field;
+                            return fieldWithoutImage;
+                        }),
+                    };
+                }
+                return sig;
+            });
+
             // Salesforce REST API endpoint to update Document__c record
             const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/Document__c/${documentId}`;
 
-            // Combine signature and field data into a single array
-            const combinedData = [...(signatureData || []), ...(fieldData || [])];
+            // Combine sanitized signature and field data into a single array
+            const combinedData = [...(sanitizedSignatureData || []), ...(fieldData || [])];
             
             // Convert combined data to JSON string
             const signatureDataJson = JSON.stringify(combinedData);
@@ -537,6 +769,9 @@ function App() {
 
     // Handle signature save from modal
     const handleSignatureSave = async (imageData, signature, signatureType) => {
+        console.log("signatureType==> ", signatureType);
+        console.log("imageData==> ", imageData);
+        console.log("signature==> ", signature);
         // Validate that this is actually a signature, not a field
         if (signature.fieldType) {
             console.error("Attempted to save signature image to a field:", signature);
@@ -556,6 +791,7 @@ function App() {
             
             // 2. Update signatures array with image and ipAddress, passing signer object for correct matching
             let updatedSignatures = updateSignatureWithImage(signatureData, signature.index, imageData, signature.type, signerObject);
+            console.log("updatedSignatures==> ", updatedSignatures);
             
             // 3. Insert ipAddress in the correct signer's fields only
             updatedSignatures = updatedSignatures.map(sig => {
