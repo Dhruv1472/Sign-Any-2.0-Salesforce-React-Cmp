@@ -87,7 +87,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, canDelete = false, disable
     return (
         <button className={getButtonClass()} onClick={handleFieldClick} disabled={isDisabled} data-key={key}>
             {getButtonText()}
-            {required && <span className="required-indicator">*</span>}
+            {required && <span className="required-indicator"></span>}
         </button>
     );
 };

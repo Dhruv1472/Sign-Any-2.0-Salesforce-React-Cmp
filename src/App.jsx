@@ -169,20 +169,48 @@ function App() {
                     const parsedData = JSON.parse(signatureDataJson);
                     if (Array.isArray(parsedData)) {
                         parsedData.forEach((entry) => {
-                            const typeLower = typeof entry.type === "string" ? entry.type.toLowerCase() : "";
-                            const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(typeLower);
-                            const isSignatureType = ["signature"].includes(typeLower) || (!isFieldType && !entry.fieldType);
-                            if (isFieldType) {
-                                parsedFieldData.push({
-                                    ...entry,
-                                    fieldType: typeLower,
-                                    filled: Boolean(entry.filled),
+                            // Check if entry has nested fields (new structure)
+                            if (entry.fields && Array.isArray(entry.fields)) {
+                                // Process nested fields
+                                entry.fields.forEach((field) => {
+                                    const typeLower = typeof field.type === "string" ? field.type.toLowerCase() : "";
+                                    const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(typeLower);
+                                    const isSignatureType = ["signature"].includes(typeLower) || (!isFieldType && !field.fieldType);
+                                    
+                                    if (isFieldType) {
+                                        parsedFieldData.push({
+                                            ...field,
+                                            fieldType: typeLower,
+                                            filled: Boolean(field.filled),
+                                            // Attach signer info to field
+                                            signerPriority: entry.priority,
+                                            signerEmail: entry.email,
+                                            signerName: entry.name,
+                                        });
+                                    } else if (isSignatureType) {
+                                        parsedSignatureData.push({
+                                            ...entry,
+                                            signed: Boolean(entry.signed),
+                                        });
+                                    }
                                 });
-                            } else if (isSignatureType) {
-                                parsedSignatureData.push({
-                                    ...entry,
-                                    signed: Boolean(entry.signed),
-                                });
+                            } else {
+                                // Old flat structure (backward compatibility)
+                                const typeLower = typeof entry.type === "string" ? entry.type.toLowerCase() : "";
+                                const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(typeLower);
+                                const isSignatureType = ["signature"].includes(typeLower) || (!isFieldType && !entry.fieldType);
+                                if (isFieldType) {
+                                    parsedFieldData.push({
+                                        ...entry,
+                                        fieldType: typeLower,
+                                        filled: Boolean(entry.filled),
+                                    });
+                                } else if (isSignatureType) {
+                                    parsedSignatureData.push({
+                                        ...entry,
+                                        signed: Boolean(entry.signed),
+                                    });
+                                }
                             }
                         });
                     }

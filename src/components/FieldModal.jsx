@@ -16,8 +16,19 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
 
     useEffect(() => {
         if (isOpen && field) {
-            // Initialize with existing value if available
-            setValue(field.value || (field.fieldType === "checkbox" ? false : ""));
+            // Initialize with existing value, or default value, or empty
+            let initialValue = field.value !== undefined && field.value !== null 
+                ? field.value 
+                : (field.defaultValue !== undefined && field.defaultValue !== null
+                    ? field.defaultValue
+                    : (field.fieldType === "checkbox" ? false : ""));
+            
+            // Ensure it's a string if it should be a string
+            if (field.fieldType !== "checkbox" && initialValue !== "") {
+                initialValue = String(initialValue);
+            }
+            
+            setValue(initialValue);
             setError("");
         }
     }, [isOpen, field]);
@@ -105,6 +116,7 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
                         onChange={(e) => setValue(e.target.value)}
                         placeholder="Enter text here"
                         autoFocus
+                        maxLength={field.maxLength ? parseInt(field.maxLength, 10) : 100}
                     />
                 );
 

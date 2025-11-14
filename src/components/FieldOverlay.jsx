@@ -20,7 +20,7 @@ const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onDelete, is
     const pageFields = fields.filter((field) => 
         field.fieldType && // Ensure it's a field, not a signature
         field.pageNumber === pageNumber && 
-        (field.priority == priority || field.filled)
+        (field.signerPriority == priority || field.priority == priority || field.filled)
     );
 
     if (pageFields.length === 0) {
