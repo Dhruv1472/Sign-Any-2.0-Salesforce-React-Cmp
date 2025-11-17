@@ -84,6 +84,31 @@
     height: calc(100vh - 4rem);
 }
 
+/* Initial accept/reject popup styles */
+.initial-popup-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+}
+.initial-popup {
+  background: #fff;
+  padding: 24px;
+  border-radius: 8px;
+  width: 420px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  text-align: center;
+}
+.accept-btn { 
+  background: #1b8a3e; 
+}
+.reject-btn { 
+  background: #d32f2f; 
+}
+
 .placeholder-content p {
     font-size: 1.2rem;
     margin-bottom: 1rem;
@@ -111,6 +136,7 @@
 .bottom-bar-left {
     display: flex;
     align-items: center;
+    gap: 10px;
 }
 
 .total-pages-text {
@@ -144,6 +170,17 @@
 
 .save-submit-btn:active {
     transform: translateY(1px);
+}
+
+.termAndConditionLink {
+  color: #00aeff;
+  text-decoration: underline;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+.termAndConditionLink:hover {
+  color: #0090d9;
 }
 
 @media screen and (max-width: 480px) {

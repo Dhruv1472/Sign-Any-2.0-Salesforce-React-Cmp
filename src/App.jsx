@@ -23,6 +23,8 @@ function App() {
     const [totalPages, setTotalPages] = useState(0);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [isExpired, setIsExpired] = useState(false); // Track if document is expired
+    const [initialAccepted, setInitialAccepted] = useState(false); // Show initial accept/reject popup on first load
     const [signatureData, setSignatureData] = useState([]);
     const [fieldData, setFieldData] = useState([]); // Fields data
     const [documentRecord, setDocumentRecord] = useState(null);
@@ -281,7 +283,7 @@ function App() {
     const fetchDocumentRecord = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
-            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(`SELECT Id, Uploaded_Document_Id__c, Signing_Details__c, Status__c, CreatedDate,CreatedBy.Name, CreatedBy.Email, Email_Subject__c, Document_Name__c FROM Document__c WHERE Id='${documentId}' LIMIT 1`)}`;
+            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(`SELECT Id, Uploaded_Document_Id__c, Signing_Details__c, Status__c, CreatedDate, CreatedBy.Name, CreatedBy.Email, Email_Subject__c, Document_Name__c, Expiration_Date__c FROM Document__c WHERE Id='${documentId}' LIMIT 1`)}`;
             // Salesforce REST API endpoint to get Document__c record
             // const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(objQuery)}`;
 
@@ -315,6 +317,22 @@ function App() {
             let documentData = await response.json();
             documentData = documentData.records[0];
             console.log('documentData', documentData);
+            
+            // Check if document is expired
+            if (documentData.Expiration_Date__c) {
+                const expirationDate = new Date(documentData.Expiration_Date__c);
+                const today = new Date();
+                // Set time to start of day for fair comparison
+                today.setHours(0, 0, 0, 0);
+                expirationDate.setHours(0, 0, 0, 0);
+                
+                if (expirationDate < today) {
+                    setIsExpired(true);
+                    setError(null);
+                    return { isExpired: true };
+                }
+            }
+            
             const contentVersionId = documentData.Uploaded_Document_Id__c;
             const signatureDataJson = documentData.Signing_Details__c;
 
@@ -433,7 +451,7 @@ function App() {
                 return sig;
             });
 
-            return { contentVersionId, currentToken, documentData, signatureData: parsedSignatureData, fieldData: parsedFieldData};
+            return { contentVersionId, currentToken, documentData, signatureData: parsedSignatureData, fieldData: parsedFieldData, isExpired: false };
         } catch (error) {
             console.error("Error fetching Document record:", error);
             throw error;
@@ -514,10 +532,23 @@ function App() {
     const fetchDocumentAndPdf = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         setLoading(true);
         setError(null);
+        setIsExpired(false);
 
         try {
             // Step 1: Fetch Document__c record to get ContentVersion ID and signature/field data
-            const { contentVersionId, currentToken, documentData, signatureData: sigData, fieldData: fieldDataFromRecord } = await fetchDocumentRecord(documentId, accessToken, instanceUrl, clientId, clientSecret);
+            const { contentVersionId, currentToken, documentData, signatureData: sigData, fieldData: fieldDataFromRecord, isExpired: documentExpired } = await fetchDocumentRecord(documentId, accessToken, instanceUrl, clientId, clientSecret);
+
+            // Check if document is expired
+            if (documentExpired) {
+                setIsExpired(true);
+                setPdfFile(null);
+                setTotalPages(0);
+                setPageDimensions([]);
+                pdfDocRef.current = null;
+                canvasRefsArray.current = [];
+                setLoading(false);
+                return;
+            }
 
             console.log(`Fetched ContentVersion ID: ${contentVersionId}`);
             console.log(`Signature Data:`, sigData);
@@ -785,7 +816,21 @@ function App() {
             const ipAddress = ipData.ip;
 
             const timeStamp = new Date().toLocaleString();
-            
+            let userAgent = navigator.userAgent || "Unknown Device";
+
+            // Extract OS and Chrome version
+            const osMatch = userAgent.match(/\(([^;]+);/);
+            const osVersion = osMatch ? osMatch[1].trim() : "Unknown OS";
+
+            const chromeMatch = userAgent.match(/Chrome\/([\d.]+)/);
+            const chromeVersion = chromeMatch ? chromeMatch[1] : "Unknown Chrome Version";
+
+            // Final clean string
+            const deviceInfo = `${osVersion} Chrome/${chromeVersion}`;
+            console.log("extractedDeviceInfo==> ", deviceInfo);
+
+            let locationInfo = await getLocationLive();
+            console.log("locationInfo==> ", locationInfo);
             // Get the parent signer object (attached in handleSignatureClick)
             const signerObject = signature._parentSigner;
             
@@ -806,6 +851,8 @@ function App() {
                                     return {
                                         ...field,
                                         ipAddress,
+                                        deviceInfo,
+                                        locationInfo,
                                         timeStamp,
                                         signatureType,      
                                         filled: true        
@@ -1131,6 +1178,8 @@ function App() {
                                         index: field.index ?? `${sig.index ?? sigIdx}-${fieldIdx}`,
                                         imagePresent: Boolean(field.filled && field.imageUrl),
                                         ipAddress: sig.ipAddress || field.ipAddress || "",
+                                        deviceInfo: sig.deviceInfo || field.deviceInfo || "",
+                                        locationInfo: sig.locationInfo || field.locationInfo || "",
                                         timeStamp: sig.signedTime || field.signedTime || sig.timeStamp || field.timeStamp || "",
                                         signeeName: sig.name || field.name || sig.signeeName || field.signeeName || "",
                                         signeeEmail: sig.email || field.email || sig.signeeEmail || field.signeeEmail || "",
@@ -1143,6 +1192,8 @@ function App() {
 									index: sig.index ?? sigIdx,
 									imagePresent: Boolean(sig.signed && (sig.imageUrl || sig.imagePresent)),
 									ipAddress: sig.ipAddress || "",
+									deviceInfo: sig.deviceInfo || "",
+									locationInfo: sig.locationInfo || "",
 									timeStamp: sig.signedTime || sig.timeStamp || "",
 									signeeName: sig.name || sig.signeeName || "",
 									signeeEmail: sig.email || sig.signeeEmail || "",
@@ -1500,18 +1551,35 @@ function App() {
 								// Signature details
                                 const signedOn = sign.timeStamp || new Date().toLocaleString();
                                 const sigDetails = sign.imagePresent ? `IP: ${sign.ipAddress || "--"}` : "--";
-								drawText(sigDetails, { 
-									x: colXs[2], 
-									y: rowYFromBottom - (rowHeight * 0.35) + 50, 
-									size: rowTextSize, 
-									color: gray 
-								});
-								drawText(`Signed On: ${signedOn}`, { 
-									x: colXs[2], 
-									y: rowYFromBottom - (rowHeight * 0.65) + 50, 
-									size: rowTextSize, 
-									color: gray 
-								});
+                                let deviceInfo = sign.imagePresent ? `Device: ${sign.deviceInfo || "--"}` : "--";
+                                let locationInfo = sign.imagePresent ? `Location: ${sign.locationInfo || "--"}` : "--";
+                                // Draw IP
+                                drawText(sigDetails, { 
+                                    x: colXs[2], 
+                                    y: rowYFromBottom - (rowHeight * 0.28) + 50, 
+                                    size: rowTextSize, 
+                                    color: gray 
+                                });
+                                // Draw Signed On
+                                drawText(`Signed On: ${signedOn}`, { 
+                                    x: colXs[2], 
+                                    y: rowYFromBottom - (rowHeight * 0.45) + 50, 
+                                    size: rowTextSize, 
+                                    color: gray 
+                                });
+                                // Draw Device Info with extra spacing below Signed On
+                                drawText(deviceInfo, { 
+                                    x: colXs[2], 
+                                    y: rowYFromBottom - (rowHeight * 0.62) + 50, 
+                                    size: rowTextSize, 
+                                    color: gray 
+                                });
+                                drawText(locationInfo, { 
+                                    x: colXs[2], 
+                                    y: rowYFromBottom - (rowHeight * 0.79) + 50, 
+                                    size: rowTextSize, 
+                                    color: gray 
+                                });
 
 								// User details
                                 drawText(`Name: ${sign.signeeName || "--"}`, { 
@@ -1714,18 +1782,33 @@ function App() {
 
                                     const signedOn = sign.timeStamp || new Date().toLocaleString();
                                     const sigDetails = sign.imagePresent ? `IP: ${sign.ipAddress || "--"}` : "--";
+                                    let deviceInfo = sign.imagePresent ? `Device: ${sign.deviceInfo || "--"}` : "--";
+                                    let locationInfo = sign.imagePresent ? `Device: ${sign.locationInfo || "--"}` : "--";
+
 									drawText(sigDetails, { 
 										x: colXs[2], 
-										y: rowYFromBottom - (rowHeight * 0.35), 
+										y: rowYFromBottom - (rowHeight * 0.28) + 50, 
 										size: rowTextSize, 
 										color: gray 
 									});
 									drawText(`Signed On: ${signedOn}`, { 
 										x: colXs[2], 
-										y: rowYFromBottom - (rowHeight * 0.65), 
+										y: rowYFromBottom - (rowHeight * 0.45) + 50, 
 										size: rowTextSize, 
 										color: gray 
 									});
+                                    drawText(deviceInfo, { 
+                                        x: colXs[2], 
+                                        y: rowYFromBottom - (rowHeight * 0.62) + 50, 
+                                        size: rowTextSize, 
+                                        color: gray 
+                                    });
+                                    drawText(locationInfo, { 
+                                        x: colXs[2], 
+                                        y: rowYFromBottom - (rowHeight * 0.79) + 50, 
+                                        size: rowTextSize, 
+                                        color: gray 
+                                    });
 
                                     drawText(`Name: ${sign.signeeName || "--"}`, { 
 										x: colXs[3], 
@@ -1878,6 +1961,36 @@ function App() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [totalPages]);
 
+    const getLocationLive = async () => {
+        try {
+            // Try GPS first
+            const coords = await new Promise((resolve, reject) => {
+                if (!navigator.geolocation) return reject("No GPS");
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true,
+                    timeout: 4000,
+                });
+            });
+
+            const { latitude, longitude } = coords.coords;
+
+            // Reverse geocode to city/state/country
+            const res = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+            );
+            const data = await res.json();
+            const address = data.address;
+
+            const city = address.state_district || "Unknown City";
+            const state = address.state || "Unknown State";
+            const country = address.country || "Unknown Country";
+            return `${city}, ${state}, ${country}`;
+        } catch (gpsError) {
+            console.warn("GPS failed, fallback to IP:", gpsError);
+            return "Location Unavailable";
+        }
+    };
+
     return (
         <div className="app">
             {loading && (
@@ -1887,8 +2000,7 @@ function App() {
                     </div>
                 </div>
             )}
-
-            {error && !pdfFile && (
+            {error && !pdfFile && !isExpired && (
                 <div className="placeholder">
                     <div className="placeholder-content">
                         <p style={{ color: "#d32f2f" }}>The URL is not right. Please contact the owner or sender of this link.</p>
@@ -1896,7 +2008,41 @@ function App() {
                 </div>
             )}
 
-            {pdfFile && (
+            {isExpired && (
+                <div className="expired-card">
+                    <div className="expired-icon">
+                    <svg
+                        className="expired-svg"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                    >
+                        <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                        />
+                    </svg>
+                    </div>
+
+                    <h3 className="expired-title">Document Expired</h3>
+
+                    <p className="expired-message">
+                    This document has expired and is no longer available for signing.
+                    </p>
+
+                    <p className="expired-hint">
+                    Please contact the document owner if you believe this is an error.
+                    </p>
+
+                    <button className="expired-button">Contact Support</button>
+                </div>
+                )}
+
+
+            {pdfFile && !isExpired && (
                 <>
                     <div className="pdf-container">
                         <div className="canvas-container">
@@ -1918,11 +2064,17 @@ function App() {
 
                     <div className="bottom-bar">
                         <div className="bottom-bar-left">
-                            <span className="total-pages-text">Total Pages: {totalPages}</span>
+                            <input
+                                type="checkbox"
+                                checked={initialAccepted}
+                                onChange={(e) => setInitialAccepted(e.target.checked)}
+                                style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+                            />
+                            <span> I have read and agree to the <a target="#" className="termAndConditionLink">Terms and Conditions ↗</a></span>
                         </div>
                         <div className="bottom-bar-right">
                             {shouldShowSaveButton() && (
-                                <button className="save-submit-btn" onClick={handleSaveAndSubmit}>
+                                <button className="save-submit-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted}>
                                     Save & Submit
                                 </button>
                             )}
@@ -1931,7 +2083,7 @@ function App() {
                 </>
             )}
 
-            {!pdfFile && !loading && !error && (
+            {!pdfFile && !loading && !error && !isExpired &&(
                 <div className="placeholder">
                     <div className="placeholder-content">
                         <p>The URL is incorrect. Please contact the owner or sender of this link.</p>
