@@ -2070,7 +2070,7 @@ function App() {
                                 onChange={(e) => setInitialAccepted(e.target.checked)}
                                 style={{ cursor: 'pointer', width: '18px', height: '18px' }}
                             />
-                            <span> I have read and agree to the <a target="#" className="termAndConditionLink">Terms and Conditions ↗</a></span>
+                            <span> I have read and agree to the <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">Terms and Conditions ↗</a></span>
                         </div>
                         <div className="bottom-bar-right">
                             {shouldShowSaveButton() && (
