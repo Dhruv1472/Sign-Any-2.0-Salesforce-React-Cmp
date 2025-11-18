@@ -58,20 +58,21 @@
 }
 
 .signature-modal-tabs {
+    position: absolute;
+    width: 200px;
     display: flex;
-    justify-content: center;
+    justify-content: start;
     padding: 4px 12px;
-    background-color: #f9f9f9;
     height: 48px;
     margin-top: 4px;
 }
 
 .signature-tabs-slider {
-    width: 100%;
+    width: 200px;
     position: relative;
-    display: inline-flex;
+    display: flex;
     background: #e0e0e0;
-    border-radius: 32px;
+    border-radius: 8px;
     padding: 4px;
     gap: 4px;
 }
@@ -79,9 +80,9 @@
 .signature-tabs-slider-indicator {
     position: absolute;
     height: calc(100% - 8px);
-    width: calc(33.333% - 5.33px);
-    background: #00aeff;
-    border-radius: 28px;
+    width: calc(50% - 5.33px);
+    background: var(--primary-color);
+    border-radius: 4px;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     top: 4px;
     left: 4px;
@@ -111,9 +112,7 @@
     color: #666;
     cursor: pointer;
     transition: color 0.3s;
-    border-radius: 28px;
-    width: 100%;
-    min-width: 100px;
+    width: 200px;
     height: 32px;
     display: flex;
     align-items: center;
@@ -128,8 +127,8 @@
     flex: 1;
     padding: 12px;
     overflow-y: auto;
-    min-height: 300px;
-    max-height: 300px;
+    min-height: 304px;
+    max-height: 304px;
 }
 
 .signature-modal-footer {
@@ -167,14 +166,15 @@
 }
 
 .signature-btn-clear {
-    background-color: #00aeff;
-    border: 1px solid #00aeff;
+    background-color: var(--primary-color);
+    border: 1px solid var(--primary-color);
     color: white;
 }
 
 .signature-btn-clear:hover:not(:disabled) {
-    background-color: #0088cc;
-    border-color: #0088cc;
+    background-color: var(--secondary-color);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
 }
 
 .signature-btn-clear:disabled {
@@ -185,14 +185,15 @@
 }
 
 .signature-btn-save {
-    background-color: #00aeff;
-    border: 1px solid #00aeff;
+    background-color: var(--primary-color);
+    border: 1px solid var(--primary-color);
     color: white;
 }
 
 .signature-btn-save:hover:not(:disabled) {
-    background-color: #0088cc;
-    border-color: #0088cc;
+    background-color: var(--secondary-color);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
 }
 
 .signature-btn-save:disabled {
