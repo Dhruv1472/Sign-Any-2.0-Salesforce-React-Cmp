@@ -790,6 +790,31 @@ function App() {
         setPageDimensions(dimensions);
     };
 
+    const renderThumbnailPages = async (pdf) => {
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const canvas = canvasRefsArray.current[`thumb-${pageNum - 1}`];
+            if (!canvas) continue;
+
+            try {
+                const page = await pdf.getPage(pageNum);
+
+                const viewport = page.getViewport({ scale: 0.25 }); // Small thumbnail scale
+                const ctx = canvas.getContext("2d");
+
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+
+                await page.render({
+                    canvasContext: ctx,
+                    viewport: viewport,
+                }).promise;
+            } catch (error) {
+                console.warn("Thumbnail render failed:", error);
+            }
+        }
+    };
+
+
     // Handle signature button click - will open signature modal
     const handleSignatureClick = (signature) => {
         if (isSubmitted) return;
@@ -1956,6 +1981,7 @@ function App() {
             // Small delay to ensure canvas elements are in the DOM
             setTimeout(() => {
                 renderAllPages(pdfDocRef.current);
+                renderThumbnailPages(pdfDocRef.current);
             }, 100);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1988,6 +2014,13 @@ function App() {
         } catch (gpsError) {
             console.warn("GPS failed, fallback to IP:", gpsError);
             return "Location Unavailable";
+        }
+    };
+
+    const handleScrollToPage = (pageNumber) => {
+        const target = document.querySelector(`[data-page="${pageNumber}"]`);
+        if (target) {
+            target.scrollIntoView({ behavior: "smooth", block: "start" });
         }
     };
 
@@ -2045,39 +2078,102 @@ function App() {
             {pdfFile && !isExpired && (
                 <>
                     <div className="pdf-container">
-                        <div className="canvas-container">
-                            {Array.from({ length: totalPages }, (_, index) => {
-                                const pageNumber = index + 1;
-                                return (
-                                    <div key={index} className="page-wrapper">
-                                        <div className="page-number">Page {pageNumber}</div>
-                                        <div className="canvas-wrapper">
-                                            <canvas ref={(el) => (canvasRefsArray.current[index] = el)}></canvas>
-                                            {signatureData.length > 0 && <SignatureOverlay pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onDelete={handleSignatureDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} />}
-                                            {fieldData.length > 0 && <FieldOverlay pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} />}
-                                        </div>
+                        <div className="heading">
+                            <h1 class="document-header">Send Document for Signing</h1>
+                        </div>
+                        <div className="content-section">
+                            <div className="preview-section">
+                                <div className="pages">
+                                    {Array.from({ length: totalPages }, (_, index) => {
+                                        const pageNumber = index + 1;
+                                        return (
+                                            <div key={index} className="preview-page-wrapper" onClick={() => handleScrollToPage(pageNumber)} >
+                                                <div className="preview-canvas-wrapper">
+                                                    <canvas ref={(el) => (canvasRefsArray.current[`thumb-${index}`] = el)} className="preview-thumbnail"/>                                                </div>
+                                                <div className="preview-page-number">{pageNumber}</div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <div className="bottom-bar">
+                                    <div className="bottom-bar-left">
+                                        <input
+                                            type="checkbox"
+                                            checked={initialAccepted}
+                                            onChange={(e) => setInitialAccepted(e.target.checked)}
+                                            style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+                                        />
+                                        <span> I have accept the <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">t & c ↗</a></span>
                                     </div>
-                                );
-                            })}
+                                    <div className="bottom-bar-right">
+                                        {shouldShowSaveButton() && (
+                                            <div className="action-btns">
+                                                <button className="reject-btn" onClick={handleSaveAndSubmit}>
+                                                    Reject
+                                                </button>
+                                                <button className="save-submit-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted}>
+                                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                        <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white"/>
+                                                    </svg>
+                                                    Submit
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="canvas-container">
+                                <div class="pdf-header">
+                                    <h4>Document Preview</h4>
+                                    <span> {totalPages} pages</span>
+                                    <div class="pdf-file-info">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M6 3C4.89688 3 4 3.89688 4 5V17C4 18.1031 4.89688 19 6 19H8.5V15.5C8.5 14.3969 9.39687 13.5 10.5 13.5H16V8.32812C16 7.79688 15.7906 7.2875 15.4156 6.9125L12.0844 3.58438C11.7094 3.20938 11.2031 3 10.6719 3H6ZM14.1719 8.5H11.25C10.8344 8.5 10.5 8.16563 10.5 7.75V4.82812L14.1719 8.5ZM10.5 14.875C10.1562 14.875 9.875 15.1562 9.875 15.5V19.5C9.875 19.8438 10.1562 20.125 10.5 20.125C10.8438 20.125 11.125 19.8438 11.125 19.5V18.625H11.5C12.5344 18.625 13.375 17.7844 13.375 16.75C13.375 15.7156 12.5344 14.875 11.5 14.875H10.5ZM11.5 17.375H11.125V16.125H11.5C11.8438 16.125 12.125 16.4062 12.125 16.75C12.125 17.0938 11.8438 17.375 11.5 17.375ZM14.5 14.875C14.1562 14.875 13.875 15.1562 13.875 15.5V19.5C13.875 19.8438 14.1562 20.125 14.5 20.125H15.5C16.3969 20.125 17.125 19.3969 17.125 18.5V16.5C17.125 15.6031 16.3969 14.875 15.5 14.875H14.5ZM15.125 18.875V16.125H15.5C15.7063 16.125 15.875 16.2937 15.875 16.5V18.5C15.875 18.7063 15.7063 18.875 15.5 18.875H15.125ZM17.875 15.5V19.5C17.875 19.8438 18.1562 20.125 18.5 20.125C18.8438 20.125 19.125 19.8438 19.125 19.5V18.125H20C20.3438 18.125 20.625 17.8438 20.625 17.5C20.625 17.1562 20.3438 16.875 20 16.875H19.125V16.125H20C20.3438 16.125 20.625 15.8438 20.625 15.5C20.625 15.1562 20.3438 14.875 20 14.875H18.5C18.1562 14.875 17.875 15.1562 17.875 15.5Z" fill="#FF8282" />
+                                        </svg>
+                                        <span>documentName</span>
+                                    </div>
+                                </div>
+                                {Array.from({ length: totalPages }, (_, index) => {
+                                    const pageNumber = index + 1;
+                                    return (
+                                        <div key={index} className="page-wrapper" data-page={pageNumber}>
+                                            <div className="page-number">Page {pageNumber}</div>
+                                            <div className="canvas-wrapper">
+                                                <canvas ref={(el) => (canvasRefsArray.current[index] = el)}></canvas>
+                                                {signatureData.length > 0 && <SignatureOverlay pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onDelete={handleSignatureDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} />}
+                                                {fieldData.length > 0 && <FieldOverlay pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} />}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
-                    </div>
 
-                    <div className="bottom-bar">
-                        <div className="bottom-bar-left">
-                            <input
-                                type="checkbox"
-                                checked={initialAccepted}
-                                onChange={(e) => setInitialAccepted(e.target.checked)}
-                                style={{ cursor: 'pointer', width: '18px', height: '18px' }}
-                            />
-                            <span> I have read and agree to the <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">Terms and Conditions ↗</a></span>
-                        </div>
-                        <div className="bottom-bar-right">
-                            {shouldShowSaveButton() && (
-                                <button className="save-submit-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted}>
-                                    Save & Submit
-                                </button>
-                            )}
+                        <div className="footer">
+                            <div className="bottom-bar-left">
+                                <input
+                                    type="checkbox"
+                                    checked={initialAccepted}
+                                    onChange={(e) => setInitialAccepted(e.target.checked)}
+                                    style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+                                />
+                                <span> I have accept the <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">t & c ↗</a></span>
+                            </div>
+                            <div className="bottom-bar-right">
+                                {shouldShowSaveButton() && (
+                                    <div className="action-btns">
+                                        <button className="reject-btn" onClick={handleSaveAndSubmit}>
+                                            Reject
+                                        </button>
+                                        <button className="save-submit-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted}>
+                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white"/>
+                                            </svg>
+                                            Submit
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </>
