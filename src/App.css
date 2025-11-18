@@ -277,6 +277,9 @@
 	padding: 0 4px;
 	border-radius: 4px;
 	font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .pdf-file-info lightning-button-icon {
@@ -285,11 +288,13 @@
 
 .content-section{
   display: flex;
+  width: 100%;
   height: calc(100vh - 54px - 3rem);
 }
 
 .preview-section{
-  max-width: 25%;
+  width: 16%;
+  flex-shrink: 0;
   height: 100%;
   border: 1px solid #ddd;
   border-radius: 8px;
@@ -301,7 +306,9 @@
   margin: 1rem 0 0 0;
   overflow-y: scroll;
   scrollbar-width: none;
-  width: 270px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .pages{
@@ -392,7 +399,7 @@
     }
 
     .content-section{
-        height: calc(100vh - 54px - 10rem);
+        /* height: calc(100vh - 54px - 10rem); */
         padding-bottom: 3rem;
     }
 }
@@ -437,6 +444,6 @@
     } */
 
     .content-section{
-        height: calc(100vh - 54px - 6rem);
+        height: calc(100vh - 54px - 3rem);
     }
 }
