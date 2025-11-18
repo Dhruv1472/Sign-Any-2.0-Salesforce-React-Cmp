@@ -1,8 +1,8 @@
 .signature-button {
-    background-color: #00aeff;
-    color: white;
+    background-color: transparent;
+    color: black;
     padding: 8px 16px;
-    border: none;
+    border: 2px dashed rgb(0, 174, 255);
     border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.3s ease;
@@ -12,9 +12,9 @@
     height: 100%;
 }
 
-.signature-button:hover:not(:disabled) {
+/* .signature-button:hover:not(:disabled) {
     background-color: #0088cc;
-}
+} */
 
 .signature-button:disabled {
     background-color: #ccc;
