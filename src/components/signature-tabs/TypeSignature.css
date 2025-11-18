@@ -1,55 +1,93 @@
 .type-signature-container {
     display: flex;
-    flex-direction: column;
-    gap: 12px;
-    height: 276px;
+    gap: 16px;
+    width: 100%;
+    height: 280px;
+    max-height: 280px;
+    align-items: flex-start;
 }
 
 .type-signature-top-header {
     display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    align-items: center;
-    height: 32px;
+    flex-direction: column;
+    gap: 12px;
+    width: 200px;
+    min-width: 200px;
+    flex-shrink: 0;
+    height: 230px;
+    border: 1px solid #ddd;
+    padding: 16px;
+    border-radius: 12px;
+    margin-top: 48px;
+}
+
+.left-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
 }
 
 .right-section {
     display: flex;
+    flex-direction: column;
     gap: 8px;
+    width: 100%;
+}
+
+.type-signature-style-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
 }
 
 .type-signature-preview-section {
-    flex: 1 1 auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
 }
 
 .type-signature-input-section,
-.type-signature-font-section,
-.type-signature-preview-section {
+.type-signature-font-section {
     display: flex;
     flex-direction: column;
+    gap: 4px;
 }
 
 .type-signature-input-section label,
 .type-signature-font-section label,
 .type-signature-preview-section label {
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 500;
-    color: #333;
+    color: #666;
 }
 
 .type-signature-input {
     padding: 8px;
-    border: 2px solid #ddd;
-    border-radius: 4px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
     font-size: 14px;
     transition: border-color 0.2s;
     height: 32px;
-    width: 200px;
+    width: 100%;
+}
+
+.type-signature-char-counter {
+    font-size: 11px;
+    color: #666;
+    margin-top: 4px;
+    text-align: right;
+    transition: color 0.2s;
+}
+
+.type-signature-char-counter.red {
+    color: red;
 }
 
 .type-signature-input:focus {
     outline: none;
-    border-color: #00aeff;
+    border-color: var(--primary-color);
 }
 
 /* Restricted mode styling */
@@ -74,27 +112,32 @@
 
 .type-signature-font-select {
     padding: 0 8px;
-    border: 2px solid #ddd;
-    border-radius: 4px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
     font-size: 14px;
     background: white;
     cursor: pointer;
     transition: border-color 0.2s;
     height: 32px;
-    width: 150px;
+    width: 100%;
 }
 
 .type-signature-font-select:focus {
     outline: none;
-    border-color: #00aeff;
+    border-color: var(--primary-color);
 }
 
 /* Style Buttons (Bold, Italic) */
+.type-signature-style-buttons {
+    display: flex;
+    gap: 8px;
+}
+
 .type-signature-style-btn {
     height: 32px;
     width: 32px;
-    border: 2px solid #ddd;
-    border-radius: 4px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
     background: white;
     color: #333;
     cursor: pointer;
@@ -103,50 +146,56 @@
     justify-content: center;
     transition: all 0.2s;
     padding: 0;
+    flex-shrink: 0;
 }
 
 .type-signature-style-btn:hover {
-    background: #f0f0f0;
-    border-color: #00aeff;
+    background: var(--secondary-color);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
 }
 
 .type-signature-style-btn.active {
-    background: #00aeff;
-    border-color: #00aeff;
+    background: var(--primary-color);
+    border-color: var(--primary-color);
     color: white;
 }
 
 /* Font Size Select */
 .type-signature-size-section {
     display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
 .type-signature-size-select {
     padding: 0 8px;
-    border: 2px solid #ddd;
-    border-radius: 4px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
     font-size: 14px;
     background: white;
     cursor: pointer;
     transition: border-color 0.2s;
     height: 32px;
-    width: 80px;
+    width: 100%;
 }
 
 .type-signature-size-select:focus {
     outline: none;
-    border-color: #00aeff;
+    border-color: #2863EB;
 }
 
 .type-signature-preview {
-    min-height: 120px;
-    border: 2px solid #ddd;
+    height: 280px;
+    max-height: 280px;
+    border: 2px solid var(--primary-color);
     border-radius: 8px;
     background: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    flex: 1 1 auto;
+    overflow: hidden;
+    padding: 12px;
 }
 
 .type-signature-preview-text {
@@ -160,33 +209,28 @@
     font-size: 16px;
 }
 
-.type-signature-clear-btn {
-    align-self: flex-end;
-    height: 32px;
-    padding: 0 24px;
-    border: 1px solid #00aeff;
-    border-radius: 4px;
-    background: #00aeff;
-    color: white;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .type-signature-container {
+        flex-direction: column;
+        gap: 12px;
+        height: auto;
+    }
 
-.type-signature-clear-btn:hover:not(:disabled) {
-    background: #0088cc;
-    border-color: #0088cc;
-}
+    .type-signature-top-header {
+        flex-direction: column;
+        width: 100%;
+        min-width: 100%;
+    }
 
-.type-signature-clear-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    background: #ccc;
-    border-color: #ccc;
+    .right-section {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .type-signature-preview {
+        min-height: 150px;
+    }
 }
 
 /* Mobile responsiveness */

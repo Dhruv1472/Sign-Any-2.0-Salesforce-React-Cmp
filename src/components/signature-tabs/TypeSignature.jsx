@@ -100,91 +100,69 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", signatureTyp
         setSelectedFont(e.target.value);
     };
 
-    // Get placeholder text based on signature type
-    const getPlaceholder = () => {
-        if (signatureType === "text") return "Enter text here";
-        if (signatureType === "initials") return "Enter initials here";
-        return "Type your name here";
-    };
-
-    // Check if all styling controls are hidden (simplified mode)
-    const isSimplifiedMode = hideBold && hideItalic && hideFontStyle && hideFontSize;
-
     return (
         <div className="type-signature-container">
-            <div className={isSimplifiedMode ? "type-signature-restricted" : "type-signature-top-header"}>
-                {isSimplifiedMode ? (
-                    // Simplified mode - Only text input
+            <div className="type-signature-top-header">
+                <div className="left-section">
+                    {/* Text Input */}
                     <div className="type-signature-input-section">
-                        <input id="signature-text" type="text" className="type-signature-input type-signature-input-large" value={text} onChange={handleTextChange} placeholder={getPlaceholder()} autoFocus maxLength={maxTextLength} />
-                        {signatureType === "initials" && text.length > 0 && maxTextLength <= 10 && (
-                            <div className="type-signature-hint">
-                                <small>Initials are typically 2-3 characters</small>
+                        <input id="signature-text" type="text" className="type-signature-input" value={text} onChange={handleTextChange} placeholder="Type your name here" autoFocus maxLength={maxTextLength} />
+                        {maxTextLength && maxTextLength < 100 && (
+                            <div className={`type-signature-char-counter ${text.length == maxTextLength ? "red" : ""}`}>
+                                {text.length} / {maxTextLength} characters
                             </div>
                         )}
                     </div>
-                ) : (
-                    // Full mode with conditional controls
-                    <>
-                        <div className="left-section">
-                            {/* Text Input */}
-                            <div className="type-signature-input-section">
-                                <input id="signature-text" type="text" className="type-signature-input" value={text} onChange={handleTextChange} placeholder={getPlaceholder()} autoFocus maxLength={maxTextLength} />
-                                {maxTextLength && maxTextLength < 100 && (
-                                    <div className="type-signature-char-counter" style={{ fontSize: '11px', color: '#666', marginTop: '4px', textAlign: 'right' }}>
-                                        {text.length} / {maxTextLength} characters
-                                    </div>
-                                )}
+                </div>
+
+                <div className="right-section">
+                    {/* Font Style, Bold, and Italic in one row */}
+                    <div className="type-signature-style-row">
+                        {/* Font Family Select */}
+                        {!hideFontStyle && (
+                            <div className="type-signature-font-section" style={{ flex: 1 }}>
+                                <select id="signature-font" className="type-signature-font-select" value={selectedFont} onChange={handleFontChange}>
+                                    {fonts.map((font) => (
+                                        <option key={font} value={font}>
+                                            {font}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
+                        )}
+
+                        {/* Bold Button */}
+                        {!hideBold && (
+                            <button className={`type-signature-style-btn ${isBold ? "active" : ""}`} onClick={() => setIsBold(!isBold)} title="Bold">
+                                <svg width="9" height="11" viewBox="0 0 9 11" fill="currentColor">
+                                    <path d="M5.19531 5C6.39844 5.08854 7.29167 5.38802 7.875 5.89844C8.45833 6.40885 8.75 7.04688 8.75 7.8125C8.75 8.47917 8.55208 9.05469 8.15625 9.53906C7.76042 10.0182 7.2526 10.3333 6.63281 10.4844C6.01823 10.6302 5.19271 10.7031 4.15625 10.7031H0V10.3438H0.40625C0.859375 10.3438 1.17188 10.2865 1.34375 10.1719C1.52083 10.0573 1.63281 9.88021 1.67969 9.64062C1.72656 9.39583 1.75 8.83073 1.75 7.94531V2.78906C1.75 1.92969 1.72396 1.375 1.67188 1.125C1.625 0.875 1.52083 0.703125 1.35938 0.609375C1.20312 0.515625 0.856771 0.46875 0.320312 0.46875H0.117188V0.109375L1.85938 0.0625L3.84375 0C6.73958 0 8.1875 0.833333 8.1875 2.5C8.1875 3.1875 7.9375 3.73958 7.4375 4.15625C6.94271 4.57292 6.19531 4.85417 5.19531 5ZM3.28125 4.85156C3.41146 4.85677 3.52083 4.85938 3.60938 4.85938C4.73438 4.85938 5.5026 4.68229 5.91406 4.32812C6.32552 3.97396 6.53125 3.40104 6.53125 2.60938C6.53125 2.05729 6.45052 1.63021 6.28906 1.32812C6.1276 1.02604 5.88542 0.794271 5.5625 0.632812C5.23958 0.466146 4.6875 0.382812 3.90625 0.382812C3.70312 0.382812 3.49479 0.390625 3.28125 0.40625V4.85156ZM3.28125 5.23438V7.59375C3.28125 8.59896 3.29948 9.23698 3.33594 9.50781C3.3724 9.77865 3.46875 9.98438 3.625 10.125C3.78646 10.2656 4.10156 10.3359 4.57031 10.3359C5.40365 10.3359 6.02865 10.1224 6.44531 9.69531C6.86198 9.26823 7.07031 8.6276 7.07031 7.77344C7.07031 6.89844 6.83333 6.25521 6.35938 5.84375C5.89062 5.42708 5.0625 5.21875 3.875 5.21875C3.6875 5.21875 3.48958 5.22396 3.28125 5.23438Z" fill="currentColor" />
+                                </svg>
+                            </button>
+                        )}
+
+                        {/* Italic Button */}
+                        {!hideItalic && (
+                            <button className={`type-signature-style-btn ${isItalic ? "active" : ""}`} onClick={() => setIsItalic(!isItalic)} title="Italic">
+                                <svg width="8" height="11" viewBox="0 0 8 11" fill="currentColor">
+                                    <path d="M4.57812 10.2344L4.46875 10.5938H0L0.109375 10.2344H0.351562C0.674479 10.2344 0.947917 10.1771 1.17188 10.0625C1.39583 9.94271 1.54688 9.80729 1.625 9.65625C1.70833 9.5 1.82812 9.16146 1.98438 8.64062L4.02344 1.89844C4.1849 1.3776 4.26562 1.05208 4.26562 0.921875C4.26562 0.546875 3.92969 0.359375 3.25781 0.359375H2.97656L3.08594 0H7.25L7.14062 0.359375H6.92188C6.67188 0.359375 6.44531 0.403646 6.24219 0.492188C6.03906 0.580729 5.89323 0.703125 5.80469 0.859375C5.72135 1.01562 5.58073 1.41927 5.38281 2.07031L3.40625 8.5625C3.25521 9.05729 3.17969 9.36979 3.17969 9.5C3.17969 9.75521 3.28906 9.94271 3.50781 10.0625C3.73177 10.1771 3.98698 10.2344 4.27344 10.2344H4.57812Z" fill="currentColor" />
+                                </svg>
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Font Size Select below */}
+                    {!hideFontSize && (
+                        <div className="type-signature-size-section">
+                            <select id="signature-size" className="type-signature-size-select" value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))}>
+                                {fontSizes.map((size) => (
+                                    <option key={size} value={size}>
+                                        {size}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
-
-                        <div className="right-section">
-                            {/* Bold Button */}
-                            {!hideBold && (
-                                <button className={`type-signature-style-btn ${isBold ? "active" : ""}`} onClick={() => setIsBold(!isBold)} title="Bold">
-                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                        <path d="M4 2h5.5C11.43 2 13 3.57 13 5.5c0 1.25-.66 2.35-1.65 2.97C12.61 9.09 14 10.8 14 12.5 14 14.43 12.43 16 10.5 16H4V2zm5.5 5C10.88 7 12 5.88 12 4.5S10.88 2 9.5 2H5v5h4.5zM5 8v6h5.5c1.38 0 2.5-1.12 2.5-2.5S11.88 8 10.5 8H5z" />
-                                    </svg>
-                                </button>
-                            )}
-
-                            {/* Italic Button */}
-                            {!hideItalic && (
-                                <button className={`type-signature-style-btn ${isItalic ? "active" : ""}`} onClick={() => setIsItalic(!isItalic)} title="Italic">
-                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                        <path d="M7 2.5v1h3.5l-4 9H3v1h6.5v-1H6l4-9h3.5v-1H7z" />
-                                    </svg>
-                                </button>
-                            )}
-
-                            {/* Font Family Select */}
-                            {!hideFontStyle && (
-                                <div className="type-signature-font-section">
-                                    <select id="signature-font" className="type-signature-font-select" value={selectedFont} onChange={handleFontChange}>
-                                        {fonts.map((font) => (
-                                            <option key={font} value={font}>
-                                                {font}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-
-                            {/* Font Size Select */}
-                            {!hideFontSize && (
-                                <div className="type-signature-size-section">
-                                    <select id="signature-size" className="type-signature-size-select" value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))}>
-                                        {fontSizes.map((size) => (
-                                            <option key={size} value={size}>
-                                                {size}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-                        </div>
-                    </>
-                )}
+                    )}
+                </div>
             </div>
 
             <div className="type-signature-preview-section">
@@ -201,7 +179,7 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", signatureTyp
                             {text}
                         </span>
                     ) : (
-                        <span className="type-signature-preview-placeholder">Your {signatureType} will appear here</span>
+                        <span className="type-signature-preview-placeholder">Your Signature will appear here</span>
                     )}
                 </div>
             </div>

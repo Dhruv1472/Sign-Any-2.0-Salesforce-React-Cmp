@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import DrawSignature from "./signature-tabs/DrawSignature";
 import TypeSignature from "./signature-tabs/TypeSignature";
-import UploadSignature from "./signature-tabs/UploadSignature";
 import "./SignatureModal.css";
 
 const TABS = {
@@ -26,10 +25,6 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
     const [clearTrigger, setClearTrigger] = useState(0);
 
     if (!isOpen) return null;
-
-    // Get signature type (signature, text, or initials)
-    const signatureType = signature?.type || "signature";
-    const isTextOrInitials = signatureType === "text" || signatureType === "initials";
 
     const handleSave = () => {
         if (signatureData && onSave) {
@@ -60,11 +55,13 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
                 <div className="signature-modal-header">
                     <h2>{title}</h2>
                     <button className="signature-modal-close" onClick={handleClose}>
-                        ×
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M7 7L17 17M7 17L17 7" stroke="#5F5F5F" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
                     </button>
                 </div>
 
-                {!isTextOrInitials && (
+                <div className="signature-modal-body">
                     <div className="signature-modal-tabs">
                         <div className="signature-tabs-slider">
                             <button className={`signature-tab ${activeTab === TABS.DRAW ? "active" : ""}`} onClick={() => setActiveTab(TABS.DRAW)}>
@@ -73,24 +70,14 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
                             <button className={`signature-tab ${activeTab === TABS.TYPE ? "active" : ""}`} onClick={() => setActiveTab(TABS.TYPE)}>
                                 Type
                             </button>
-                            <button className={`signature-tab ${activeTab === TABS.UPLOAD ? "active" : ""}`} onClick={() => setActiveTab(TABS.UPLOAD)}>
-                                Upload
-                            </button>
                             <div className="signature-tabs-slider-indicator" data-active={activeTab}></div>
                         </div>
                     </div>
-                )}
 
-                <div className="signature-modal-content">
-                    {isTextOrInitials ? (
-                        <TypeSignature onChange={handleSignatureChange} clearTrigger={clearTrigger} signatureType={signatureType} hideBold={true} hideItalic={true} hideFontStyle={true} hideFontSize={true} availableFonts={["Arial", "Courier New", "Times New Roman", "Verdana"]} defaultFontStyle="Arial" defaultFontSize={48} minFontSize={24} maxFontSize={48} fontSizeStep={4} maxTextLength={signatureType === "initials" ? 5 : 50} />
-                    ) : (
-                        <>
-                            {activeTab === TABS.DRAW && <DrawSignature onChange={handleSignatureChange} clearTrigger={clearTrigger} />}
-                            {activeTab === TABS.TYPE && <TypeSignature onChange={handleSignatureChange} clearTrigger={clearTrigger} signatureType={signatureType} defaultValue={signature?.defaultValue || ""} maxTextLength={signature?.maxLength || 50} />}
-                            {activeTab === TABS.UPLOAD && <UploadSignature onChange={handleSignatureChange} clearTrigger={clearTrigger} />}
-                        </>
-                    )}
+                    <div className="signature-modal-content">
+                        {activeTab === TABS.DRAW && <DrawSignature onChange={handleSignatureChange} clearTrigger={clearTrigger} />}
+                        {activeTab === TABS.TYPE && <TypeSignature onChange={handleSignatureChange} clearTrigger={clearTrigger} defaultValue={signature?.defaultValue || ""} maxTextLength={signature?.maxLength || 50} />}
+                    </div>
                 </div>
 
                 <div className="signature-modal-footer">
