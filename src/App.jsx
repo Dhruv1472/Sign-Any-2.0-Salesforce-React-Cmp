@@ -46,6 +46,84 @@ function App() {
     const canvasRefsArray = useRef([]);
     const pdfDocRef = useRef(null);
 
+    // Check URL parameters on mount
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const accessToken = urlParams.get("act");
+        const recordId = urlParams.get("recordId");
+        const instanceUrl = urlParams.get("instanceUrl");
+        const clientId = urlParams.get("clientId");
+        const clientSecret = urlParams.get("clientSecret");
+        const priority = urlParams.get("priority");
+
+        // Parse and store priority if provided
+        const parsedPriority = priority ? parseInt(priority, 10) : 1;
+        setUrlPriority(parsedPriority);
+
+        if (recordId && instanceUrl) {
+            // Store Salesforce config for later use
+            setSalesforceConfig({ accessToken, recordId, instanceUrl, clientId, clientSecret });
+
+            // Fetch Document__c record and then PDF
+            fetchDocumentAndPdf(recordId, accessToken, instanceUrl, clientId, clientSecret);
+
+            // Also fetch Organization Id
+            fetchOrganizationId(accessToken, instanceUrl, clientId, clientSecret)
+                .then((id) => setOrgIdState(id))
+                .catch(() => setOrgIdState(null));
+        }
+
+        // window.history.replaceState({}, document.title, window.location.pathname);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Main function to fetch Document and then PDF
+    const fetchDocumentAndPdf = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+        setLoading(true);
+        setError(null);
+        setIsExpired(false);
+
+        try {
+            // Step 1: Fetch Document__c record to get ContentVersion ID and signature/field data
+            const { contentVersionId, currentToken, documentData, signatureData: sigData, fieldData: fieldDataFromRecord, isExpired: documentExpired } = await fetchDocumentRecord(documentId, accessToken, instanceUrl, clientId, clientSecret);
+
+            // Check if document is expired
+            if (documentExpired) {
+                setIsExpired(true);
+                setPdfFile(null);
+                setTotalPages(0);
+                setPageDimensions([]);
+                pdfDocRef.current = null;
+                canvasRefsArray.current = [];
+                setLoading(false);
+                return;
+            }
+
+            console.log(`Fetched ContentVersion ID: ${contentVersionId}`);
+            console.log(`Signature Data:`, sigData);
+            console.log(`Field Data:`, fieldDataFromRecord);
+
+            // Store document record and data directly (no parsing needed)
+            setDocumentRecord(documentData);
+            const signatures = Array.isArray(sigData) ? sigData : [];
+            const fields = Array.isArray(fieldDataFromRecord) ? fieldDataFromRecord : [];
+            setSignatureData(signatures);
+            setFieldData(fields);
+
+            // Store initial data to detect changes later
+            setInitialSignatureData(JSON.parse(JSON.stringify(signatures)));
+            setInitialFieldData(JSON.parse(JSON.stringify(fields)));
+
+            // Step 2: Fetch PDF from ContentVersion
+            await fetchPdfFromContentVersion(contentVersionId, currentToken, instanceUrl);
+        } catch (error) {
+            console.error("Error in fetchDocumentAndPdf:", error);
+            setError(`Failed to load document: ${error.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // Load PDF from array buffer
     const loadPdfFromArrayBuffer = async (arrayBuffer, fileName = "document.pdf") => {
         try {
@@ -56,9 +134,6 @@ function App() {
             setTotalPages(pdf.numPages);
             setPdfFile(fileName);
             setError(null);
-
-            // Store original PDF bytes for later modification
-            // setOriginalPdfBytes(typedArray);
         } catch (error) {
             console.error("Error loading PDF:", error);
             setError("Error loading PDF file");
@@ -123,9 +198,9 @@ function App() {
         try {
             let currentToken = accessToken;
             const query = `SELECT Id, Field_Index__c, Signing_Details__c FROM Signature__c WHERE Document__c = '${documentId}'`;
-            
+
             const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
-            
+
             let response = await fetch(apiUrl, {
                 method: "GET",
                 headers: {
@@ -225,9 +300,7 @@ function App() {
             const upsertPromises = recordsToUpsert.map(async (record) => {
                 const isUpdate = !!record.Id;
                 const method = isUpdate ? "PATCH" : "POST";
-                const apiUrl = isUpdate 
-                    ? `${instanceUrl}/services/data/v65.0/sobjects/Signature__c/${record.Id}`
-                    : `${instanceUrl}/services/data/v65.0/sobjects/Signature__c`;
+                const apiUrl = isUpdate ? `${instanceUrl}/services/data/v65.0/sobjects/Signature__c/${record.Id}` : `${instanceUrl}/services/data/v65.0/sobjects/Signature__c`;
 
                 // Remove Id from body if updating (Id is in URL)
                 const body = isUpdate ? { ...record } : record;
@@ -262,7 +335,7 @@ function App() {
 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    throw new Error(`Failed to ${isUpdate ? 'update' : 'create'} Signature record (Field Index: ${record.Field_Index__c}): ${response.status} ${response.statusText} - ${errorText}`);
+                    throw new Error(`Failed to ${isUpdate ? "update" : "create"} Signature record (Field Index: ${record.Field_Index__c}): ${response.status} ${response.statusText} - ${errorText}`);
                 }
 
                 const result = await response.json();
@@ -283,9 +356,8 @@ function App() {
     const fetchDocumentRecord = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
-            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(`SELECT Id, Uploaded_Document_Id__c, Signing_Details__c, Status__c, CreatedDate, CreatedBy.Name, CreatedBy.Email, Email_Subject__c, Document_Name__c, Expiration_Date__c FROM Document__c WHERE Id='${documentId}' LIMIT 1`)}`;
             // Salesforce REST API endpoint to get Document__c record
-            // const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(objQuery)}`;
+            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(`SELECT Id, Uploaded_Document_Id__c, Signing_Details__c, Status__c, CreatedDate, CreatedBy.Name, CreatedBy.Email, Email_Subject__c, Document_Name__c, Expiration_Date__c FROM Document__c WHERE Id='${documentId}' LIMIT 1`)}`;
 
             let response = await fetch(apiUrl, {
                 method: "GET",
@@ -316,8 +388,8 @@ function App() {
 
             let documentData = await response.json();
             documentData = documentData.records[0];
-            console.log('documentData', documentData);
-            
+            console.log("documentData", documentData);
+
             // Check if document is expired
             if (documentData.Expiration_Date__c) {
                 const expirationDate = new Date(documentData.Expiration_Date__c);
@@ -325,14 +397,14 @@ function App() {
                 // Set time to start of day for fair comparison
                 today.setHours(0, 0, 0, 0);
                 expirationDate.setHours(0, 0, 0, 0);
-                
+
                 if (expirationDate < today) {
                     setIsExpired(true);
                     setError(null);
                     return { isExpired: true };
                 }
             }
-            
+
             const contentVersionId = documentData.Uploaded_Document_Id__c;
             const signatureDataJson = documentData.Signing_Details__c;
 
@@ -355,7 +427,7 @@ function App() {
                                     const typeLower = typeof field.type === "string" ? field.type.toLowerCase() : "";
                                     const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(typeLower);
                                     const isSignatureType = ["signature"].includes(typeLower) || (!isFieldType && !field.fieldType);
-                                    
+
                                     if (isFieldType) {
                                         parsedFieldData.push({
                                             ...field,
@@ -400,9 +472,9 @@ function App() {
 
             // Fetch Signature__c records to get imageUrl data
             const signatureRecords = await fetchSignatureRecords(documentId, currentToken, instanceUrl, clientId, clientSecret);
-            
+
             console.log("Fetched Signature__c records:", signatureRecords);
-            
+
             // Create a map of fieldIndex -> signature data
             // Store with both string and number keys to handle type mismatches
             const signatureMap = new Map();
@@ -528,53 +600,6 @@ function App() {
         }
     };
 
-    // Main function to fetch Document and then PDF
-    const fetchDocumentAndPdf = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
-        setLoading(true);
-        setError(null);
-        setIsExpired(false);
-
-        try {
-            // Step 1: Fetch Document__c record to get ContentVersion ID and signature/field data
-            const { contentVersionId, currentToken, documentData, signatureData: sigData, fieldData: fieldDataFromRecord, isExpired: documentExpired } = await fetchDocumentRecord(documentId, accessToken, instanceUrl, clientId, clientSecret);
-
-            // Check if document is expired
-            if (documentExpired) {
-                setIsExpired(true);
-                setPdfFile(null);
-                setTotalPages(0);
-                setPageDimensions([]);
-                pdfDocRef.current = null;
-                canvasRefsArray.current = [];
-                setLoading(false);
-                return;
-            }
-
-            console.log(`Fetched ContentVersion ID: ${contentVersionId}`);
-            console.log(`Signature Data:`, sigData);
-            console.log(`Field Data:`, fieldDataFromRecord);
-
-            // Store document record and data directly (no parsing needed)
-            setDocumentRecord(documentData);
-            const signatures = Array.isArray(sigData) ? sigData : [];
-            const fields = Array.isArray(fieldDataFromRecord) ? fieldDataFromRecord : [];
-            setSignatureData(signatures);
-            setFieldData(fields);
-            
-            // Store initial data to detect changes later
-            setInitialSignatureData(JSON.parse(JSON.stringify(signatures)));
-            setInitialFieldData(JSON.parse(JSON.stringify(fields)));
-
-            // Step 2: Fetch PDF from ContentVersion
-            await fetchPdfFromContentVersion(contentVersionId, currentToken, instanceUrl);
-        } catch (error) {
-            console.error("Error in fetchDocumentAndPdf:", error);
-            setError(`Failed to load document: ${error.message}`);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     // Update Document__c record with signature and field data
     const updateDocumentRecord = async (documentId, signatureData, fieldData, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
@@ -603,7 +628,7 @@ function App() {
 
             // Combine sanitized signature and field data into a single array
             const combinedData = [...(sanitizedSignatureData || []), ...(fieldData || [])];
-            
+
             // Convert combined data to JSON string
             const signatureDataJson = JSON.stringify(combinedData);
 
@@ -706,37 +731,6 @@ function App() {
         }
     };
 
-    // Check URL parameters on mount
-    useEffect(() => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const accessToken = urlParams.get("act");
-        const recordId = urlParams.get("recordId");
-        const instanceUrl = urlParams.get("instanceUrl");
-        const clientId = urlParams.get("clientId");
-        const clientSecret = urlParams.get("clientSecret");
-        const priority = urlParams.get("priority");
-
-        // Parse and store priority if provided
-        const parsedPriority = priority ? parseInt(priority, 10) : 1;
-        setUrlPriority(parsedPriority);
-
-        if (recordId && instanceUrl) {
-            // Store Salesforce config for later use
-            setSalesforceConfig({ accessToken, recordId, instanceUrl, clientId, clientSecret });
-
-            // Fetch Document__c record and then PDF
-            fetchDocumentAndPdf(recordId, accessToken, instanceUrl, clientId, clientSecret);
-
-            // Also fetch Organization Id
-            fetchOrganizationId(accessToken, instanceUrl, clientId, clientSecret)
-                .then((id) => setOrgIdState(id))
-                .catch(() => setOrgIdState(null));
-        }
-
-        // window.history.replaceState({}, document.title, window.location.pathname);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     const renderPage = async (pdf, pageNumber, canvas, targetWidth) => {
         if (!canvas) {
             console.error("Canvas not available for page", pageNumber);
@@ -814,7 +808,6 @@ function App() {
         }
     };
 
-
     // Handle signature button click - will open signature modal
     const handleSignatureClick = (signature) => {
         if (isSubmitted) return;
@@ -836,7 +829,7 @@ function App() {
 
         try {
             // 1. Get user's public IP address
-            const ipRes = await fetch('https://api.ipify.org?format=json');
+            const ipRes = await fetch("https://api.ipify.org?format=json");
             const ipData = await ipRes.json();
             const ipAddress = ipData.ip;
 
@@ -846,7 +839,7 @@ function App() {
             // Extract OS and Chrome version
             const osMatch = userAgent.match(/\(([^;]+);/);
             const osVersion = osMatch ? osMatch[1].trim() : "Unknown OS";
-            
+
             const chromeMatch = userAgent.match(/Chrome\/([\d.]+)/);
             const chromeVersion = chromeMatch ? chromeMatch[1] : "Unknown Chrome Version";
 
@@ -858,20 +851,20 @@ function App() {
             console.log("locationInfo==> ", locationInfo);
             // Get the parent signer object (attached in handleSignatureClick)
             const signerObject = signature._parentSigner;
-            
+
             // 2. Update signatures array with image and ipAddress, passing signer object for correct matching
             let updatedSignatures = updateSignatureWithImage(signatureData, signature.index, imageData, signature.type, signerObject);
             console.log("updatedSignatures==> ", updatedSignatures);
-            
+
             // 3. Insert ipAddress in the correct signer's fields only
-            updatedSignatures = updatedSignatures.map(sig => {
+            updatedSignatures = updatedSignatures.map((sig) => {
                 // Only update the fields if this is the correct signer
                 if (sig.fields && Array.isArray(sig.fields)) {
                     const isCorrectSigner = signerObject && (sig.priority === signerObject.priority || sig.email === signerObject.email);
                     if (isCorrectSigner) {
                         return {
                             ...sig,
-                            fields: sig.fields.map(field => {
+                            fields: sig.fields.map((field) => {
                                 if (field.index === signature.index) {
                                     return {
                                         ...field,
@@ -879,12 +872,12 @@ function App() {
                                         deviceInfo,
                                         locationInfo,
                                         timeStamp,
-                                        signatureType,      
-                                        filled: true        
+                                        signatureType,
+                                        filled: true,
                                     };
                                 }
                                 return field;
-                            })
+                            }),
                         };
                     }
                 }
@@ -896,10 +889,10 @@ function App() {
         } catch (e) {
             console.warn("Could not fetch IP address:", e);
             // Fallback: Just update without IP
-            
+
             // Get the parent signer object (attached in handleSignatureClick)
             const signerObject = signature._parentSigner;
-            
+
             const updatedSignatures = updateSignatureWithImage(signatureData, signature.index, imageData, signature.type, signerObject);
             setSignatureData(updatedSignatures);
             setSessionSignedKeys((prev) => new Set(prev).add(signature.index));
@@ -915,10 +908,10 @@ function App() {
     // Handle signature deletion
     const handleSignatureDelete = (signature) => {
         console.log("Delete signature:", signature);
-        
+
         // Get the parent signer object (attached in handleSignatureClick)
         const signerObject = signature._parentSigner;
-        
+
         const updatedSignatures = deleteSignatureImage(signatureData, signature.index, signature.type, signerObject);
         setSignatureData(updatedSignatures);
 
@@ -965,7 +958,7 @@ function App() {
             console.error("Attempted to save field value to a signature:", field);
             return;
         }
-        
+
         console.log("Field saved:", field.index, value);
         const updatedFields = updateFieldWithValue(fieldData, field.index, value, field.fieldType || field.type);
         setFieldData(updatedFields);
@@ -998,9 +991,9 @@ function App() {
     const handleSaveAndSubmit = async () => {
         // Validate if all signature fields are filled for current priority
         const unfilledFields = signatureData
-            .filter(sig => sig.priority == urlPriority)
-            .flatMap(sig => sig.fields || [])
-            .filter(field => !field.filled);
+            .filter((sig) => sig.priority == urlPriority)
+            .flatMap((sig) => sig.fields || [])
+            .filter((field) => !field.filled);
 
         if (unfilledFields.length > 0) {
             // Show error toast
@@ -1021,9 +1014,7 @@ function App() {
                 const pages = pdfDoc.getPages();
 
                 // Get all filled signature fields across all signatures
-                const filledFieldsNew = signatureData
-                    .flatMap(sig => sig.fields || [])
-                    .filter(field => field.filled && field.imageUrl);
+                const filledFieldsNew = signatureData.flatMap((sig) => sig.fields || []).filter((field) => field.filled && field.imageUrl);
 
                 // Process each signature field
                 for (const field of filledFieldsNew) {
@@ -1053,7 +1044,7 @@ function App() {
 
                         // Use percentage-based coordinates from the field data
                         const pdfX = (field.xPercent / 100) * pageWidth;
-                        const pdfY = pageHeight - ((field.yPercent / 100) * pageHeight) - ((field.heightPercent / 100) * pageHeight);
+                        const pdfY = pageHeight - (field.yPercent / 100) * pageHeight - (field.heightPercent / 100) * pageHeight;
                         const pdfWidth = (field.widthPercent / 100) * pageWidth;
                         const pdfHeight = (field.heightPercent / 100) * pageHeight;
 
@@ -1096,7 +1087,7 @@ function App() {
 
                         // Use percentage-based coordinates from the field data
                         const pdfX = (field.xPercent / 100) * pageWidth;
-                        const pdfY = pageHeight - ((field.yPercent / 100) * pageHeight) - ((field.heightPercent / 100) * pageHeight);
+                        const pdfY = pageHeight - (field.yPercent / 100) * pageHeight - (field.heightPercent / 100) * pageHeight;
                         const pdfWidth = (field.widthPercent / 100) * pageWidth;
                         const pdfHeight = (field.heightPercent / 100) * pageHeight;
 
@@ -1104,7 +1095,7 @@ function App() {
                         let displayValue = "";
                         let isCheckbox = false;
                         let checkboxChecked = false;
-                        
+
                         if (field.fieldType === "checkbox") {
                             isCheckbox = true;
                             // Handle both boolean and string values
@@ -1120,7 +1111,7 @@ function App() {
                             const checkboxSize = Math.min(pdfWidth, pdfHeight) * 0.8;
                             const checkboxX = pdfX + (pdfWidth - checkboxSize) / 2;
                             const checkboxY = pdfY + (pdfHeight - checkboxSize) / 2;
-                            
+
                             // Draw checkbox border
                             page.drawRectangle({
                                 x: checkboxX,
@@ -1130,13 +1121,13 @@ function App() {
                                 borderColor: rgb(0, 0, 0),
                                 borderWidth: 2,
                             });
-                            
+
                             // Draw checkmark if checked
                             if (checkboxChecked) {
                                 const path = "M2 12 L10 20 L22 4";
                                 page.drawSvgPath(path, {
-                                    x: checkboxX + (checkboxSize * 0.1),
-                                    y: checkboxY + (checkboxSize * 0.1) + 22,
+                                    x: checkboxX + checkboxSize * 0.1,
+                                    y: checkboxY + checkboxSize * 0.1 + 22,
                                     width: checkboxSize - 12,
                                     height: checkboxSize - 7,
                                     borderColor: rgb(0, 0, 0),
@@ -1147,7 +1138,7 @@ function App() {
                             // Draw text field
                             // Calculate font size based on field height (leave some padding)
                             const fontSize = Math.min(pdfHeight * 0.6, 12);
-                            
+
                             // Draw background rectangle for better visibility
                             // page.drawRectangle({
                             //     x: pdfX,
@@ -1162,7 +1153,7 @@ function App() {
                             // Draw the text
                             page.drawText(displayValue, {
                                 x: pdfX + 4,
-                                y: pdfY + (pdfHeight / 2) - (fontSize / 3),
+                                y: pdfY + pdfHeight / 2 - fontSize / 3,
                                 size: fontSize,
                                 font: font,
                                 color: rgb(0, 0, 0),
@@ -1174,7 +1165,7 @@ function App() {
                     }
                 }
 
-				// Build audit report data from Salesforce record and signatures
+                // Build audit report data from Salesforce record and signatures
                 try {
                     await generateAuditReportPages({
                         pdfDoc,
@@ -1188,8 +1179,7 @@ function App() {
                     console.warn("Failed to append audit report page:", e);
                 }
 
-
-				// Save the modified PDF
+                // Save the modified PDF
                 const pdfBytes = await pdfDoc.save();
 
                 // Upload to Salesforce if config is available
@@ -1198,9 +1188,7 @@ function App() {
                     const firstPublishLocationId = documentRecord?.Record_Id__c || salesforceConfig.recordId;
 
                     // Check if all fields are filled before uploading
-                    const allFieldsFilled = signatureData.every(sig => 
-                        (sig.fields || []).every(field => field.filled)
-                    );
+                    const allFieldsFilled = signatureData.every((sig) => (sig.fields || []).every((field) => field.filled));
 
                     // Upload signed PDF as ContentVersion
                     if (allFieldsFilled) {
@@ -1268,7 +1256,7 @@ function App() {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    Status__c: "Rejected"
+                    Status__c: "Rejected",
                 }),
             });
 
@@ -1285,7 +1273,7 @@ function App() {
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
-                        Status__c: "Rejected"
+                        Status__c: "Rejected",
                     }),
                 });
             }
@@ -1299,45 +1287,32 @@ function App() {
             setToast({
                 isVisible: true,
                 message: "Document has been rejected.",
-                type: "error"
+                type: "error",
             });
-
         } catch (error) {
             console.error("Reject error:", error);
             setToast({
                 isVisible: true,
                 message: `Error rejecting document: ${error.message}`,
-                type: "error"
+                type: "error",
             });
         }
     };
 
     // ========= AUDIT REPORT – dedicated helper =========
-    const generateAuditReportPages = async ({
-        pdfDoc,
-        pages,
-        documentRecord,
-        signatureData,
-        orgId,
-        totalPages
-    }) => {
+    const generateAuditReportPages = async ({ pdfDoc, pages, documentRecord, signatureData, orgId, totalPages }) => {
         if (!documentRecord) return;
 
         // ---------- 1. Build audit data ----------
         const buildAuditData = () => {
             // Document information
-            const createdDate = documentRecord.CreatedDate
-                ? new Date(documentRecord.CreatedDate)
-                : null;
-            const modifiedDate = documentRecord.LastModifiedDate
-                ? new Date(documentRecord.LastModifiedDate)
-                : null;
+            const createdDate = documentRecord.CreatedDate ? new Date(documentRecord.CreatedDate) : null;
+            const modifiedDate = documentRecord.LastModifiedDate ? new Date(documentRecord.LastModifiedDate) : null;
             const emailSubject = documentRecord.Email_Subject__c || null;
             const ownerName = documentRecord.CreatedBy?.Name || null;
             const ownerEmail = documentRecord.CreatedBy?.Email || null;
 
-            const documentName =
-                documentRecord.Document_Name__c || documentRecord.Name || "";
+            const documentName = documentRecord.Document_Name__c || documentRecord.Name || "";
             const orgIdVal = orgId || "";
 
             // Signatures summary - handle both flat and nested field structures
@@ -1357,29 +1332,11 @@ function App() {
                                 ipAddress: sig.ipAddress || field.ipAddress || "",
                                 deviceInfo: sig.deviceInfo || field.deviceInfo || "",
                                 locationInfo: sig.locationInfo || field.locationInfo || "",
-                                timeStamp:
-                                    sig.signedTime ||
-                                    field.signedTime ||
-                                    sig.timeStamp ||
-                                    field.timeStamp ||
-                                    "",
-                                signeeName:
-                                    sig.name ||
-                                    field.name ||
-                                    sig.signeeName ||
-                                    field.signeeName ||
-                                    "",
-                                signeeEmail:
-                                    sig.email ||
-                                    field.email ||
-                                    sig.signeeEmail ||
-                                    field.signeeEmail ||
-                                    "",
+                                timeStamp: sig.signedTime || field.signedTime || sig.timeStamp || field.timeStamp || "",
+                                signeeName: sig.name || field.name || sig.signeeName || field.signeeName || "",
+                                signeeEmail: sig.email || field.email || sig.signeeEmail || field.signeeEmail || "",
                                 imageUrl: field.imageUrl || null,
-                                signatureType:
-                                    field.signatureType ||
-                                    sig.signatureType ||
-                                    "--",
+                                signatureType: field.signatureType || sig.signatureType || "--",
                             });
                         });
                 } else if ((sig.type || sig.fieldType) === "signature") {
@@ -1454,16 +1411,15 @@ function App() {
         const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
         const blue = rgb(0.12, 0.59, 0.95);
-        const darkBlue = rgb(0.10, 0.46, 0.82);
-        const green = rgb(0.18, 0.49, 0.20);
-        const orange = rgb(0.96, 0.49, 0.00);
+        const darkBlue = rgb(0.1, 0.46, 0.82);
+        const green = rgb(0.18, 0.49, 0.2);
+        const orange = rgb(0.96, 0.49, 0.0);
         const gray = rgb(0.2, 0.2, 0.2);
         const lightGray = rgb(0.961, 0.961, 0.961);
         const white = rgb(1, 1, 1);
         // const summaryBlue = rgb(224,245,255);
         // const summaryGreen = rgb(224,255,235);
         // const summaryOrange = rgb(255,236,224);
-
 
         const fmt = (d) => (d ? new Date(d).toLocaleString() : "");
 
@@ -1477,24 +1433,11 @@ function App() {
         const sigDetailsColW = Math.max(140, Math.floor(remW / 2));
         const userColW = Math.max(120, remW - sigDetailsColW);
 
-        const colXs = [
-            margin + padding,
-            margin + padding + imgColW + padding,
-            margin + padding + imgColW + padding + typeColW + padding,
-            margin +
-                padding +
-                imgColW +
-                padding +
-                typeColW +
-                padding +
-                sigDetailsColW +
-                padding,
-        ];
+        const colXs = [margin + padding, margin + padding + imgColW + padding, margin + padding + imgColW + padding + typeColW + padding, margin + padding + imgColW + padding + typeColW + padding + sigDetailsColW + padding];
 
         // ---------- 3. Helper: draw one set of signature rows (used for page1 and continuation pages) ----------
         const drawSignatureRows = async (page, signaturesToDraw, startRowYFromBottom) => {
-            const drawText = (text, opts) =>
-                page.drawText(String(text ?? ""), { font, ...opts });
+            const drawText = (text, opts) => page.drawText(String(text ?? ""), { font, ...opts });
 
             let rowYFromBottom = startRowYFromBottom;
             let rowsDrawn = 0;
@@ -1503,7 +1446,7 @@ function App() {
                 const signatureType = sign.signatureType.toUpperCase() || "--";
                 const isSigned = !!sign.imagePresent;
                 const backColour = rowsDrawn % 2 == 0 ? white : lightGray;
-                
+
                 page.drawRectangle({
                     x: margin,
                     y: rowYFromBottom - rowHeight,
@@ -1517,16 +1460,11 @@ function App() {
                 // Signature thumbnail / index
                 if (isSigned && sign.imageUrl) {
                     try {
-                        const imgBytes = await fetch(sign.imageUrl).then((res) =>
-                            res.arrayBuffer()
-                        );
+                        const imgBytes = await fetch(sign.imageUrl).then((res) => res.arrayBuffer());
                         let img;
                         if (sign.imageUrl.startsWith("data:image/png")) {
                             img = await pdfDoc.embedPng(imgBytes);
-                        } else if (
-                            sign.imageUrl.startsWith("data:image/jpeg") ||
-                            sign.imageUrl.startsWith("data:image/jpg")
-                        ) {
+                        } else if (sign.imageUrl.startsWith("data:image/jpeg") || sign.imageUrl.startsWith("data:image/jpg")) {
                             img = await pdfDoc.embedJpg(imgBytes);
                         } else {
                             img = await pdfDoc.embedPng(imgBytes);
@@ -1534,8 +1472,7 @@ function App() {
 
                         const imgW = imgColW - padding * 2;
                         const imgH = imgHeight;
-                        const imgYFromBottom =
-                            rowYFromBottom - (rowHeight - imgH) / 2 - imgH;
+                        const imgYFromBottom = rowYFromBottom - (rowHeight - imgH) / 2 - imgH;
 
                         // rounded container
                         page.drawRectangle({
@@ -1556,10 +1493,7 @@ function App() {
                     } catch (e) {
                         drawText(`#${sign.index}`, {
                             x: colXs[0],
-                            y:
-                                rowYFromBottom -
-                                rowHeight / 2 -
-                                textSize / 3,
+                            y: rowYFromBottom - rowHeight / 2 - textSize / 3,
                             size: textSize,
                             color: gray,
                         });
@@ -1567,10 +1501,7 @@ function App() {
                 } else {
                     drawText(`#${sign.index}`, {
                         x: colXs[0],
-                        y:
-                            rowYFromBottom -
-                            rowHeight / 2 -
-                            textSize / 3,
+                        y: rowYFromBottom - rowHeight / 2 - textSize / 3,
                         size: textSize,
                         color: gray,
                     });
@@ -1581,18 +1512,11 @@ function App() {
                 const pillPaddingX = 12;
                 const pillPaddingY = 4;
                 const pillTextSize = Math.max(9, PH * 0.011);
-                const pillTextWidth = font.widthOfTextAtSize(
-                    pillText,
-                    pillTextSize
-                );
+                const pillTextWidth = font.widthOfTextAtSize(pillText, pillTextSize);
                 const pillWidth = pillTextWidth + pillPaddingX * 2;
                 const pillHeight = pillTextSize + pillPaddingY * 2;
-                const pillX =
-                    colXs[1] + (typeColW - pillWidth) / 2;
-                const pillY =
-                    rowYFromBottom -
-                    rowHeight / 2 -
-                    pillHeight / 2;
+                const pillX = colXs[1] + (typeColW - pillWidth) / 2;
+                const pillY = rowYFromBottom - rowHeight / 2 - pillHeight / 2;
 
                 // page.drawRectangle({
                 //     x: pillX,
@@ -1613,15 +1537,14 @@ function App() {
 
                 // Signature details
                 const rowTextSize = Math.max(8, PH * 0.0095);
-                const signedOn =
-                    sign.timeStamp || (isSigned ? new Date().toLocaleString() : "--");
-                const ipLine = isSigned ? `IP: ${sign.ipAddress || "--"}`: "IP: --";
-                const deviceLine = isSigned ? `Device: ${sign.deviceInfo || "--"}`: "Device: --";
-                const locationLine = isSigned ? `Location: ${sign.locationInfo || "--"}`: "Location: --";
+                const signedOn = sign.timeStamp || (isSigned ? new Date().toLocaleString() : "--");
+                const ipLine = isSigned ? `IP: ${sign.ipAddress || "--"}` : "IP: --";
+                const deviceLine = isSigned ? `Device: ${sign.deviceInfo || "--"}` : "Device: --";
+                const locationLine = isSigned ? `Location: ${sign.locationInfo || "--"}` : "Location: --";
 
                 drawText(`Signed On: ${signedOn}`, {
                     x: colXs[2],
-                    y: rowYFromBottom - rowHeight * 0.30,
+                    y: rowYFromBottom - rowHeight * 0.3,
                     size: rowTextSize,
                     color: gray,
                 });
@@ -1641,7 +1564,7 @@ function App() {
                 // User details
                 drawText(`Name: ${sign.signeeName || "--"}`, {
                     x: colXs[3],
-                    y: rowYFromBottom - rowHeight * 0.30,
+                    y: rowYFromBottom - rowHeight * 0.3,
                     size: rowTextSize,
                     color: gray,
                 });
@@ -1687,23 +1610,10 @@ function App() {
             bottomMargin;
 
         const availableFirst = PH - fixedSectionsHeightFirst;
-        const maxRowsFirst = Math.max(
-            0,
-            Math.floor(availableFirst / rowHeight)
-        );
+        const maxRowsFirst = Math.max(0, Math.floor(availableFirst / rowHeight));
 
-        const availableCont =
-            PH -
-            (margin +
-                sectionTitleSize * 1.5 +
-                sectionSpacing +
-                tableHeaderHeight +
-                sectionSpacing +
-                bottomMargin);
-        const maxRowsCont = Math.max(
-            0,
-            Math.floor(availableCont / rowHeight)
-        );
+        const availableCont = PH - (margin + sectionTitleSize * 1.5 + sectionSpacing + tableHeaderHeight + sectionSpacing + bottomMargin);
+        const maxRowsCont = Math.max(0, Math.floor(availableCont / rowHeight));
 
         let signaturesRemaining = [...data.signatures];
         let pageNumber = 1;
@@ -1715,11 +1625,10 @@ function App() {
                 y: 0,
                 width: PW,
                 height: PH,
-                color: lightGray // light gray background
+                color: lightGray, // light gray background
             });
 
-            const drawText = (text, opts) =>
-                page.drawText(String(text ?? ""), { font, ...opts });
+            const drawText = (text, opts) => page.drawText(String(text ?? ""), { font, ...opts });
 
             let currentYFromTop = margin;
             let currentYFromBottom = PH - currentYFromTop;
@@ -1764,7 +1673,7 @@ function App() {
                     y: cardY + docInfoBoxHeight - 28,
                     width: PW - margin * 2,
                     height: 28,
-                    color: white
+                    color: white,
                 });
 
                 // Draw top border
@@ -1772,7 +1681,7 @@ function App() {
                     start: { x: margin, y: cardY + docInfoBoxHeight - 28 + 28 },
                     end: { x: margin + (PW - margin * 2), y: cardY + docInfoBoxHeight - 28 + 28 },
                     color: rgb(0.88, 0.9, 0.92),
-                    thickness: 1.5
+                    thickness: 1.5,
                 });
 
                 // Draw left border
@@ -1780,7 +1689,7 @@ function App() {
                     start: { x: margin, y: cardY + docInfoBoxHeight - 28 },
                     end: { x: margin, y: cardY + docInfoBoxHeight },
                     color: rgb(0.88, 0.9, 0.92),
-                    thickness: 1.5
+                    thickness: 1.5,
                 });
 
                 // Draw right border
@@ -1788,9 +1697,8 @@ function App() {
                     start: { x: margin + (PW - margin * 2), y: cardY + docInfoBoxHeight - 28 },
                     end: { x: margin + (PW - margin * 2), y: cardY + docInfoBoxHeight },
                     color: rgb(0.88, 0.9, 0.92),
-                    thickness: 1.5
+                    thickness: 1.5,
                 });
-
 
                 // Make the Document Information heading slightly larger
                 const docInfoHeadingSize = Math.max(sectionTitleSize, sectionTitleSize + Math.round(PH * 0.002));
@@ -1798,7 +1706,7 @@ function App() {
                     x: cardInnerLeftX,
                     y: cardY + docInfoBoxHeight - 20,
                     size: docInfoHeadingSize,
-                    color: rgb(0,0,0),
+                    color: rgb(0, 0, 0),
                 });
 
                 let infoY = cardY + docInfoBoxHeight - 45;
@@ -1823,58 +1731,23 @@ function App() {
                 // Left column
                 writeKV(cardInnerLeftX, infoY, "Sent Date:", fmt(data.createdDate));
                 infoY -= lineHeight;
-                writeKV(
-                    cardInnerLeftX,
-                    infoY,
-                    "Document Name:",
-                    data.documentName
-                );
+                writeKV(cardInnerLeftX, infoY, "Document Name:", data.documentName);
                 infoY -= lineHeight;
-                writeKV(
-                    cardInnerLeftX,
-                    infoY,
-                    "Document Owner:",
-                    data.ownerName
-                );
+                writeKV(cardInnerLeftX, infoY, "Document Owner:", data.ownerName);
                 infoY -= lineHeight;
-                writeKV(
-                    cardInnerLeftX,
-                    infoY,
-                    "Document Owner Email:",
-                    data.ownerEmail
-                );
+                writeKV(cardInnerLeftX, infoY, "Document Owner Email:", data.ownerEmail);
                 infoY -= lineHeight;
-                writeKV(
-                    cardInnerLeftX,
-                    infoY,
-                    "Email Subject:",
-                    data.emailSubject
-                );
+                writeKV(cardInnerLeftX, infoY, "Email Subject:", data.emailSubject);
 
                 // Right column
                 let infoYR = cardY + docInfoBoxHeight - 45;
-                writeKV(
-                    cardInnerRightX,
-                    infoYR,
-                    "Document ID:",
-                    data.documentId || ""
-                );
+                writeKV(cardInnerRightX, infoYR, "Document ID:", data.documentId || "");
                 infoYR -= lineHeight;
                 writeKV(cardInnerRightX, infoYR, "Org ID:", data.orgId || "");
                 infoYR -= lineHeight;
-                writeKV(
-                    cardInnerRightX,
-                    infoYR,
-                    "Document Status:",
-                    data.documentStatus
-                );
+                writeKV(cardInnerRightX, infoYR, "Document Status:", data.documentStatus);
                 infoYR -= lineHeight;
-                writeKV(
-                    cardInnerRightX,
-                    infoYR,
-                    "Document Pages:",
-                    String(totalPages)
-                );
+                writeKV(cardInnerRightX, infoYR, "Document Pages:", String(totalPages));
 
                 currentYFromTop += docInfoBoxHeight + Math.max(8, Math.floor(sectionSpacing / 2));
                 currentYFromBottom = PH - currentYFromTop;
@@ -1888,7 +1761,11 @@ function App() {
                 const labels = ["Total Signatures", "Signed", "Pending"];
                 const values = [data.totalSignatures, data.signedCount, data.pendingCount];
                 const colors = [blue, green, orange];
-                const summaryPaths=['M4 6C4 4.89688 4.89688 4 6 4H10.6719C11.2031 4 11.7125 4.20938 12.0875 4.58438L15.4125 7.91563C15.7875 8.29063 15.9969 8.8 15.9969 9.33125V12.3781L11.8719 16.5031H10.5562L10.0531 14.8281C9.90625 14.3375 9.45625 14.0031 8.94375 14.0031C8.59063 14.0031 8.25937 14.1625 8.04062 14.4375L6.1625 16.7812C5.90313 17.1031 5.95625 17.5781 6.27813 17.8344C6.6 18.0906 7.075 18.0406 7.33125 17.7156L8.80313 15.8781L9.27812 17.4625C9.37187 17.7812 9.66562 17.9969 9.99687 17.9969H10.9812C10.9531 18.0938 10.9281 18.1937 10.9094 18.2937L10.5687 19.9969H6C4.89688 19.9969 4 19.1 4 17.9969V5.99688V6ZM10.5 5.82812V8.75C10.5 9.16563 10.8344 9.5 11.25 9.5H14.1719L10.5 5.82812ZM12.3812 18.5906C12.4594 18.2031 12.65 17.8469 12.9281 17.5688L16.6438 13.8531L19.1438 16.3531L15.4281 20.0688C15.15 20.3469 14.7937 20.5375 14.4062 20.6156L12.5437 20.9875C12.5156 20.9937 12.4844 20.9969 12.4531 20.9969C12.2031 20.9969 11.9969 20.7937 11.9969 20.5406C11.9969 20.5094 12 20.4813 12.0062 20.45L12.3781 18.5875L12.3812 18.5906ZM20.75 14.7469L19.85 15.6469L17.35 13.1469L18.25 12.2469C18.9406 11.5562 20.0594 11.5562 20.75 12.2469C21.4406 12.9375 21.4406 14.0562 20.75 14.7469Z','M10.2882 4.11611C10.3768 4.1467 10.4636 4.18256 10.5485 4.2237L11.5635 4.72369C11.6993 4.79056 11.8487 4.82533 12.0002 4.82533C12.1516 4.82533 12.301 4.79056 12.4369 4.72369L13.4518 4.2237C13.7082 4.0975 13.9869 4.02304 14.272 4.00456C14.5571 3.98608 14.8431 4.02394 15.1136 4.11599C15.3841 4.20804 15.6338 4.35247 15.8484 4.54104C16.0631 4.7296 16.2385 4.9586 16.3647 5.21497L16.4224 5.34313L16.4723 5.47525L16.8362 6.54563C16.9351 6.83676 17.1637 7.0646 17.454 7.16349L18.5252 7.5274C18.8182 7.62709 19.0866 7.78815 19.3124 7.99982C19.5381 8.21149 19.7162 8.46891 19.8346 8.75487C19.9529 9.04084 20.0089 9.34877 19.9988 9.6581C19.9887 9.96744 19.9127 10.2711 19.7759 10.5487L19.2767 11.5637C19.2099 11.6995 19.1751 11.8489 19.1751 12.0004C19.1751 12.1518 19.2099 12.3012 19.2767 12.4371L19.7759 13.4521C19.9126 13.7297 19.9885 14.0332 19.9985 14.3425C20.0086 14.6517 19.9525 14.9595 19.8342 15.2454C19.7158 15.5313 19.5378 15.7886 19.3121 16.0002C19.0864 16.2118 18.8181 16.3729 18.5252 16.4726L17.454 16.8365C17.3108 16.8854 17.1806 16.9665 17.0736 17.0736C16.9666 17.1807 16.8857 17.311 16.837 17.4543L16.4723 18.5255C16.3726 18.8184 16.2115 19.0867 15.9999 19.3124C15.7883 19.5381 15.531 19.7161 15.2451 19.8345C14.9593 19.9529 14.6514 20.0089 14.3422 19.9989C14.033 19.9888 13.7294 19.9129 13.4518 19.7763L12.4369 19.2771C12.301 19.2102 12.1516 19.1754 12.0002 19.1754C11.8487 19.1754 11.6993 19.2102 11.5635 19.2771L10.5485 19.7763C10.2709 19.9129 9.96737 19.9888 9.65814 19.9989C9.3489 20.0089 9.04107 19.9529 8.75521 19.8345C8.46935 19.7161 8.21203 19.5381 8.00041 19.3124C7.7888 19.0867 7.62777 18.8184 7.52806 18.5255L7.16415 17.4543C7.1152 17.311 7.03395 17.1808 6.92668 17.0738C6.81942 16.9668 6.68901 16.8859 6.54551 16.8373L5.47515 16.4726C5.18218 16.3729 4.91384 16.212 4.68803 16.0004C4.46223 15.7888 4.28415 15.5315 4.1657 15.2456C4.04725 14.9597 3.99115 14.6519 4.00113 14.3426C4.01112 14.0333 4.08697 13.7297 4.22362 13.4521L4.7236 12.4371C4.79047 12.3012 4.82524 12.1518 4.82524 12.0004C4.82524 11.8489 4.79047 11.6995 4.7236 11.5637L4.22362 10.5487C4.08697 10.271 4.01112 9.96744 4.00113 9.65816C3.99115 9.34888 4.04725 9.04102 4.1657 8.75514C4.28415 8.46927 4.46223 8.21195 4.68803 8.00037C4.91384 7.78879 5.18218 7.62782 5.47515 7.52819L6.54551 7.16428C6.68903 7.11542 6.81939 7.03422 6.92652 6.92695C7.03366 6.81968 7.11469 6.68921 7.16336 6.54563L7.52727 5.47525C7.61926 5.20468 7.76366 4.95488 7.95222 4.74014C8.14077 4.52539 8.36978 4.34989 8.62618 4.22368C8.88257 4.09746 9.16132 4.023 9.4465 4.00454C9.73168 3.98609 10.0177 4.024 10.2882 4.11611ZM14.7453 9.6025L10.4575 13.8904L8.89588 12.0154C8.84671 11.9534 8.78563 11.9019 8.71625 11.8639C8.64688 11.8259 8.57059 11.8021 8.49189 11.794C8.41319 11.7859 8.33367 11.7936 8.258 11.8167C8.18232 11.8398 8.11203 11.8777 8.05125 11.9284C7.99047 11.979 7.94044 12.0413 7.90409 12.1116C7.86774 12.1819 7.84581 12.2587 7.8396 12.3376C7.83338 12.4165 7.843 12.4958 7.86789 12.5709C7.89278 12.646 7.93244 12.7153 7.98453 12.7749L9.96229 15.1482C10.015 15.2115 10.0804 15.2632 10.1542 15.2999C10.2279 15.3365 10.3086 15.3574 10.3909 15.3612C10.4732 15.365 10.5554 15.3516 10.6322 15.3219C10.7091 15.2922 10.7789 15.2468 10.8372 15.1886L15.5839 10.4419C15.6422 10.3876 15.6889 10.3221 15.7214 10.2493C15.7538 10.1765 15.7712 10.0979 15.7726 10.0183C15.774 9.93858 15.7594 9.85945 15.7295 9.78557C15.6997 9.71169 15.6553 9.64457 15.5989 9.58823C15.5426 9.53189 15.4755 9.48747 15.4016 9.45763C15.3277 9.42779 15.2486 9.41313 15.1689 9.41454C15.0893 9.41594 15.0107 9.43338 14.9379 9.46581C14.8651 9.49824 14.7996 9.545 14.7453 9.60329','M20 12C20 14.1217 19.1571 16.1566 17.6569 17.6569C16.1566 19.1571 14.1217 20 12 20C9.87827 20 7.84344 19.1571 6.34315 17.6569C4.84285 16.1566 4 14.1217 4 12C4 9.87827 4.84285 7.84344 6.34315 6.34315C7.84344 4.84285 9.87827 4 12 4C14.1217 4 16.1566 4.84285 17.6569 6.34315C19.1571 7.84344 20 9.87827 20 12ZM12 7.5C12 7.36739 11.9473 7.24021 11.8536 7.14645C11.7598 7.05268 11.6326 7 11.5 7C11.3674 7 11.2402 7.05268 11.1464 7.14645C11.0527 7.24021 11 7.36739 11 7.5V13C11 13.0881 11.0234 13.1747 11.0676 13.2509C11.1119 13.3271 11.1755 13.3903 11.252 13.434L14.752 15.434C14.8669 15.4961 15.0014 15.5108 15.127 15.4749C15.2525 15.4391 15.3591 15.3556 15.4238 15.2422C15.4886 15.1288 15.5065 14.9946 15.4736 14.8683C15.4408 14.7419 15.3598 14.6334 15.248 14.566L12 12.71V7.5Z'];
+                const summaryPaths = [
+                    "M4 6C4 4.89688 4.89688 4 6 4H10.6719C11.2031 4 11.7125 4.20938 12.0875 4.58438L15.4125 7.91563C15.7875 8.29063 15.9969 8.8 15.9969 9.33125V12.3781L11.8719 16.5031H10.5562L10.0531 14.8281C9.90625 14.3375 9.45625 14.0031 8.94375 14.0031C8.59063 14.0031 8.25937 14.1625 8.04062 14.4375L6.1625 16.7812C5.90313 17.1031 5.95625 17.5781 6.27813 17.8344C6.6 18.0906 7.075 18.0406 7.33125 17.7156L8.80313 15.8781L9.27812 17.4625C9.37187 17.7812 9.66562 17.9969 9.99687 17.9969H10.9812C10.9531 18.0938 10.9281 18.1937 10.9094 18.2937L10.5687 19.9969H6C4.89688 19.9969 4 19.1 4 17.9969V5.99688V6ZM10.5 5.82812V8.75C10.5 9.16563 10.8344 9.5 11.25 9.5H14.1719L10.5 5.82812ZM12.3812 18.5906C12.4594 18.2031 12.65 17.8469 12.9281 17.5688L16.6438 13.8531L19.1438 16.3531L15.4281 20.0688C15.15 20.3469 14.7937 20.5375 14.4062 20.6156L12.5437 20.9875C12.5156 20.9937 12.4844 20.9969 12.4531 20.9969C12.2031 20.9969 11.9969 20.7937 11.9969 20.5406C11.9969 20.5094 12 20.4813 12.0062 20.45L12.3781 18.5875L12.3812 18.5906ZM20.75 14.7469L19.85 15.6469L17.35 13.1469L18.25 12.2469C18.9406 11.5562 20.0594 11.5562 20.75 12.2469C21.4406 12.9375 21.4406 14.0562 20.75 14.7469Z",
+                    "M10.2882 4.11611C10.3768 4.1467 10.4636 4.18256 10.5485 4.2237L11.5635 4.72369C11.6993 4.79056 11.8487 4.82533 12.0002 4.82533C12.1516 4.82533 12.301 4.79056 12.4369 4.72369L13.4518 4.2237C13.7082 4.0975 13.9869 4.02304 14.272 4.00456C14.5571 3.98608 14.8431 4.02394 15.1136 4.11599C15.3841 4.20804 15.6338 4.35247 15.8484 4.54104C16.0631 4.7296 16.2385 4.9586 16.3647 5.21497L16.4224 5.34313L16.4723 5.47525L16.8362 6.54563C16.9351 6.83676 17.1637 7.0646 17.454 7.16349L18.5252 7.5274C18.8182 7.62709 19.0866 7.78815 19.3124 7.99982C19.5381 8.21149 19.7162 8.46891 19.8346 8.75487C19.9529 9.04084 20.0089 9.34877 19.9988 9.6581C19.9887 9.96744 19.9127 10.2711 19.7759 10.5487L19.2767 11.5637C19.2099 11.6995 19.1751 11.8489 19.1751 12.0004C19.1751 12.1518 19.2099 12.3012 19.2767 12.4371L19.7759 13.4521C19.9126 13.7297 19.9885 14.0332 19.9985 14.3425C20.0086 14.6517 19.9525 14.9595 19.8342 15.2454C19.7158 15.5313 19.5378 15.7886 19.3121 16.0002C19.0864 16.2118 18.8181 16.3729 18.5252 16.4726L17.454 16.8365C17.3108 16.8854 17.1806 16.9665 17.0736 17.0736C16.9666 17.1807 16.8857 17.311 16.837 17.4543L16.4723 18.5255C16.3726 18.8184 16.2115 19.0867 15.9999 19.3124C15.7883 19.5381 15.531 19.7161 15.2451 19.8345C14.9593 19.9529 14.6514 20.0089 14.3422 19.9989C14.033 19.9888 13.7294 19.9129 13.4518 19.7763L12.4369 19.2771C12.301 19.2102 12.1516 19.1754 12.0002 19.1754C11.8487 19.1754 11.6993 19.2102 11.5635 19.2771L10.5485 19.7763C10.2709 19.9129 9.96737 19.9888 9.65814 19.9989C9.3489 20.0089 9.04107 19.9529 8.75521 19.8345C8.46935 19.7161 8.21203 19.5381 8.00041 19.3124C7.7888 19.0867 7.62777 18.8184 7.52806 18.5255L7.16415 17.4543C7.1152 17.311 7.03395 17.1808 6.92668 17.0738C6.81942 16.9668 6.68901 16.8859 6.54551 16.8373L5.47515 16.4726C5.18218 16.3729 4.91384 16.212 4.68803 16.0004C4.46223 15.7888 4.28415 15.5315 4.1657 15.2456C4.04725 14.9597 3.99115 14.6519 4.00113 14.3426C4.01112 14.0333 4.08697 13.7297 4.22362 13.4521L4.7236 12.4371C4.79047 12.3012 4.82524 12.1518 4.82524 12.0004C4.82524 11.8489 4.79047 11.6995 4.7236 11.5637L4.22362 10.5487C4.08697 10.271 4.01112 9.96744 4.00113 9.65816C3.99115 9.34888 4.04725 9.04102 4.1657 8.75514C4.28415 8.46927 4.46223 8.21195 4.68803 8.00037C4.91384 7.78879 5.18218 7.62782 5.47515 7.52819L6.54551 7.16428C6.68903 7.11542 6.81939 7.03422 6.92652 6.92695C7.03366 6.81968 7.11469 6.68921 7.16336 6.54563L7.52727 5.47525C7.61926 5.20468 7.76366 4.95488 7.95222 4.74014C8.14077 4.52539 8.36978 4.34989 8.62618 4.22368C8.88257 4.09746 9.16132 4.023 9.4465 4.00454C9.73168 3.98609 10.0177 4.024 10.2882 4.11611ZM14.7453 9.6025L10.4575 13.8904L8.89588 12.0154C8.84671 11.9534 8.78563 11.9019 8.71625 11.8639C8.64688 11.8259 8.57059 11.8021 8.49189 11.794C8.41319 11.7859 8.33367 11.7936 8.258 11.8167C8.18232 11.8398 8.11203 11.8777 8.05125 11.9284C7.99047 11.979 7.94044 12.0413 7.90409 12.1116C7.86774 12.1819 7.84581 12.2587 7.8396 12.3376C7.83338 12.4165 7.843 12.4958 7.86789 12.5709C7.89278 12.646 7.93244 12.7153 7.98453 12.7749L9.96229 15.1482C10.015 15.2115 10.0804 15.2632 10.1542 15.2999C10.2279 15.3365 10.3086 15.3574 10.3909 15.3612C10.4732 15.365 10.5554 15.3516 10.6322 15.3219C10.7091 15.2922 10.7789 15.2468 10.8372 15.1886L15.5839 10.4419C15.6422 10.3876 15.6889 10.3221 15.7214 10.2493C15.7538 10.1765 15.7712 10.0979 15.7726 10.0183C15.774 9.93858 15.7594 9.85945 15.7295 9.78557C15.6997 9.71169 15.6553 9.64457 15.5989 9.58823C15.5426 9.53189 15.4755 9.48747 15.4016 9.45763C15.3277 9.42779 15.2486 9.41313 15.1689 9.41454C15.0893 9.41594 15.0107 9.43338 14.9379 9.46581C14.8651 9.49824 14.7996 9.545 14.7453 9.60329",
+                    "M20 12C20 14.1217 19.1571 16.1566 17.6569 17.6569C16.1566 19.1571 14.1217 20 12 20C9.87827 20 7.84344 19.1571 6.34315 17.6569C4.84285 16.1566 4 14.1217 4 12C4 9.87827 4.84285 7.84344 6.34315 6.34315C7.84344 4.84285 9.87827 4 12 4C14.1217 4 16.1566 4.84285 17.6569 6.34315C19.1571 7.84344 20 9.87827 20 12ZM12 7.5C12 7.36739 11.9473 7.24021 11.8536 7.14645C11.7598 7.05268 11.6326 7 11.5 7C11.3674 7 11.2402 7.05268 11.1464 7.14645C11.0527 7.24021 11 7.36739 11 7.5V13C11 13.0881 11.0234 13.1747 11.0676 13.2509C11.1119 13.3271 11.1755 13.3903 11.252 13.434L14.752 15.434C14.8669 15.4961 15.0014 15.5108 15.127 15.4749C15.2525 15.4391 15.3591 15.3556 15.4238 15.2422C15.4886 15.1288 15.5065 14.9946 15.4736 14.8683C15.4408 14.7419 15.3598 14.6334 15.248 14.566L12 12.71V7.5Z",
+                ];
 
                 for (let i = 0; i < 3; i++) {
                     const bx = offsets[i];
@@ -1910,7 +1787,8 @@ function App() {
                     const label = labels[i];
                     const labelSize = Math.max(9, textSize - 1);
                     const labelW = font.widthOfTextAtSize(label, labelSize);
-                    const iconW = 20, iconH = 20;
+                    const iconW = 20,
+                        iconH = 20;
                     const gap = 8;
                     const leftPad = 18;
                     const rightPad = 18;
@@ -1959,7 +1837,7 @@ function App() {
                 // ---- Signature Events header strip ----
                 page.drawRectangle({
                     x: margin,
-                    y: currentYFromBottom ,
+                    y: currentYFromBottom,
                     width: PW - margin * 2,
                     height: 28,
                     color: white,
@@ -1971,7 +1849,7 @@ function App() {
                     x: margin + 12,
                     y: currentYFromBottom + 9,
                     size: sectionTitleSize,
-                    color: rgb(0,0,0),
+                    color: rgb(0, 0, 0),
                 });
 
                 currentYFromTop += 28 + sectionSpacing;
@@ -1987,18 +1865,8 @@ function App() {
                     color: lightGray,
                 });
 
-                const headerTitles = [
-                    "SIGNATURE",
-                    "SIGNATURE TYPE",
-                    "SIGNATURE DETAILS",
-                    "USER DETAILS",
-                ];
-                const headerWidths = [
-                    imgColW,
-                    typeColW,
-                    sigDetailsColW,
-                    userColW,
-                ];
+                const headerTitles = ["SIGNATURE", "SIGNATURE TYPE", "SIGNATURE DETAILS", "USER DETAILS"];
+                const headerWidths = [imgColW, typeColW, sigDetailsColW, userColW];
                 const headerTextSize = Math.max(9, PH * 0.011);
 
                 for (let i = 0; i < headerTitles.length; i++) {
@@ -2010,7 +1878,7 @@ function App() {
 
                     drawText(t, {
                         x: tx,
-                        y: headerY - tableHeaderHeight / 2 - headerTextSize / 3 + 46, 
+                        y: headerY - tableHeaderHeight / 2 - headerTextSize / 3 + 46,
                         size: headerTextSize - 2,
                         color: rgb(0, 0, 0),
                     });
@@ -2027,15 +1895,12 @@ function App() {
                 // ---- Continuation pages ----
 
                 // small title
-                drawText(
-                    `Signature Events (continued) - Page ${pageNumber}`,
-                    {
-                        x: margin,
-                        y: currentYFromBottom,
-                        size: sectionTitleSize,
-                        color: darkBlue,
-                    }
-                );
+                drawText(`Signature Events (continued) - Page ${pageNumber}`, {
+                    x: margin,
+                    y: currentYFromBottom,
+                    size: sectionTitleSize,
+                    color: darkBlue,
+                });
 
                 currentYFromTop += sectionTitleSize * 1.5;
                 currentYFromBottom = PH - currentYFromTop;
@@ -2050,18 +1915,8 @@ function App() {
                     color: darkBlue,
                 });
 
-                const headerTitles = [
-                    "Signature",
-                    "Signature Type",
-                    "Signature Details",
-                    "User Details",
-                ];
-                const headerWidths = [
-                    imgColW,
-                    typeColW,
-                    sigDetailsColW,
-                    userColW,
-                ];
+                const headerTitles = ["Signature", "Signature Type", "Signature Details", "User Details"];
+                const headerWidths = [imgColW, typeColW, sigDetailsColW, userColW];
                 const headerTextSize = Math.max(9, PH * 0.011);
 
                 for (let i = 0; i < headerTitles.length; i++) {
@@ -2073,10 +1928,7 @@ function App() {
 
                     drawText(t, {
                         x: tx,
-                        y:
-                            headerY -
-                            tableHeaderHeight / 2 -
-                            headerTextSize / 3,
+                        y: headerY - tableHeaderHeight / 2 - headerTextSize / 3,
                         size: headerTextSize,
                         color: rgb(1, 1, 1),
                     });
@@ -2095,8 +1947,6 @@ function App() {
         }
     };
 
-
-
     // Close toast
     const handleCloseToast = () => {
         setToast({ isVisible: false, message: "", type: "success" });
@@ -2105,20 +1955,16 @@ function App() {
     // Check if Save & Submit button should be shown
     const shouldShowSaveButton = () => {
         // If already submitted in this session, hide button
-        
+
         if (isSubmitted) {
             console.log(1);
             return false;
         }
 
         // Get all fields for current priority from all signatures
-        const currentPriorityFields = signatureData
-            .filter((sig) => sig.priority == urlPriority)
-            .flatMap(sig => sig.fields || []);
-            
-        const initialPriorityFields = initialSignatureData
-            .filter((sig) => sig.priority == urlPriority)
-            .flatMap(sig => sig.fields || []);
+        const currentPriorityFields = signatureData.filter((sig) => sig.priority == urlPriority).flatMap((sig) => sig.fields || []);
+
+        const initialPriorityFields = initialSignatureData.filter((sig) => sig.priority == urlPriority).flatMap((sig) => sig.fields || []);
 
         // If no fields for current priority, hide button
         if (currentPriorityFields.length === 0) {
@@ -2127,7 +1973,7 @@ function App() {
 
         // Check if all fields for current priority were already filled initially
         const allInitiallyFilled = initialPriorityFields.every((field) => field.filled);
-        
+
         if (allInitiallyFilled) {
             // Check if there are any changes from initial state
             const hasChanges = currentPriorityFields.some((currentField) => {
@@ -2135,7 +1981,7 @@ function App() {
                 // Check if imageUrl has changed
                 return !initialField || currentField.imageUrl !== initialField.imageUrl;
             });
-            
+
             // Only show button if there are changes
             return hasChanges;
         }
@@ -2169,9 +2015,7 @@ function App() {
             const { latitude, longitude } = coords.coords;
 
             // Reverse geocode to city/state/country
-            const res = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
-            );
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
             const data = await res.json();
             const address = data.address;
 
@@ -2212,36 +2056,20 @@ function App() {
             {isExpired && (
                 <div className="expired-card">
                     <div className="expired-icon">
-                    <svg
-                        className="expired-svg"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                        />
-                    </svg>
+                        <svg className="expired-svg" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
                     </div>
 
                     <h3 className="expired-title">Document Expired</h3>
 
-                    <p className="expired-message">
-                    This document has expired and is no longer available for signing.
-                    </p>
+                    <p className="expired-message">This document has expired and is no longer available for signing.</p>
 
-                    <p className="expired-hint">
-                    Please contact the document owner if you believe this is an error.
-                    </p>
+                    <p className="expired-hint">Please contact the document owner if you believe this is an error.</p>
 
                     <button className="expired-button">Contact Support</button>
                 </div>
-                )}
-
+            )}
 
             {pdfFile && !isExpired && (
                 <>
@@ -2255,9 +2083,10 @@ function App() {
                                     {Array.from({ length: totalPages }, (_, index) => {
                                         const pageNumber = index + 1;
                                         return (
-                                            <div key={index} className="preview-page-wrapper" onClick={() => handleScrollToPage(pageNumber)} >
+                                            <div key={index} className="preview-page-wrapper" onClick={() => handleScrollToPage(pageNumber)}>
                                                 <div className="preview-canvas-wrapper">
-                                                    <canvas ref={(el) => (canvasRefsArray.current[`thumb-${index}`] = el)} className="preview-thumbnail"/>                                                </div>
+                                                    <canvas ref={(el) => (canvasRefsArray.current[`thumb-${index}`] = el)} className="preview-thumbnail" />{" "}
+                                                </div>
                                                 <div className="preview-page-number">{pageNumber}</div>
                                             </div>
                                         );
@@ -2266,26 +2095,27 @@ function App() {
                                 {shouldShowSaveButton() && (
                                     <div className="bottom-bar">
                                         <div className="bottom-bar-left">
-                                            <input
-                                                type="checkbox"
-                                                checked={initialAccepted}
-                                                onChange={(e) => setInitialAccepted(e.target.checked)}
-                                                style={{ cursor: 'pointer', width: '18px', height: '18px' }}
-                                            />
-                                            <span> I have accept the <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">t & c ↗</a></span>
+                                            <input type="checkbox" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px" }} />
+                                            <span>
+                                                {" "}
+                                                I accept the{" "}
+                                                <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">
+                                                    t & c ↗
+                                                </a>
+                                            </span>
                                         </div>
                                         <div className="bottom-bar-right">
-                                                <div className="action-btns">
-                                                    <button className="reject-btn" onClick={handleReject}>
-                                                        Reject
-                                                    </button>
-                                                    <button className="save-submit-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted}>
-                                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white"/>
-                                                        </svg>
-                                                        Submit
-                                                    </button>
-                                                </div>
+                                            <div className="action-btns">
+                                                <button className="reject-btn" onClick={handleReject}>
+                                                    Reject
+                                                </button>
+                                                <button className="save-submit-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted}>
+                                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                        <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white" />
+                                                    </svg>
+                                                    Submit
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -2298,7 +2128,7 @@ function App() {
                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                             <path d="M6 3C4.89688 3 4 3.89688 4 5V17C4 18.1031 4.89688 19 6 19H8.5V15.5C8.5 14.3969 9.39687 13.5 10.5 13.5H16V8.32812C16 7.79688 15.7906 7.2875 15.4156 6.9125L12.0844 3.58438C11.7094 3.20938 11.2031 3 10.6719 3H6ZM14.1719 8.5H11.25C10.8344 8.5 10.5 8.16563 10.5 7.75V4.82812L14.1719 8.5ZM10.5 14.875C10.1562 14.875 9.875 15.1562 9.875 15.5V19.5C9.875 19.8438 10.1562 20.125 10.5 20.125C10.8438 20.125 11.125 19.8438 11.125 19.5V18.625H11.5C12.5344 18.625 13.375 17.7844 13.375 16.75C13.375 15.7156 12.5344 14.875 11.5 14.875H10.5ZM11.5 17.375H11.125V16.125H11.5C11.8438 16.125 12.125 16.4062 12.125 16.75C12.125 17.0938 11.8438 17.375 11.5 17.375ZM14.5 14.875C14.1562 14.875 13.875 15.1562 13.875 15.5V19.5C13.875 19.8438 14.1562 20.125 14.5 20.125H15.5C16.3969 20.125 17.125 19.3969 17.125 18.5V16.5C17.125 15.6031 16.3969 14.875 15.5 14.875H14.5ZM15.125 18.875V16.125H15.5C15.7063 16.125 15.875 16.2937 15.875 16.5V18.5C15.875 18.7063 15.7063 18.875 15.5 18.875H15.125ZM17.875 15.5V19.5C17.875 19.8438 18.1562 20.125 18.5 20.125C18.8438 20.125 19.125 19.8438 19.125 19.5V18.125H20C20.3438 18.125 20.625 17.8438 20.625 17.5C20.625 17.1562 20.3438 16.875 20 16.875H19.125V16.125H20C20.3438 16.125 20.625 15.8438 20.625 15.5C20.625 15.1562 20.3438 14.875 20 14.875H18.5C18.1562 14.875 17.875 15.1562 17.875 15.5Z" fill="#FF8282" />
                                         </svg>
-                                        <span>{documentRecord?.Document_Name__c || 'document'}</span>
+                                        <span>{documentRecord?.Document_Name__c || "document"}</span>
                                     </div>
                                 </div>
                                 {Array.from({ length: totalPages }, (_, index) => {
@@ -2316,16 +2146,17 @@ function App() {
                                 })}
                             </div>
                         </div>
-                        {shouldShowSaveButton() && (        
+                        {shouldShowSaveButton() && (
                             <div className="footer">
                                 <div className="bottom-bar-left">
-                                    <input
-                                        type="checkbox"
-                                        checked={initialAccepted}
-                                        onChange={(e) => setInitialAccepted(e.target.checked)}
-                                        style={{ cursor: 'pointer', width: '18px', height: '18px' }}
-                                    />
-                                    <span> I have accept the <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">t & c ↗</a></span>
+                                    <input type="checkbox" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px" }} />
+                                    <span>
+                                        {" "}
+                                        I accept the{" "}
+                                        <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">
+                                            t & c ↗
+                                        </a>
+                                    </span>
                                 </div>
                                 <div className="bottom-bar-right">
                                     <div className="action-btns">
@@ -2334,7 +2165,7 @@ function App() {
                                         </button>
                                         <button className="save-submit-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted}>
                                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white"/>
+                                                <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white" />
                                             </svg>
                                             Submit
                                         </button>
@@ -2346,7 +2177,7 @@ function App() {
                 </>
             )}
 
-            {!pdfFile && !loading && !error && !isExpired &&(
+            {!pdfFile && !loading && !error && !isExpired && (
                 <div className="placeholder">
                     <div className="placeholder-content">
                         <p>The URL is incorrect. Please contact the owner or sender of this link.</p>
