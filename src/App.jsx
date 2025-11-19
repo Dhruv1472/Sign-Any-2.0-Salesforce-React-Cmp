@@ -9,7 +9,7 @@ import SignatureModal from "./components/SignatureModal";
 import FieldOverlay from "./components/FieldOverlay";
 import FieldModal from "./components/FieldModal";
 import Toast from "./components/Toast";
-import { updateSignatureWithImage, deleteSignatureImage, updateFieldWithValue, deleteFieldValue } from "./utils/signatureUtils";
+import { updateSignatureWithImage, deleteSignatureImage, updateFieldWithValue, deleteFieldValue, updateNestedFieldValue, deleteNestedFieldValue } from "./utils/signatureUtils";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "./pdfjs/pdf.worker.min.mjs";
 
@@ -440,20 +440,39 @@ function App() {
     };
 
     const handleFieldSave = (value, field) => {
-        if (!field.fieldType) {
+        if (!field.fieldType && !field.type) {
             console.error("Attempted to save field value to a signature:", field);
             return;
         }
-        const updatedFields = updateFieldWithValue(fieldData, field.index, value, field.fieldType || field.type);
-        setFieldData(updatedFields);
+        
+        // Check if this field belongs to nested structure (has _parentSigner)
+        if (field._parentSigner) {
+            // Update nested field within signatureData
+            const signerObject = field._parentSigner;
+            const updatedSignatures = updateNestedFieldValue(signatureData, field.index, value, field.fieldType || field.type, signerObject);
+            setSignatureData(updatedSignatures);
+        } else {
+            // Update flat field structure
+            const updatedFields = updateFieldWithValue(fieldData, field.index, value, field.fieldType || field.type);
+            setFieldData(updatedFields);
+        }
 
         // Track that this field was filled in the current session
         setSessionFilledKeys((prev) => new Set(prev).add(field.index));
     };
 
     const handleFieldDelete = (field) => {
-        const updatedFields = deleteFieldValue(fieldData, field.index, field.fieldType || field.type);
-        setFieldData(updatedFields);
+        // Check if this field belongs to nested structure (has _parentSigner)
+        if (field._parentSigner) {
+            // Delete nested field within signatureData
+            const signerObject = field._parentSigner;
+            const updatedSignatures = deleteNestedFieldValue(signatureData, field.index, field.fieldType || field.type, signerObject);
+            setSignatureData(updatedSignatures);
+        } else {
+            // Delete flat field structure
+            const updatedFields = deleteFieldValue(fieldData, field.index, field.fieldType || field.type);
+            setFieldData(updatedFields);
+        }
 
         // Remove from session filled keys
         setSessionFilledKeys((prev) => {
@@ -489,16 +508,30 @@ function App() {
         if (fType === "checkbox") {
             const current = field.value === true || field.value === "true" || field.value === "True";
             if (current) {
-                const updated = deleteFieldValue(fieldData, field.index, "checkbox");
-                setFieldData(updated);
+                // Check if nested structure
+                if (field._parentSigner) {
+                    const signerObject = field._parentSigner;
+                    const updated = deleteNestedFieldValue(signatureData, field.index, "checkbox", signerObject);
+                    setSignatureData(updated);
+                } else {
+                    const updated = deleteFieldValue(fieldData, field.index, "checkbox");
+                    setFieldData(updated);
+                }
                 setSessionFilledKeys((prev) => {
                     const s = new Set(prev);
                     s.delete(field.index);
                     return s;
                 });
             } else {
-                const updated = updateFieldWithValue(fieldData, field.index, true, "checkbox");
-                setFieldData(updated);
+                // Check if nested structure
+                if (field._parentSigner) {
+                    const signerObject = field._parentSigner;
+                    const updated = updateNestedFieldValue(signatureData, field.index, true, "checkbox", signerObject);
+                    setSignatureData(updated);
+                } else {
+                    const updated = updateFieldWithValue(fieldData, field.index, true, "checkbox");
+                    setFieldData(updated);
+                }
                 setSessionFilledKeys((prev) => new Set(prev).add(field.index));
             }
             return;
@@ -931,7 +964,6 @@ function App() {
                 });
 
                 const recordData = {
-                    Document__c: documentId,
                     Field_Index__c: field.fieldIndex,
                     Signing_Details__c: signingDetails,
                 };
@@ -940,6 +972,8 @@ function App() {
                 const existingId = existingMap.get(field.fieldIndex);
                 if (existingId) {
                     recordData.Id = existingId;
+                } else {
+                    recordData.Document__c = documentId;
                 }
 
                 recordsToUpsert.push(recordData);
@@ -953,6 +987,7 @@ function App() {
             const upsertPromises = recordsToUpsert.map(async (record) => {
                 const isUpdate = !!record.Id;
                 const method = isUpdate ? "PATCH" : "POST";
+                console.log("isUpdate==> ", isUpdate);
                 const apiUrl = isUpdate ? `${instanceUrl}/services/data/v65.0/sobjects/Signature__c/${record.Id}` : `${instanceUrl}/services/data/v65.0/sobjects/Signature__c`;
 
                 // Remove Id from body if updating (Id is in URL)
@@ -989,6 +1024,10 @@ function App() {
                 if (!response.ok) {
                     const errorText = await response.text();
                     throw new Error(`Failed to ${isUpdate ? "update" : "create"} Signature record (Field Index: ${record.Field_Index__c}): ${response.status} ${response.statusText} - ${errorText}`);
+                }
+
+                if (response.status === 201 || response.status === 204) {
+                    return { success: true };
                 }
 
                 const result = await response.json();
