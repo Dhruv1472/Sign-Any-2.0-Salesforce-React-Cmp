@@ -19,6 +19,11 @@
     text-wrap: balance;
 }
 
+:root::selection {
+    background-color: var(--primary-color);
+    color: white;
+}
+
 body {
     margin: 0;
     min-width: 320px;
