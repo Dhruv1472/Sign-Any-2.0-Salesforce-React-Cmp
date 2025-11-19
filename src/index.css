@@ -16,6 +16,12 @@
     -moz-osx-font-smoothing: grayscale;
     --primary-color: #2863EB;
     --secondary-color: #F5F8FF;
+    text-wrap: balance;
+}
+
+:root::selection {
+    background-color: var(--primary-color);
+    color: white;
 }
 
 body {

@@ -54,24 +54,20 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
             <div className="signature-modal-container" onClick={(e) => e.stopPropagation()}>
                 <div className="signature-modal-header">
                     <h2>{title}</h2>
-                    <button className="signature-modal-close" onClick={handleClose}>
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M7 7L17 17M7 17L17 7" stroke="#5F5F5F" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </button>
+                    <svg width="32" height="32" viewBox="0 0 24 24" className="signature-modal-close" onClick={handleClose}>
+                        <path d="M7 7L17 17M7 17L17 7" stroke="#5F5F5F" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                 </div>
 
                 <div className="signature-modal-body">
-                    <div className="signature-modal-tabs">
-                        <div className="signature-tabs-slider">
-                            <button className={`signature-tab ${activeTab === TABS.DRAW ? "active" : ""}`} onClick={() => setActiveTab(TABS.DRAW)}>
-                                Draw
-                            </button>
-                            <button className={`signature-tab ${activeTab === TABS.TYPE ? "active" : ""}`} onClick={() => setActiveTab(TABS.TYPE)}>
-                                Type
-                            </button>
-                            <div className="signature-tabs-slider-indicator" data-active={activeTab}></div>
-                        </div>
+                    <div className="signature-tabs-slider">
+                        <button className={`signature-tab ${activeTab === TABS.DRAW ? "active" : ""}`} onClick={() => setActiveTab(TABS.DRAW)}>
+                            Draw
+                        </button>
+                        <button className={`signature-tab ${activeTab === TABS.TYPE ? "active" : ""}`} onClick={() => setActiveTab(TABS.TYPE)}>
+                            Type
+                        </button>
+                        <div className="signature-tabs-slider-indicator" data-active={activeTab}></div>
                     </div>
 
                     <div className="signature-modal-content">

@@ -15,8 +15,8 @@
     background: white;
     border-radius: 8px;
     width: 90%;
-    max-width: min(70vw, 700px);
-    max-height: min(90vh, 500px);
+    max-width: max-content;
+    max-height: max-content;
     display: flex;
     flex-direction: column;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
@@ -57,24 +57,42 @@
     background-color: #f0f0f0;
 }
 
-.signature-modal-tabs {
-    position: absolute;
-    width: 200px;
-    display: flex;
-    justify-content: start;
-    padding: 4px 12px;
-    height: 48px;
-    margin-top: 4px;
+.signature-modal-body {
+    position: relative;
+    width: 100%;
 }
 
 .signature-tabs-slider {
+    margin: 8px 12px 16px;
     width: 200px;
-    position: relative;
+    position: absolute;
     display: flex;
     background: #e0e0e0;
     border-radius: 8px;
     padding: 4px;
     gap: 4px;
+}
+
+.signature-tab {
+    position: relative;
+    z-index: 1;
+    padding: 8px 24px;
+    background: transparent;
+    border: none;
+    font-size: 14px;
+    font-weight: 500;
+    color: #666;
+    cursor: pointer;
+    transition: color 0.3s;
+    width: 200px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.signature-tab.active {
+    color: white;
 }
 
 .signature-tabs-slider-indicator {
@@ -101,28 +119,6 @@
     transform: translateX(calc(200% + 8px));
 }
 
-.signature-tab {
-    position: relative;
-    z-index: 1;
-    padding: 8px 24px;
-    background: transparent;
-    border: none;
-    font-size: 14px;
-    font-weight: 500;
-    color: #666;
-    cursor: pointer;
-    transition: color 0.3s;
-    width: 200px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.signature-tab.active {
-    color: white;
-}
-
 .signature-modal-content {
     flex: 1;
     padding: 12px;
@@ -134,7 +130,8 @@
 .signature-modal-footer {
     display: flex;
     justify-content: flex-end;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
     padding: 8px;
     height: 48px;
 }
@@ -165,38 +162,19 @@
     border-color: #999;
 }
 
-.signature-btn-clear {
+.signature-btn-clear, .signature-btn-save {
     background-color: var(--primary-color);
     border: 1px solid var(--primary-color);
     color: white;
 }
 
-.signature-btn-clear:hover:not(:disabled) {
+.signature-btn-clear:hover:not(:disabled), .signature-btn-save:hover:not(:disabled) {
     background-color: var(--secondary-color);
     border-color: var(--primary-color);
     color: var(--primary-color);
 }
 
-.signature-btn-clear:disabled {
-    background-color: #ccc;
-    border-color: #ccc;
-    cursor: not-allowed;
-    opacity: 0.6;
-}
-
-.signature-btn-save {
-    background-color: var(--primary-color);
-    border: 1px solid var(--primary-color);
-    color: white;
-}
-
-.signature-btn-save:hover:not(:disabled) {
-    background-color: var(--secondary-color);
-    border-color: var(--primary-color);
-    color: var(--primary-color);
-}
-
-.signature-btn-save:disabled {
+.signature-btn-clear:disabled, .signature-btn-save:disabled {
     background-color: #ccc;
     border-color: #ccc;
     cursor: not-allowed;
@@ -206,29 +184,35 @@
 /* Responsive styles */
 @media screen and (max-width: 768px) {
     .signature-modal-container {
-        width: 95%;
-        max-height: 95vh;
+        height: 100%;
+        max-height: max-content;
     }
 
-    .signature-modal-header {
-        padding: 15px;
-    }
-
-    .signature-modal-header h2 {
-        font-size: 1.25rem;
-    }
-
+    .signature-tabs-slider,
     .signature-tab {
-        padding: 12px 15px;
-        font-size: 14px;
+        width: calc(100% - 24px);
     }
 
     .signature-modal-content {
-        padding: 15px;
-        min-height: 300px;
+        max-height: 100%;
     }
 
     .signature-modal-footer {
-        padding: 15px;
+        height: max-content;
+    }
+
+    .signature-btn-clear {
+        order: 1;
+        width: 100%;
+    }
+
+    .signature-btn-cancel {
+        order: 2;
+        width: calc(50% - 4px);
+    }
+
+    .signature-btn-save {
+        order: 3;
+        width: calc(50% - 4px);
     }
 }
