@@ -27,7 +27,7 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
     const [history, setHistory] = useState([]);
     const [historyStep, setHistoryStep] = useState(-1);
 
-    useEffect(() => {
+    const initializeCanvas = () => {
         const canvas = canvasRef.current;
         if (!canvas) return;
 
@@ -51,6 +51,28 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
         const imageData = canvas.toDataURL("image/png");
         setHistory([imageData]);
         setHistoryStep(0);
+        setIsEmpty(true);
+        
+        // Notify parent that canvas was cleared
+        if (onChange) {
+            onChange(null);
+        }
+    };
+
+    useEffect(() => {
+        initializeCanvas();
+
+        // Handle window resize
+        const handleResize = () => {
+            initializeCanvas();
+        };
+
+        window.addEventListener("resize", handleResize);
+
+        return () => {
+            window.removeEventListener("resize", handleResize);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const saveToHistory = () => {
@@ -186,29 +208,60 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
 
     // Touch events for mobile
     const handleTouchStart = (e) => {
-        e.preventDefault();
+        if (!canvasRef.current) return;
         const touch = e.touches[0];
-        const mouseEvent = new MouseEvent("mousedown", {
-            clientX: touch.clientX,
-            clientY: touch.clientY,
-        });
-        canvasRef.current.dispatchEvent(mouseEvent);
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+        const ctx = canvas.getContext("2d");
+
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+
+        // Set style based on tool
+        if (tool === "pen") {
+            ctx.strokeStyle = "#000000";
+            ctx.lineWidth = penSize;
+        } else {
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = eraseSize;
+        }
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        setIsDrawing(true);
     };
 
     const handleTouchMove = (e) => {
-        e.preventDefault();
+        if (!isDrawing || !canvasRef.current) return;
+
         const touch = e.touches[0];
-        const mouseEvent = new MouseEvent("mousemove", {
-            clientX: touch.clientX,
-            clientY: touch.clientY,
-        });
-        canvasRef.current.dispatchEvent(mouseEvent);
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d");
+        const rect = canvas.getBoundingClientRect();
+
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+
+        ctx.lineTo(x, y);
+        ctx.stroke();
+
+        setIsEmpty(false);
+
+        // Notify parent with canvas data
+        if (onChange) {
+            onChange(canvas.toDataURL("image/png"));
+        }
     };
 
-    const handleTouchEnd = (e) => {
-        e.preventDefault();
-        const mouseEvent = new MouseEvent("mouseup", {});
-        canvasRef.current.dispatchEvent(mouseEvent);
+    const handleTouchEnd = () => {
+        if (isDrawing && canvasRef.current) {
+            const ctx = canvasRef.current.getContext("2d");
+            ctx.closePath();
+            setIsDrawing(false);
+            saveToHistory();
+        }
     };
 
     return (

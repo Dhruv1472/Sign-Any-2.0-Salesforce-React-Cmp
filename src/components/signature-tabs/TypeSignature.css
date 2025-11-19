@@ -186,8 +186,9 @@
 }
 
 .type-signature-preview {
+    width: 100%;
+    aspect-ratio: 1.65;
     height: 280px;
-    max-height: 280px;
     border: 2px solid var(--primary-color);
     border-radius: 8px;
     background: white;
@@ -202,11 +203,13 @@
     font-size: 48px;
     color: #000;
     user-select: none;
+    white-space: nowrap;
 }
 
 .type-signature-preview-placeholder {
     color: #999;
     font-size: 16px;
+    text-align: center;
 }
 
 /* Mobile responsiveness */
@@ -214,42 +217,25 @@
     .type-signature-container {
         flex-direction: column;
         gap: 12px;
-        height: auto;
+        height: max-content;
+        max-height: none;
     }
 
     .type-signature-top-header {
         flex-direction: column;
         width: 100%;
         min-width: 100%;
+        height: max-content;
     }
 
     .right-section {
         flex-direction: row;
-        flex-wrap: wrap;
+        justify-content: space-between;
     }
 
-    .type-signature-preview {
-        min-height: 150px;
-    }
-}
-
-/* Mobile responsiveness */
-@media (max-width: 768px) {
-    .type-signature-container {
-        padding: 15px;
-        gap: 20px;
-    }
-
-    .type-signature-preview {
-        min-height: 100px;
-        padding: 15px;
-    }
-
-    .type-signature-preview-text {
-        font-size: 36px;
-    }
-
-    .type-signature-preview-placeholder {
-        font-size: 14px;
+    .type-signature-preview-section {
+        width: 100%;
+        height: max-content;
+        aspect-ratio: 1.65;
     }
 }
