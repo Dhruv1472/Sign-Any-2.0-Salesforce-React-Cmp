@@ -11,10 +11,8 @@ import FieldModal from "./components/FieldModal";
 import Toast from "./components/Toast";
 import { updateSignatureWithImage, deleteSignatureImage, updateFieldWithValue, deleteFieldValue } from "./utils/signatureUtils";
 
-// Set up the worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = "./pdfjs/pdf.worker.min.mjs";
 
-// A4 page dimensions in pixels at 72 DPI
 const A4_WIDTH = 595;
 const A4_HEIGHT = 842;
 
@@ -23,12 +21,11 @@ function App() {
     const [totalPages, setTotalPages] = useState(0);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [isExpired, setIsExpired] = useState(false); // Track if document is expired
-    const [initialAccepted, setInitialAccepted] = useState(false); // Show initial accept/reject popup on first load
+    const [isExpired, setIsExpired] = useState(false);
+    const [initialAccepted, setInitialAccepted] = useState(false);
     const [signatureData, setSignatureData] = useState([]);
-    const [fieldData, setFieldData] = useState([]); // Fields data
+    const [fieldData, setFieldData] = useState([]);
     const [documentRecord, setDocumentRecord] = useState(null);
-    const [pageDimensions, setPageDimensions] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isFieldModalOpen, setIsFieldModalOpen] = useState(false);
     const [currentSignature, setCurrentSignature] = useState(null);
@@ -36,17 +33,15 @@ function App() {
     const [toast, setToast] = useState({ isVisible: false, message: "", type: "success" });
     const [salesforceConfig, setSalesforceConfig] = useState(null);
     const [urlPriority, setUrlPriority] = useState(null);
-    const [isSubmitted, setIsSubmitted] = useState(false); // Track if document has been submitted
-    const [sessionSignedKeys, setSessionSignedKeys] = useState(new Set()); // Track signatures signed in this session
-    const [sessionFilledKeys, setSessionFilledKeys] = useState(new Set()); // Track fields filled in this session
-    const [originalPdfBytes, setOriginalPdfBytes] = useState(null); // Store original PDF bytes for modification
-    const [initialSignatureData, setInitialSignatureData] = useState([]); // Store initial signature data to detect changes
-    const [initialFieldData, setInitialFieldData] = useState([]); // Store initial field data to detect changes
-    const [orgIdState, setOrgIdState] = useState(null); // Salesforce Organization Id
+    const [isSubmitted, setIsSubmitted] = useState(false);
+    const [sessionSignedKeys, setSessionSignedKeys] = useState(new Set());
+    const [sessionFilledKeys, setSessionFilledKeys] = useState(new Set());
+    const [originalPdfBytes, setOriginalPdfBytes] = useState(null);
+    const [initialSignatureData, setInitialSignatureData] = useState([]);
+    const [orgIdState, setOrgIdState] = useState(null);
     const canvasRefsArray = useRef([]);
     const pdfDocRef = useRef(null);
 
-    // Check URL parameters on mount
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
         const accessToken = urlParams.get("act");
@@ -56,24 +51,17 @@ function App() {
         const clientSecret = urlParams.get("clientSecret");
         const priority = urlParams.get("priority");
 
-        // Parse and store priority if provided
         const parsedPriority = priority ? parseInt(priority, 10) : 1;
         setUrlPriority(parsedPriority);
 
         if (recordId && instanceUrl) {
-            // Store Salesforce config for later use
             setSalesforceConfig({ accessToken, recordId, instanceUrl, clientId, clientSecret });
-
-            // Fetch Document__c record and then PDF
             fetchDocumentAndPdf(recordId, accessToken, instanceUrl, clientId, clientSecret);
 
-            // Also fetch Organization Id
             fetchOrganizationId(accessToken, instanceUrl, clientId, clientSecret)
                 .then((id) => setOrgIdState(id))
                 .catch(() => setOrgIdState(null));
         }
-
-        // window.history.replaceState({}, document.title, window.location.pathname);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -92,27 +80,18 @@ function App() {
                 setIsExpired(true);
                 setPdfFile(null);
                 setTotalPages(0);
-                setPageDimensions([]);
                 pdfDocRef.current = null;
                 canvasRefsArray.current = [];
                 setLoading(false);
                 return;
             }
 
-            console.log(`Fetched ContentVersion ID: ${contentVersionId}`);
-            console.log(`Signature Data:`, sigData);
-            console.log(`Field Data:`, fieldDataFromRecord);
-
-            // Store document record and data directly (no parsing needed)
             setDocumentRecord(documentData);
             const signatures = Array.isArray(sigData) ? sigData : [];
             const fields = Array.isArray(fieldDataFromRecord) ? fieldDataFromRecord : [];
             setSignatureData(signatures);
             setFieldData(fields);
-
-            // Store initial data to detect changes later
             setInitialSignatureData(JSON.parse(JSON.stringify(signatures)));
-            setInitialFieldData(JSON.parse(JSON.stringify(fields)));
 
             // Step 2: Fetch PDF from ContentVersion
             await fetchPdfFromContentVersion(contentVersionId, currentToken, instanceUrl);
@@ -121,234 +100,6 @@ function App() {
             setError(`Failed to load document: ${error.message}`);
         } finally {
             setLoading(false);
-        }
-    };
-
-    // Load PDF from array buffer
-    const loadPdfFromArrayBuffer = async (arrayBuffer, fileName = "document.pdf") => {
-        try {
-            const typedArray = new Uint8Array(arrayBuffer);
-            const loadingTask = pdfjsLib.getDocument(typedArray);
-            const pdf = await loadingTask.promise;
-            pdfDocRef.current = pdf;
-            setTotalPages(pdf.numPages);
-            setPdfFile(fileName);
-            setError(null);
-        } catch (error) {
-            console.error("Error loading PDF:", error);
-            setError("Error loading PDF file");
-        }
-    };
-
-    // Refresh access token using client credentials
-    // Helper to update access token in the url and component state so refresh persists across reloads
-    const updateUrlAccessToken = (token) => {
-        try {
-            const url = new URL(window.location.href);
-            url.searchParams.set("act", token);
-            // Replace the current history entry without reloading
-            window.history.replaceState({}, document.title, url.toString());
-
-            // Keep salesforceConfig state in sync if present
-            setSalesforceConfig((prev) => (prev ? { ...prev, accessToken: token } : prev));
-        } catch (err) {
-            console.warn("Could not update URL access token:", err);
-        }
-    };
-
-    // Refresh access token using client credentials
-    const refreshAccessToken = async (instanceUrl, clientId, clientSecret) => {
-        try {
-            const tokenUrl = `${instanceUrl}/services/oauth2/token`;
-            const params = new URLSearchParams({
-                grant_type: "client_credentials",
-                client_id: clientId,
-                client_secret: clientSecret,
-            });
-
-            const response = await fetch(tokenUrl, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                body: params,
-            });
-
-            if (!response.ok) {
-                throw new Error(`Failed to refresh token: ${response.status} ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            const newToken = data.access_token;
-
-            // Persist the refreshed token in the URL and component state so reloads keep using it
-            if (newToken) {
-                updateUrlAccessToken(newToken);
-            }
-
-            return newToken;
-        } catch (error) {
-            console.error("Error refreshing access token:", error);
-            throw error;
-        }
-    };
-
-    // Fetch all Signature__c records for a document
-    const fetchSignatureRecords = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
-        try {
-            let currentToken = accessToken;
-            const query = `SELECT Id, Field_Index__c, Signing_Details__c FROM Signature__c WHERE Document__c = '${documentId}'`;
-
-            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
-
-            let response = await fetch(apiUrl, {
-                method: "GET",
-                headers: {
-                    Authorization: `Bearer ${currentToken}`,
-                    "Content-Type": "application/json",
-                },
-            });
-
-            // If token expired (401), try to refresh it
-            if (response.status === 401 && clientId && clientSecret) {
-                console.log("Access token expired, attempting to refresh...");
-                currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
-
-                // Retry the request with new token
-                response = await fetch(apiUrl, {
-                    method: "GET",
-                    headers: {
-                        Authorization: `Bearer ${currentToken}`,
-                        "Content-Type": "application/json",
-                    },
-                });
-            }
-
-            if (!response.ok) {
-                throw new Error(`Failed to fetch Signature records: ${response.status} ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            return data.records || [];
-        } catch (error) {
-            console.error("Error fetching Signature records:", error);
-            return [];
-        }
-    };
-
-    // Create or update Signature__c records
-    const upsertSignatureRecords = async (documentId, signatureData, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
-        try {
-            let currentToken = accessToken;
-
-            // Extract all fields with imageUrl from signatureData
-            const fieldsWithImages = [];
-            signatureData.forEach((sig) => {
-                if (sig.fields && Array.isArray(sig.fields)) {
-                    sig.fields.forEach((field) => {
-                        if (field.filled && field.imageUrl) {
-                            fieldsWithImages.push({
-                                fieldIndex: field.index,
-                                imageUrl: field.imageUrl,
-                                ipAddress: field.ipAddress || "",
-                                timestamp: field.timestamp || field.signedTime || "",
-                            });
-                        }
-                    });
-                }
-            });
-
-            // First, fetch existing Signature__c records to get their IDs
-            const existingRecords = await fetchSignatureRecords(documentId, currentToken, instanceUrl, clientId, clientSecret);
-            const existingMap = new Map();
-            existingRecords.forEach((record) => {
-                existingMap.set(record.Field_Index__c, record.Id);
-            });
-
-            // Prepare records for upsert (create or update)
-            const recordsToUpsert = [];
-            for (const field of fieldsWithImages) {
-                const signingDetails = JSON.stringify({
-                    imageUrl: field.imageUrl,
-                    ipAddress: field.ipAddress,
-                    timestamp: field.timestamp,
-                });
-
-                const recordData = {
-                    Document__c: documentId,
-                    Field_Index__c: field.fieldIndex,
-                    Signing_Details__c: signingDetails,
-                };
-
-                // If record exists, add Id for update
-                const existingId = existingMap.get(field.fieldIndex);
-                if (existingId) {
-                    recordData.Id = existingId;
-                }
-
-                recordsToUpsert.push(recordData);
-            }
-
-            if (recordsToUpsert.length === 0) {
-                console.log("No signature records to upsert");
-                return true;
-            }
-
-            console.log("recordsToUpsert==> ", recordsToUpsert);
-
-            // Use Promise.all to create/update records individually
-            const upsertPromises = recordsToUpsert.map(async (record) => {
-                const isUpdate = !!record.Id;
-                const method = isUpdate ? "PATCH" : "POST";
-                const apiUrl = isUpdate ? `${instanceUrl}/services/data/v65.0/sobjects/Signature__c/${record.Id}` : `${instanceUrl}/services/data/v65.0/sobjects/Signature__c`;
-
-                // Remove Id from body if updating (Id is in URL)
-                const body = isUpdate ? { ...record } : record;
-                if (isUpdate) {
-                    delete body.Id;
-                }
-
-                let response = await fetch(apiUrl, {
-                    method: method,
-                    headers: {
-                        Authorization: `Bearer ${currentToken}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(body),
-                });
-
-                // If token expired (401), try to refresh it
-                if (response.status === 401 && clientId && clientSecret) {
-                    console.log("Access token expired, attempting to refresh...");
-                    currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
-
-                    // Retry the request with new token
-                    response = await fetch(apiUrl, {
-                        method: method,
-                        headers: {
-                            Authorization: `Bearer ${currentToken}`,
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify(body),
-                    });
-                }
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Failed to ${isUpdate ? "update" : "create"} Signature record (Field Index: ${record.Field_Index__c}): ${response.status} ${response.statusText} - ${errorText}`);
-                }
-
-                const result = await response.json();
-                return result;
-            });
-
-            // Execute all upsert operations in parallel
-            const results = await Promise.all(upsertPromises);
-            console.log("Signature records upserted successfully:", results);
-            return true;
-        } catch (error) {
-            console.error("Error upserting Signature records:", error);
-            throw error;
         }
     };
 
@@ -386,9 +137,8 @@ function App() {
                 throw new Error(`Failed to fetch Document record: ${response.status} ${response.statusText}`);
             }
 
-            let documentData = await response.json();
-            documentData = documentData.records[0];
-            console.log("documentData", documentData);
+            const data = await response.json();
+            const documentData = data.records[0];
 
             // Check if document is expired
             if (documentData.Expiration_Date__c) {
@@ -422,29 +172,25 @@ function App() {
                         parsedData.forEach((entry) => {
                             // Check if entry has nested fields (new structure)
                             if (entry.fields && Array.isArray(entry.fields)) {
-                                // Process nested fields
-                                entry.fields.forEach((field) => {
+                                // Check if any field in this entry is a signature type
+                                const hasSignatureFields = entry.fields.some((field) => {
                                     const typeLower = typeof field.type === "string" ? field.type.toLowerCase() : "";
                                     const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(typeLower);
                                     const isSignatureType = ["signature"].includes(typeLower) || (!isFieldType && !field.fieldType);
-
-                                    if (isFieldType) {
-                                        parsedFieldData.push({
-                                            ...field,
-                                            fieldType: typeLower,
-                                            filled: Boolean(field.filled),
-                                            // Attach signer info to field
-                                            signerPriority: entry.priority,
-                                            signerEmail: entry.email,
-                                            signerName: entry.name,
-                                        });
-                                    } else if (isSignatureType) {
-                                        parsedSignatureData.push({
-                                            ...entry,
-                                            signed: Boolean(entry.signed),
-                                        });
-                                    }
+                                    return isSignatureType;
                                 });
+
+                                // If this entry has signature fields, add the entire entry once
+                                // All fields (signature + text/date/etc) stay together in nested structure
+                                if (hasSignatureFields) {
+                                    parsedSignatureData.push({
+                                        ...entry,
+                                        signed: Boolean(entry.signed),
+                                    });
+                                }
+                                
+                                // DO NOT extract text fields from nested structure to fieldData
+                                // They will be rendered by SignatureOverlay along with signature fields
                             } else {
                                 // Old flat structure (backward compatibility)
                                 const typeLower = typeof entry.type === "string" ? entry.type.toLowerCase() : "";
@@ -473,48 +219,44 @@ function App() {
             // Fetch Signature__c records to get imageUrl data
             const signatureRecords = await fetchSignatureRecords(documentId, currentToken, instanceUrl, clientId, clientSecret);
 
-            console.log("Fetched Signature__c records:", signatureRecords);
-
-            // Create a map of fieldIndex -> signature data
-            // Store with both string and number keys to handle type mismatches
             const signatureMap = new Map();
             signatureRecords.forEach((record) => {
                 try {
                     const sigDetails = JSON.parse(record.Signing_Details__c);
-                    const fieldIndex = record.Field_Index__c;
-                    // Store with original value (string)
-                    signatureMap.set(fieldIndex, sigDetails);
-                    // Also store with number if it's numeric
-                    if (!isNaN(fieldIndex)) {
-                        signatureMap.set(Number(fieldIndex), sigDetails);
-                    }
-                    // Also store with string if it's a number
-                    signatureMap.set(String(fieldIndex), sigDetails);
-                    console.log(`Mapped field index ${fieldIndex} to signature data:`, sigDetails);
-                } catch (e) {
-                    console.warn(`Failed to parse Signature record ${record.Id}:`, e);
+                    const fieldIndexStr = String(record.Field_Index__c);
+                    signatureMap.set(fieldIndexStr, sigDetails);
+                } catch (error) {
+                    console.warn(`Failed to parse Signature record ${record.Id}:`, error);
                 }
             });
 
-            // Merge imageUrl data back into parsedSignatureData fields
-            parsedSignatureData = parsedSignatureData.map((sig) => {
+            const consumedLegacyKeys = new Set();
+            const sortedSignatureData = [...parsedSignatureData].sort((a, b) => a.priority - b.priority);
+            
+            parsedSignatureData = sortedSignatureData.map((sig) => {
                 if (sig.fields && Array.isArray(sig.fields)) {
                     return {
                         ...sig,
                         fields: sig.fields.map((field) => {
-                            console.log(`Looking up signature data for field index: ${field.index} (type: ${typeof field.index})`);
-                            const sigData = signatureMap.get(field.index);
+                            const compositeKey = `${String(sig.priority)}_${String(field.index)}`;
+                            const legacyKey = String(field.index);
+                            let sigData = signatureMap.get(compositeKey);
+                            
+                            if (!sigData && field.filled && !consumedLegacyKeys.has(legacyKey)) {
+                                sigData = signatureMap.get(legacyKey);
+                                if (sigData) {
+                                    consumedLegacyKeys.add(legacyKey);
+                                }
+                            }
+                            
                             if (sigData) {
-                                console.log(`Found signature data for field ${field.index}:`, sigData);
                                 return {
                                     ...field,
                                     imageUrl: sigData.imageUrl || null,
                                     ipAddress: sigData.ipAddress || field.ipAddress || "",
                                     timestamp: sigData.timestamp || field.timestamp || "",
-                                    filled: Boolean(sigData.imageUrl), // Set filled based on imageUrl presence
+                                    filled: Boolean(sigData.imageUrl),
                                 };
-                            } else {
-                                console.log(`No signature data found for field ${field.index}`);
                             }
                             return field;
                         }),
@@ -527,6 +269,54 @@ function App() {
         } catch (error) {
             console.error("Error fetching Document record:", error);
             throw error;
+        }
+    };
+
+    // Fetch PDF from Salesforce ContentVersion
+    const fetchPdfFromContentVersion = async (contentVersionId, accessToken, instanceUrl) => {
+        try {
+            // Salesforce REST API endpoint to get ContentVersion
+            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/ContentVersion/${contentVersionId}/VersionData`;
+
+            const response = await fetch(apiUrl, {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "Content-Type": "application/pdf",
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+
+            // Create a copy for pdf-lib before pdfjs consumes the original
+            const arrayBufferCopy = arrayBuffer.slice(0);
+            setOriginalPdfBytes(arrayBufferCopy);
+
+            // Pass original to pdfjs (it will consume/detach this buffer)
+            await loadPdfFromArrayBuffer(arrayBuffer, `Document_${contentVersionId}.pdf`);
+        } catch (error) {
+            console.error("Error fetching PDF from ContentVersion:", error);
+            throw error;
+        }
+    };
+
+    // Load PDF from array buffer
+    const loadPdfFromArrayBuffer = async (arrayBuffer, fileName = "document.pdf") => {
+        try {
+            const typedArray = new Uint8Array(arrayBuffer);
+            const loadingTask = pdfjsLib.getDocument(typedArray);
+            const pdf = await loadingTask.promise;
+            pdfDocRef.current = pdf;
+            setTotalPages(pdf.numPages);
+            setPdfFile(fileName);
+            setError(null);
+        } catch (error) {
+            console.error("Error loading PDF:", error);
+            setError("Error loading PDF file");
         }
     };
 
@@ -568,260 +358,19 @@ function App() {
         }
     };
 
-    // Fetch PDF from Salesforce ContentVersion
-    const fetchPdfFromContentVersion = async (contentVersionId, accessToken, instanceUrl) => {
-        try {
-            // Salesforce REST API endpoint to get ContentVersion
-            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/ContentVersion/${contentVersionId}/VersionData`;
-
-            const response = await fetch(apiUrl, {
-                method: "GET",
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    "Content-Type": "application/pdf",
-                },
-            });
-
-            if (!response.ok) {
-                throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
-            }
-
-            const arrayBuffer = await response.arrayBuffer();
-
-            // Create a copy for pdf-lib before pdfjs consumes the original
-            const arrayBufferCopy = arrayBuffer.slice(0);
-            setOriginalPdfBytes(arrayBufferCopy);
-
-            // Pass original to pdfjs (it will consume/detach this buffer)
-            await loadPdfFromArrayBuffer(arrayBuffer, `Document_${contentVersionId}.pdf`);
-        } catch (error) {
-            console.error("Error fetching PDF from ContentVersion:", error);
-            throw error;
-        }
-    };
-
-    // Update Document__c record with signature and field data
-    const updateDocumentRecord = async (documentId, signatureData, fieldData, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
-        try {
-            let currentToken = accessToken;
-
-            // Step 1: Save imageUrl data to Signature__c records
-            await upsertSignatureRecords(documentId, signatureData, currentToken, instanceUrl, clientId, clientSecret);
-
-            // Step 2: Remove imageUrl from signature data before saving to Document__c
-            const sanitizedSignatureData = signatureData.map((sig) => {
-                if (sig.fields && Array.isArray(sig.fields)) {
-                    return {
-                        ...sig,
-                        fields: sig.fields.map((field) => {
-                            // eslint-disable-next-line no-unused-vars
-                            const { imageUrl, ...fieldWithoutImage } = field;
-                            return fieldWithoutImage;
-                        }),
-                    };
-                }
-                return sig;
-            });
-
-            // Salesforce REST API endpoint to update Document__c record
-            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/Document__c/${documentId}`;
-
-            // Combine sanitized signature and field data into a single array
-            const combinedData = [...(sanitizedSignatureData || []), ...(fieldData || [])];
-
-            // Convert combined data to JSON string
-            const signatureDataJson = JSON.stringify(combinedData);
-
-            let response = await fetch(apiUrl, {
-                method: "PATCH",
-                headers: {
-                    Authorization: `Bearer ${currentToken}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    Signing_Details__c: signatureDataJson,
-                }),
-            });
-
-            // If token expired (401), try to refresh it
-            if (response.status === 401 && clientId && clientSecret) {
-                console.log("Access token expired, attempting to refresh...");
-                currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
-
-                // Retry the request with new token
-                response = await fetch(apiUrl, {
-                    method: "PATCH",
-                    headers: {
-                        Authorization: `Bearer ${currentToken}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        Signing_Details__c: signatureDataJson,
-                    }),
-                });
-            }
-
-            if (!response.ok) {
-                throw new Error(`Failed to update Document record: ${response.status} ${response.statusText}`);
-            }
-
-            console.log("Document record updated successfully");
-            return true;
-        } catch (error) {
-            console.error("Error updating Document record:", error);
-            throw error;
-        }
-    };
-
-    // Upload signed PDF to Salesforce as ContentVersion
-    const uploadSignedPdfToSalesforce = async (pdfBytes, firstPublishLocationId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
-        try {
-            let currentToken = accessToken;
-
-            // Convert PDF bytes to base64
-            const base64Pdf = Buffer.from(pdfBytes).toString("base64");
-
-            // Create ContentVersion record
-            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/ContentVersion`;
-
-            const contentVersionData = {
-                Title: `Signed_Document_${Date.now()}`,
-                PathOnClient: `Signed_Document_${Date.now()}.pdf`,
-                VersionData: base64Pdf,
-                FirstPublishLocationId: firstPublishLocationId,
-                IsMajorVersion: true,
-            };
-
-            let response = await fetch(apiUrl, {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${currentToken}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(contentVersionData),
-            });
-
-            // If token expired (401), try to refresh it
-            if (response.status === 401 && clientId && clientSecret) {
-                console.log("Access token expired, attempting to refresh...");
-                currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
-
-                // Retry the request with new token
-                response = await fetch(apiUrl, {
-                    method: "POST",
-                    headers: {
-                        Authorization: `Bearer ${currentToken}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(contentVersionData),
-                });
-            }
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Failed to upload ContentVersion: ${response.status} ${response.statusText} - ${errorText}`);
-            }
-
-            const result = await response.json();
-            console.log("Signed PDF uploaded successfully. ContentVersion ID:", result.id);
-            return result.id;
-        } catch (error) {
-            console.error("Error uploading signed PDF to Salesforce:", error);
-            throw error;
-        }
-    };
-
-    const renderPage = async (pdf, pageNumber, canvas, targetWidth) => {
-        if (!canvas) {
-            console.error("Canvas not available for page", pageNumber);
-            return null;
-        }
-
-        const page = await pdf.getPage(pageNumber);
-        const originalViewport = page.getViewport({ scale: 1 });
-
-        // Calculate scale to fit target width or use original dimensions
-        const pageWidth = originalViewport.width || A4_WIDTH;
-        const pageHeight = originalViewport.height || A4_HEIGHT;
-        const calculatedScale = targetWidth / pageWidth;
-
-        const viewport = page.getViewport({ scale: calculatedScale });
-        const context = canvas.getContext("2d");
-
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-
-        const renderContext = {
-            canvasContext: context,
-            viewport: viewport,
-        };
-
-        await page.render(renderContext).promise;
-
-        // Return actual dimensions for this page
-        return {
-            width: viewport.width,
-            height: viewport.height,
-            scale: calculatedScale,
-        };
-    };
-
-    const renderAllPages = async (pdf) => {
-        const numPages = pdf.numPages;
-        const dimensions = [];
-
-        // Get container width for responsive sizing
-        const containerWidth = 800; // Fixed width for consistency
-
-        for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-            const canvas = canvasRefsArray.current[pageNum - 1];
-            if (canvas) {
-                const dims = await renderPage(pdf, pageNum, canvas, containerWidth);
-                dimensions.push(dims);
-            }
-        }
-
-        setPageDimensions(dimensions);
-    };
-
-    const renderThumbnailPages = async (pdf) => {
-        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-            const canvas = canvasRefsArray.current[`thumb-${pageNum - 1}`];
-            if (!canvas) continue;
-
-            try {
-                const page = await pdf.getPage(pageNum);
-
-                const viewport = page.getViewport({ scale: 0.25 }); // Small thumbnail scale
-                const ctx = canvas.getContext("2d");
-
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-
-                await page.render({
-                    canvasContext: ctx,
-                    viewport: viewport,
-                }).promise;
-            } catch (error) {
-                console.warn("Thumbnail render failed:", error);
-            }
-        }
-    };
-
-    // Handle signature button click - will open signature modal
     const handleSignatureClick = (signature) => {
         if (isSubmitted) return;
-        console.log("Signature clicked:", signature);
         setCurrentSignature(signature);
         setIsModalOpen(true);
     };
 
-    // Handle signature save from modal
+    // Handle modal close
+    const handleModalClose = () => {
+        setIsModalOpen(false);
+        setCurrentSignature(null);
+    };
+
     const handleSignatureSave = async (imageData, signature, signatureType) => {
-        console.log("signatureType==> ", signatureType);
-        console.log("imageData==> ", imageData);
-        console.log("signature==> ", signature);
-        // Validate that this is actually a signature, not a field
         if (signature.fieldType) {
             console.error("Attempted to save signature image to a field:", signature);
             return;
@@ -834,27 +383,20 @@ function App() {
             const ipAddress = ipData.ip;
 
             const timeStamp = new Date().toLocaleString();
-            let userAgent = navigator.userAgent || "Unknown Device";
+            const userAgent = navigator.userAgent || "Unknown Device";
 
-            // Extract OS and Chrome version
             const osMatch = userAgent.match(/\(([^;]+);/);
             const osVersion = osMatch ? osMatch[1].trim() : "Unknown OS";
 
             const chromeMatch = userAgent.match(/Chrome\/([\d.]+)/);
             const chromeVersion = chromeMatch ? chromeMatch[1] : "Unknown Chrome Version";
 
-            // Final clean string
             const deviceInfo = `${osVersion} Chrome/${chromeVersion}`;
-            console.log("extractedDeviceInfo==> ", deviceInfo);
 
-            let locationInfo = await getLocationLive();
-            console.log("locationInfo==> ", locationInfo);
-            // Get the parent signer object (attached in handleSignatureClick)
+            const locationInfo = await getLocationLive();
             const signerObject = signature._parentSigner;
 
-            // 2. Update signatures array with image and ipAddress, passing signer object for correct matching
             let updatedSignatures = updateSignatureWithImage(signatureData, signature.index, imageData, signature.type, signerObject);
-            console.log("updatedSignatures==> ", updatedSignatures);
 
             // 3. Insert ipAddress in the correct signer's fields only
             updatedSignatures = updatedSignatures.map((sig) => {
@@ -866,15 +408,7 @@ function App() {
                             ...sig,
                             fields: sig.fields.map((field) => {
                                 if (field.index === signature.index) {
-                                    return {
-                                        ...field,
-                                        ipAddress,
-                                        deviceInfo,
-                                        locationInfo,
-                                        timeStamp,
-                                        signatureType,
-                                        filled: true,
-                                    };
+                                    return { ...field, ipAddress, deviceInfo, locationInfo, timeStamp, signatureType, filled: true };
                                 }
                                 return field;
                             }),
@@ -899,17 +433,42 @@ function App() {
         }
     };
 
-    // Handle modal close
-    const handleModalClose = () => {
-        setIsModalOpen(false);
-        setCurrentSignature(null);
+    // Handle field modal close
+    const handleFieldModalClose = () => {
+        setIsFieldModalOpen(false);
+        setCurrentField(null);
     };
 
-    // Handle signature deletion
-    const handleSignatureDelete = (signature) => {
-        console.log("Delete signature:", signature);
+    const handleFieldSave = (value, field) => {
+        if (!field.fieldType) {
+            console.error("Attempted to save field value to a signature:", field);
+            return;
+        }
+        const updatedFields = updateFieldWithValue(fieldData, field.index, value, field.fieldType || field.type);
+        setFieldData(updatedFields);
 
-        // Get the parent signer object (attached in handleSignatureClick)
+        // Track that this field was filled in the current session
+        setSessionFilledKeys((prev) => new Set(prev).add(field.index));
+    };
+
+    const handleFieldDelete = (field) => {
+        const updatedFields = deleteFieldValue(fieldData, field.index, field.fieldType || field.type);
+        setFieldData(updatedFields);
+
+        // Remove from session filled keys
+        setSessionFilledKeys((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(field.index);
+            return newSet;
+        });
+    };
+
+    // Close toast
+    const handleCloseToast = () => {
+        setToast({ isVisible: false, message: "", type: "success" });
+    };
+
+    const handleSignatureDelete = (signature) => {
         const signerObject = signature._parentSigner;
 
         const updatedSignatures = deleteSignatureImage(signatureData, signature.index, signature.type, signerObject);
@@ -923,10 +482,8 @@ function App() {
         });
     };
 
-    // Handle field button click
     const handleFieldClick = (field) => {
         if (isSubmitted) return;
-        console.log("Field clicked:", field);
         // For checkbox, toggle directly without opening modal
         const fType = (field.fieldType || field.type || "").toLowerCase();
         if (fType === "checkbox") {
@@ -949,42 +506,6 @@ function App() {
         // Otherwise open modal
         setCurrentField(field);
         setIsFieldModalOpen(true);
-    };
-
-    // Handle field save from modal
-    const handleFieldSave = (value, field) => {
-        // Validate that this is actually a field, not a signature
-        if (!field.fieldType) {
-            console.error("Attempted to save field value to a signature:", field);
-            return;
-        }
-
-        console.log("Field saved:", field.index, value);
-        const updatedFields = updateFieldWithValue(fieldData, field.index, value, field.fieldType || field.type);
-        setFieldData(updatedFields);
-
-        // Track that this field was filled in the current session
-        setSessionFilledKeys((prev) => new Set(prev).add(field.index));
-    };
-
-    // Handle field modal close
-    const handleFieldModalClose = () => {
-        setIsFieldModalOpen(false);
-        setCurrentField(null);
-    };
-
-    // Handle field deletion
-    const handleFieldDelete = (field) => {
-        console.log("Delete field:", field);
-        const updatedFields = deleteFieldValue(fieldData, field.index, field.fieldType || field.type);
-        setFieldData(updatedFields);
-
-        // Remove from session filled keys
-        setSessionFilledKeys((prev) => {
-            const newSet = new Set(prev);
-            newSet.delete(field.index);
-            return newSet;
-        });
     };
 
     // Handle Save & Submit
@@ -1098,7 +619,6 @@ function App() {
 
                         if (field.fieldType === "checkbox") {
                             isCheckbox = true;
-                            // Handle both boolean and string values
                             checkboxChecked = field.value === true || field.value === "true" || field.value === "True";
                         } else if (field.fieldType === "date" && field.value) {
                             displayValue = new Date(field.value).toLocaleDateString();
@@ -1240,6 +760,293 @@ function App() {
         }
     };
 
+    // Upload signed PDF to Salesforce as ContentVersion
+    const uploadSignedPdfToSalesforce = async (pdfBytes, firstPublishLocationId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+        try {
+            let currentToken = accessToken;
+
+            // Convert PDF bytes to base64
+            const base64Pdf = Buffer.from(pdfBytes).toString("base64");
+
+            // Create ContentVersion record
+            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/ContentVersion`;
+
+            const contentVersionData = {
+                Title: `Signed_Document_${Date.now()}`,
+                PathOnClient: `Signed_Document_${Date.now()}.pdf`,
+                VersionData: base64Pdf,
+                FirstPublishLocationId: firstPublishLocationId,
+                IsMajorVersion: true,
+            };
+
+            let response = await fetch(apiUrl, {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${currentToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(contentVersionData),
+            });
+
+            // If token expired (401), try to refresh it
+            if (response.status === 401 && clientId && clientSecret) {
+                console.log("Access token expired, attempting to refresh...");
+                currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
+
+                // Retry the request with new token
+                response = await fetch(apiUrl, {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(contentVersionData),
+                });
+            }
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to upload ContentVersion: ${response.status} ${response.statusText} - ${errorText}`);
+            }
+
+            const result = await response.json();
+            return result.id;
+        } catch (error) {
+            console.error("Error uploading signed PDF to Salesforce:", error);
+            throw error;
+        }
+    };
+
+    // Update Document__c record with signature and field data
+    const updateDocumentRecord = async (documentId, signatureData, fieldData, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+        try {
+            let currentToken = accessToken;
+
+            // Step 1: Save imageUrl data to Signature__c records
+            await upsertSignatureRecords(documentId, signatureData, currentToken, instanceUrl, clientId, clientSecret);
+
+            // Step 2: Remove imageUrl from signature data before saving to Document__c
+            const sanitizedSignatureData = signatureData.map((sig) => {
+                if (sig.fields && Array.isArray(sig.fields)) {
+                    return {
+                        ...sig,
+                        fields: sig.fields.map((field) => {
+                            // eslint-disable-next-line no-unused-vars
+                            const { imageUrl, ...fieldWithoutImage } = field;
+                            return fieldWithoutImage;
+                        }),
+                    };
+                }
+                return sig;
+            });
+
+            // Salesforce REST API endpoint to update Document__c record
+            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/Document__c/${documentId}`;
+
+            // Combine sanitized signature and field data into a single array
+            const combinedData = [...(sanitizedSignatureData || []), ...(fieldData || [])];
+
+            // Convert combined data to JSON string
+            const signatureDataJson = JSON.stringify(combinedData);
+
+            let response = await fetch(apiUrl, {
+                method: "PATCH",
+                headers: {
+                    Authorization: `Bearer ${currentToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    Signing_Details__c: signatureDataJson,
+                }),
+            });
+
+            // If token expired (401), try to refresh it
+            if (response.status === 401 && clientId && clientSecret) {
+                console.log("Access token expired, attempting to refresh...");
+                currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
+
+                // Retry the request with new token
+                response = await fetch(apiUrl, {
+                    method: "PATCH",
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        Signing_Details__c: signatureDataJson,
+                    }),
+                });
+            }
+
+            if (!response.ok) {
+                throw new Error(`Failed to update Document record: ${response.status} ${response.statusText}`);
+            }
+
+            return true;
+        } catch (error) {
+            console.error("Error updating Document record:", error);
+            throw error;
+        }
+    };
+
+    // Create or update Signature__c records
+    const upsertSignatureRecords = async (documentId, signatureData, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+        try {
+            let currentToken = accessToken;
+
+            // Extract all fields with imageUrl from signatureData
+            const fieldsWithImages = [];
+            signatureData.forEach((sig) => {
+                if (sig.fields && Array.isArray(sig.fields)) {
+                    sig.fields.forEach((field) => {
+                        if (field.filled && field.imageUrl) {
+                            // Use composite key: priority_fieldIndex to prevent cross-priority contamination
+                            // Ensure both values are converted to strings
+                            const compositeKey = `${String(sig.priority)}_${String(field.index)}`;
+                            fieldsWithImages.push({
+                                fieldIndex: compositeKey, // Store as priority_fieldIndex
+                                imageUrl: field.imageUrl,
+                                ipAddress: field.ipAddress || "",
+                                timestamp: field.timestamp || field.signedTime || "",
+                            });
+                        }
+                    });
+                }
+            });
+
+            // First, fetch existing Signature__c records to get their IDs
+            const existingRecords = await fetchSignatureRecords(documentId, currentToken, instanceUrl, clientId, clientSecret);
+            const existingMap = new Map();
+            existingRecords.forEach((record) => {
+                existingMap.set(record.Field_Index__c, record.Id);
+            });
+
+            // Prepare records for upsert (create or update)
+            const recordsToUpsert = [];
+            for (const field of fieldsWithImages) {
+                const signingDetails = JSON.stringify({
+                    imageUrl: field.imageUrl,
+                    ipAddress: field.ipAddress,
+                    timestamp: field.timestamp,
+                });
+
+                const recordData = {
+                    Document__c: documentId,
+                    Field_Index__c: field.fieldIndex,
+                    Signing_Details__c: signingDetails,
+                };
+
+                // If record exists, add Id for update
+                const existingId = existingMap.get(field.fieldIndex);
+                if (existingId) {
+                    recordData.Id = existingId;
+                }
+
+                recordsToUpsert.push(recordData);
+            }
+
+            if (recordsToUpsert.length === 0) {
+                return true;
+            }
+
+            // Use Promise.all to create/update records individually
+            const upsertPromises = recordsToUpsert.map(async (record) => {
+                const isUpdate = !!record.Id;
+                const method = isUpdate ? "PATCH" : "POST";
+                const apiUrl = isUpdate ? `${instanceUrl}/services/data/v65.0/sobjects/Signature__c/${record.Id}` : `${instanceUrl}/services/data/v65.0/sobjects/Signature__c`;
+
+                // Remove Id from body if updating (Id is in URL)
+                const body = isUpdate ? { ...record } : record;
+                if (isUpdate) {
+                    delete body.Id;
+                }
+
+                let response = await fetch(apiUrl, {
+                    method: method,
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(body),
+                });
+
+                // If token expired (401), try to refresh it
+                if (response.status === 401 && clientId && clientSecret) {
+                    console.log("Access token expired, attempting to refresh...");
+                    currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
+
+                    // Retry the request with new token
+                    response = await fetch(apiUrl, {
+                        method: method,
+                        headers: {
+                            Authorization: `Bearer ${currentToken}`,
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify(body),
+                    });
+                }
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Failed to ${isUpdate ? "update" : "create"} Signature record (Field Index: ${record.Field_Index__c}): ${response.status} ${response.statusText} - ${errorText}`);
+                }
+
+                const result = await response.json();
+                return result;
+            });
+
+            // Execute all upsert operations in parallel
+            await Promise.all(upsertPromises);
+            return true;
+        } catch (error) {
+            console.error("Error upserting Signature records:", error);
+            throw error;
+        }
+    };
+
+    // Fetch all Signature__c records for a document
+    const fetchSignatureRecords = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+        try {
+            let currentToken = accessToken;
+            const query = `SELECT Id, Field_Index__c, Signing_Details__c FROM Signature__c WHERE Document__c = '${documentId}'`;
+
+            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
+
+            let response = await fetch(apiUrl, {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${currentToken}`,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            // If token expired (401), try to refresh it
+            if (response.status === 401 && clientId && clientSecret) {
+                console.log("Access token expired, attempting to refresh...");
+                currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
+
+                // Retry the request with new token
+                response = await fetch(apiUrl, {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                        "Content-Type": "application/json",
+                    },
+                });
+            }
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch Signature records: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return data.records || [];
+        } catch (error) {
+            console.error("Error fetching Signature records:", error);
+            return [];
+        }
+    };
+
     const handleReject = async () => {
         if (!salesforceConfig) return;
 
@@ -1296,6 +1103,59 @@ function App() {
                 message: `Error rejecting document: ${error.message}`,
                 type: "error",
             });
+        }
+    };
+
+    // Refresh access token using client credentials
+    const refreshAccessToken = async (instanceUrl, clientId, clientSecret) => {
+        try {
+            const tokenUrl = `${instanceUrl}/services/oauth2/token`;
+            const params = new URLSearchParams({
+                grant_type: "client_credentials",
+                client_id: clientId,
+                client_secret: clientSecret,
+            });
+
+            const response = await fetch(tokenUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: params,
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to refresh token: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            const newToken = data.access_token;
+
+            // Persist the refreshed token in the URL and component state so reloads keep using it
+            if (newToken) {
+                updateUrlAccessToken(newToken);
+            }
+
+            return newToken;
+        } catch (error) {
+            console.error("Error refreshing access token:", error);
+            throw error;
+        }
+    };
+
+    // Refresh access token using client credentials
+    // Helper to update access token in the url and component state so refresh persists across reloads
+    const updateUrlAccessToken = (token) => {
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set("act", token);
+            // Replace the current history entry without reloading
+            window.history.replaceState({}, document.title, url.toString());
+
+            // Keep salesforceConfig state in sync if present
+            setSalesforceConfig((prev) => (prev ? { ...prev, accessToken: token } : prev));
+        } catch (err) {
+            console.warn("Could not update URL access token:", err);
         }
     };
 
@@ -1389,8 +1249,8 @@ function App() {
                 PW = sz.width;
                 PH = sz.height;
             }
-        } catch (e) {
-            console.log("Exception while reading original page size", e);
+        } catch (error) {
+            console.warn("Exception while reading original page size:", error);
         }
 
         // Dynamic spacing based on page
@@ -1490,7 +1350,7 @@ function App() {
                             width: imgW,
                             height: imgH,
                         });
-                    } catch (e) {
+                    } catch {
                         drawText(`#${sign.index}`, {
                             x: colXs[0],
                             y: rowYFromBottom - rowHeight / 2 - textSize / 3,
@@ -1786,7 +1646,6 @@ function App() {
                     const countW = countFont.widthOfTextAtSize(countStr, countSize);
                     const label = labels[i];
                     const labelSize = Math.max(9, textSize - 1);
-                    const labelW = font.widthOfTextAtSize(label, labelSize);
                     const iconW = 20,
                         iconH = 20;
                     const gap = 8;
@@ -1947,17 +1806,10 @@ function App() {
         }
     };
 
-    // Close toast
-    const handleCloseToast = () => {
-        setToast({ isVisible: false, message: "", type: "success" });
-    };
-
     // Check if Save & Submit button should be shown
     const shouldShowSaveButton = () => {
         // If already submitted in this session, hide button
-
         if (isSubmitted) {
-            console.log(1);
             return false;
         }
 
@@ -2000,6 +1852,79 @@ function App() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [totalPages]);
+
+    const renderAllPages = async (pdf) => {
+        const numPages = pdf.numPages;
+        const dimensions = [];
+
+        // Get container width for responsive sizing
+        const containerWidth = 800; // Fixed width for consistency
+
+        for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+            const canvas = canvasRefsArray.current[pageNum - 1];
+            if (canvas) {
+                const dims = await renderPage(pdf, pageNum, canvas, containerWidth);
+                dimensions.push(dims);
+            }
+        }
+    };
+
+    const renderPage = async (pdf, pageNumber, canvas, targetWidth) => {
+        if (!canvas) {
+            console.error("Canvas not available for page", pageNumber);
+            return null;
+        }
+
+        const page = await pdf.getPage(pageNumber);
+        const originalViewport = page.getViewport({ scale: 1 });
+
+        const pageWidth = originalViewport.width || A4_WIDTH;
+        const calculatedScale = targetWidth / pageWidth;
+
+        const viewport = page.getViewport({ scale: calculatedScale });
+        const context = canvas.getContext("2d");
+
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        const renderContext = {
+            canvasContext: context,
+            viewport: viewport,
+        };
+
+        await page.render(renderContext).promise;
+
+        // Return actual dimensions for this page
+        return {
+            width: viewport.width,
+            height: viewport.height,
+            scale: calculatedScale,
+        };
+    };
+
+    const renderThumbnailPages = async (pdf) => {
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const canvas = canvasRefsArray.current[`thumb-${pageNum - 1}`];
+            if (!canvas) continue;
+
+            try {
+                const page = await pdf.getPage(pageNum);
+
+                const viewport = page.getViewport({ scale: 0.25 }); // Small thumbnail scale
+                const ctx = canvas.getContext("2d");
+
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+
+                await page.render({
+                    canvasContext: ctx,
+                    viewport: viewport,
+                }).promise;
+            } catch (error) {
+                console.warn("Thumbnail render failed:", error);
+            }
+        }
+    };
 
     const getLocationLive = async () => {
         try {
@@ -2075,7 +2000,7 @@ function App() {
                 <>
                     <div className="pdf-container">
                         <div className="heading">
-                            <h1 class="document-header">Send Document for Signing</h1>
+                            <h1 className="document-header">Send Document for Signing</h1>
                         </div>
                         <div className="content-section">
                             <div className="preview-section">
@@ -2121,10 +2046,10 @@ function App() {
                                 )}
                             </div>
                             <div className="canvas-container">
-                                <div class="pdf-header">
+                                <div className="pdf-header">
                                     <h4>Document Preview</h4>
                                     <span> {totalPages} pages</span>
-                                    <div class="pdf-file-info">
+                                    <div className="pdf-file-info">
                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                             <path d="M6 3C4.89688 3 4 3.89688 4 5V17C4 18.1031 4.89688 19 6 19H8.5V15.5C8.5 14.3969 9.39687 13.5 10.5 13.5H16V8.32812C16 7.79688 15.7906 7.2875 15.4156 6.9125L12.0844 3.58438C11.7094 3.20938 11.2031 3 10.6719 3H6ZM14.1719 8.5H11.25C10.8344 8.5 10.5 8.16563 10.5 7.75V4.82812L14.1719 8.5ZM10.5 14.875C10.1562 14.875 9.875 15.1562 9.875 15.5V19.5C9.875 19.8438 10.1562 20.125 10.5 20.125C10.8438 20.125 11.125 19.8438 11.125 19.5V18.625H11.5C12.5344 18.625 13.375 17.7844 13.375 16.75C13.375 15.7156 12.5344 14.875 11.5 14.875H10.5ZM11.5 17.375H11.125V16.125H11.5C11.8438 16.125 12.125 16.4062 12.125 16.75C12.125 17.0938 11.8438 17.375 11.5 17.375ZM14.5 14.875C14.1562 14.875 13.875 15.1562 13.875 15.5V19.5C13.875 19.8438 14.1562 20.125 14.5 20.125H15.5C16.3969 20.125 17.125 19.3969 17.125 18.5V16.5C17.125 15.6031 16.3969 14.875 15.5 14.875H14.5ZM15.125 18.875V16.125H15.5C15.7063 16.125 15.875 16.2937 15.875 16.5V18.5C15.875 18.7063 15.7063 18.875 15.5 18.875H15.125ZM17.875 15.5V19.5C17.875 19.8438 18.1562 20.125 18.5 20.125C18.8438 20.125 19.125 19.8438 19.125 19.5V18.125H20C20.3438 18.125 20.625 17.8438 20.625 17.5C20.625 17.1562 20.3438 16.875 20 16.875H19.125V16.125H20C20.3438 16.125 20.625 15.8438 20.625 15.5C20.625 15.1562 20.3438 14.875 20 14.875H18.5C18.1562 14.875 17.875 15.1562 17.875 15.5Z" fill="#FF8282" />
                                         </svg>
@@ -2138,7 +2063,7 @@ function App() {
                                             {/* <div className="page-number">Page {pageNumber}</div> */}
                                             <div className="canvas-wrapper">
                                                 <canvas ref={(el) => (canvasRefsArray.current[index] = el)}></canvas>
-                                                {signatureData.length > 0 && <SignatureOverlay pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onDelete={handleSignatureDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} />}
+                                                {signatureData.length > 0 && <SignatureOverlay pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} />}
                                                 {fieldData.length > 0 && <FieldOverlay pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} />}
                                             </div>
                                         </div>
