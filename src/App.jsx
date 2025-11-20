@@ -1303,12 +1303,12 @@ function App() {
                                         ${(f.signatureType || '--').toUpperCase()}
                                     </span>
                                 </td>
-                                <td style="padding:8px;color:#444;width:40%;">
+                                <td style="padding:8px;color:#444;width:35%;">
                                     Signed On: ${f.timestamp || "--"} <br/>
                                     Device: ${f.deviceInfo || "--"} <br/>
                                     Location: ${f.locationInfo || "--"}
                                 </td>
-                                <td style="padding:8px 8px 8px 0;color:#444;width:30%;">
+                                <td style="padding:8px 8px 8px 0;color:#444;width:35%;">
                                     Name: ${f.signerName  || "--"} <br/>
                                     Email: ${f.signerEmail  || "--"} <br/>
                                     IP: ${f.ipAddress || "--"}
