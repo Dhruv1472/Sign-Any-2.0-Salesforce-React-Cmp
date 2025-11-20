@@ -78,3 +78,35 @@
 .signature-image-container:hover .signature-delete-btn {
     display: flex;
 }
+
+/* Signature wrapper for image and footer */
+.signature-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+}
+
+/* Signature footer showing signer name and timestamp */
+.signature-footer {
+    display: flex;
+    /* flex-direction: column; */
+    gap: 8px;
+    margin-top: 4px;
+    padding: 2px 4px;
+    font-size: 9px;
+    line-height: 1.3;
+    color: #666;
+    text-align: left;
+    border-top: 1px solid #e0e0e0;
+}
+
+.signature-footer-name {
+    font-weight: 500;
+    color: #555;
+}
+
+.signature-footer-timestamp {
+    font-weight: 400;
+    color: #777;
+}
