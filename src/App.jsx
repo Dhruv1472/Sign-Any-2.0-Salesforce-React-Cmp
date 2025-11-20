@@ -9,6 +9,7 @@ import SignatureModal from "./components/SignatureModal";
 import FieldOverlay from "./components/FieldOverlay";
 import FieldModal from "./components/FieldModal";
 import Toast from "./components/Toast";
+import html2pdf from "html2pdf.js";
 import { updateSignatureWithImage, deleteSignatureImage, updateFieldWithValue, deleteFieldValue, updateNestedFieldValue, deleteNestedFieldValue } from "./utils/signatureUtils";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "./pdfjs/pdf.worker.min.mjs";
@@ -412,6 +413,56 @@ function App() {
 
             let updatedSignatures = updateSignatureWithImage(signatureData, signature.index, imageData, signature.type, signerObject);
 
+            // Check if document is expired
+            if (documentExpired) {
+                setDocumentRecord(documentData);
+                setIsExpired(true);
+                setPdfFile(null);
+                setTotalPages(0);
+                setPageDimensions([]);
+                pdfDocRef.current = null;
+                canvasRefsArray.current = [];
+                setLoading(false);
+                return;
+            }
+
+            console.log("Fetched Document__c record:", documentData);
+
+            console.log(`Fetched ContentVersion ID: ${contentVersionId}`);
+            console.log(`Signature Data:`, sigData);
+            console.log(`Field Data:`, fieldDataFromRecord);
+
+            // Store document record and data directly (no parsing needed)
+            setDocumentRecord(documentData);
+            const signatures = Array.isArray(sigData) ? sigData : [];
+            const fields = Array.isArray(fieldDataFromRecord) ? fieldDataFromRecord : [];
+            setSignatureData(signatures);
+            setFieldData(fields);
+            
+            // Store initial data to detect changes later
+            setInitialSignatureData(JSON.parse(JSON.stringify(signatures)));
+            setInitialFieldData(JSON.parse(JSON.stringify(fields)));
+
+            // Step 2: Fetch PDF from ContentVersion
+            await fetchPdfFromContentVersion(contentVersionId, currentToken, instanceUrl);
+        } catch (error) {
+            console.error("Error in fetchDocumentAndPdf:", error);
+            setError(`Failed to load document: ${error.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Update Document__c record with signature and field data
+    const updateDocumentRecord = async (documentId, signatureData, fieldData, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+        try {
+            let currentToken = accessToken;
+
+            // Step 1: Save imageUrl data to Signature__c records
+            await upsertSignatureRecords(documentId, signatureData, currentToken, instanceUrl, clientId, clientSecret);
+
+            // Step 2: Remove imageUrl from signature data before saving to Document__c
+            const sanitizedSignatureData = signatureData.map((sig) => {
             // 3. Insert ipAddress in the correct signer's fields only
             updatedSignatures = updatedSignatures.map((sig) => {
                 // Only update the fields if this is the correct signer
@@ -734,20 +785,21 @@ function App() {
 
                 // Build audit report data from Salesforce record and signatures
                 try {
-                    await generateAuditReportPages({
-                        pdfDoc,
-                        pages,
-                        documentRecord,
-                        signatureData,
-                        orgId: orgIdState,
-                        totalPages,
-                    });
+                    await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages);
                 } catch (e) {
                     console.warn("Failed to append audit report page:", e);
                 }
 
-                // Save the modified PDF
-                const pdfBytes = await pdfDoc.save();
+
+				// Merge audit report HTML as extra pages
+                const htmlPdfBytes = await convertAuditHTMLToPDF();
+                const finalDoc = await PDFDocument.load(await pdfDoc.save());
+                const extraDoc = await PDFDocument.load(htmlPdfBytes);
+                const htmlPages = await finalDoc.copyPages(extraDoc, extraDoc.getPageIndices());
+                htmlPages.forEach(p => finalDoc.addPage(p));
+
+                const pdfBytes = await finalDoc.save();
+
 
                 // Upload to Salesforce if config is available
                 if (salesforceConfig) {
@@ -1100,6 +1152,259 @@ function App() {
         }
     };
 
+    // Build HTML for audit report
+    const generateAuditHTML = async (doc, sigData, orgId, totalPages) => {
+        console.log("Generating audit report HTML with document and signatures:", doc, sigData, orgId, totalPages);
+
+        const allFields = sigData.flatMap(s => s.fields || []);
+        const signedFields = allFields.filter(f => f.filled);
+        const pendingFields = allFields.filter(f => !f.filled);
+
+        console.log("All fields:", allFields);
+        console.log("Signed fields:", signedFields);
+        console.log("Pending fields:", pendingFields);
+
+        // SVG ICONS
+        const SVG_TOTAL = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="4" fill="#E0F5FF"/><path d="M4 6C4 4.89688 4.89688 4 6 4H10.6719C11.2031 4 11.7125 4.20938 12.0875 4.58438L15.4125 7.91563C15.7875 8.29063 15.9969 8.8 15.9969 9.33125V12.3781L11.8719 16.5031H10.5562L10.0531 14.8281C9.90625 14.3375 9.45625 14.0031 8.94375 14.0031C8.59063 14.0031 8.25937 14.1625 8.04062 14.4375L6.1625 16.7812C5.90313 17.1031 5.95625 17.5781 6.27813 17.8344C6.6 18.0906 7.075 18.0406 7.33125 17.7156L8.80313 15.8781L9.27812 17.4625C9.37187 17.7812 9.66562 17.9969 9.99687 17.9969H10.9812C10.9531 18.0938 10.9281 18.1937 10.9094 18.2937L10.5687 19.9969H6C4.89688 19.9969 4 19.1 4 17.9969V5.99688V6ZM10.5 5.82812V8.75C10.5 9.16563 10.8344 9.5 11.25 9.5H14.1719L10.5 5.82812ZM12.3812 18.5906C12.4594 18.2031 12.65 17.8469 12.9281 17.5688L16.6438 13.8531L19.1438 16.3531L15.4281 20.0688C15.15 20.3469 14.7937 20.5375 14.4062 20.6156L12.5437 20.9875C12.5156 20.9937 12.4844 20.9969 12.4531 20.9969C12.2031 20.9969 11.9969 20.7937 11.9969 20.5406C11.9969 20.5094 12 20.4813 12.0062 20.45L12.3781 18.5875L12.3812 18.5906ZM20.75 14.7469L19.85 15.6469L17.35 13.1469L18.25 12.2469C18.9406 11.5562 20.0594 11.5562 20.75 12.2469C21.4406 12.9375 21.4406 14.0562 20.75 14.7469Z" fill="#42C0FF"/></svg>`;
+        const SVG_SIGNED = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="4" fill="#E0FFEB"/><path d="M10.2882 4.11611C10.3768 4.1467 10.4636 4.18256 10.5485 4.2237L11.5635 4.72369C11.6993 4.79056 11.8487 4.82533 12.0002 4.82533C12.1516 4.82533 12.301 4.79056 12.4369 4.72369L13.4518 4.2237C13.7082 4.0975 13.9869 4.02304 14.272 4.00456C14.5571 3.98608 14.8431 4.02394 15.1136 4.11599C15.3841 4.20804 15.6338 4.35247 15.8484 4.54104C16.0631 4.7296 16.2385 4.9586 16.3647 5.21497L16.4224 5.34313L16.4723 5.47525L16.8362 6.54563C16.9351 6.83676 17.1637 7.0646 17.454 7.16349L18.5252 7.5274C18.8182 7.62709 19.0866 7.78815 19.3124 7.99982C19.5381 8.21149 19.7162 8.46891 19.8346 8.75487C19.9529 9.04084 20.0089 9.34877 19.9988 9.6581C19.9887 9.96744 19.9127 10.2711 19.7759 10.5487L19.2767 11.5637C19.2099 11.6995 19.1751 11.8489 19.1751 12.0004C19.1751 12.1518 19.2099 12.3012 19.2767 12.4371L19.7759 13.4521C19.9126 13.7297 19.9885 14.0332 19.9985 14.3425C20.0086 14.6517 19.9525 14.9595 19.8342 15.2454C19.7158 15.5313 19.5378 15.7886 19.3121 16.0002C19.0864 16.2118 18.8181 16.3729 18.5252 16.4726L17.454 16.8365C17.3108 16.8854 17.1806 16.9665 17.0736 17.0736C16.9666 17.1807 16.8857 17.311 16.837 17.4543L16.4723 18.5255C16.3726 18.8184 16.2115 19.0867 15.9999 19.3124C15.7883 19.5381 15.531 19.7161 15.2451 19.8345C14.9593 19.9529 14.6514 20.0089 14.3422 19.9989C14.033 19.9888 13.7294 19.9129 13.4518 19.7763L12.4369 19.2771C12.301 19.2102 12.1516 19.1754 12.0002 19.1754C11.8487 19.1754 11.6993 19.2102 11.5635 19.2771L10.5485 19.7763C10.2709 19.9129 9.96737 19.9888 9.65814 19.9989C9.3489 20.0089 9.04107 19.9529 8.75521 19.8345C8.46935 19.7161 8.21203 19.5381 8.00041 19.3124C7.7888 19.0867 7.62777 18.8184 7.52806 18.5255L7.16415 17.4543C7.1152 17.311 7.03395 17.1808 6.92668 17.0738C6.81942 16.9668 6.68901 16.8859 6.54551 16.8373L5.47515 16.4726C5.18218 16.3729 4.91384 16.212 4.68803 16.0004C4.46223 15.7888 4.28415 15.5315 4.1657 15.2456C4.04725 14.9597 3.99115 14.6519 4.00113 14.3426C4.01112 14.0333 4.08697 13.7297 4.22362 13.4521L4.7236 12.4371C4.79047 12.3012 4.82524 12.1518 4.82524 12.0004C4.82524 11.8489 4.79047 11.6995 4.7236 11.5637L4.22362 10.5487C4.08697 10.271 4.01112 9.96744 4.00113 9.65816C3.99115 9.34888 4.04725 9.04102 4.1657 8.75514C4.28415 8.46927 4.46223 8.21195 4.68803 8.00037C4.91384 7.78879 5.18218 7.62782 5.47515 7.52819L6.54551 7.16428C6.68903 7.11542 6.81939 7.03422 6.92652 6.92695C7.03366 6.81968 7.11469 6.68921 7.16336 6.54563L7.52727 5.47525C7.61926 5.20468 7.76366 4.95488 7.95222 4.74014C8.14077 4.52539 8.36978 4.34989 8.62618 4.22368C8.88257 4.09746 9.16132 4.023 9.4465 4.00454C9.73168 3.98609 10.0177 4.024 10.2882 4.11611ZM14.7453 9.6025L10.4575 13.8904L8.89588 12.0154C8.84671 11.9534 8.78563 11.9019 8.71625 11.8639C8.64688 11.8259 8.57059 11.8021 8.49189 11.794C8.41319 11.7859 8.33367 11.7936 8.258 11.8167C8.18232 11.8398 8.11203 11.8777 8.05125 11.9284C7.99047 11.979 7.94044 12.0413 7.90409 12.1116C7.86774 12.1819 7.84581 12.2587 7.8396 12.3376C7.83338 12.4165 7.843 12.4958 7.86789 12.5709C7.89278 12.646 7.93244 12.7153 7.98453 12.7749L9.96229 15.1482C10.015 15.2115 10.0804 15.2632 10.1542 15.2999C10.2279 15.3365 10.3086 15.3574 10.3909 15.3612C10.4732 15.365 10.5554 15.3516 10.6322 15.3219C10.7091 15.2922 10.7789 15.2468 10.8372 15.1886L15.5839 10.4419C15.6422 10.3876 15.6889 10.3221 15.7214 10.2493C15.7538 10.1765 15.7712 10.0979 15.7726 10.0183C15.774 9.93858 15.7594 9.85945 15.7295 9.78557C15.6997 9.71169 15.6553 9.64457 15.5989 9.58823C15.5426 9.53189 15.4755 9.48747 15.4016 9.45763C15.3277 9.42779 15.2486 9.41313 15.1689 9.41454C15.0893 9.41594 15.0107 9.43338 14.9379 9.46581C14.8651 9.49824 14.7996 9.545 14.7453 9.60329" fill="#00BD42"/></svg>`;
+        const SVG_PENDING = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="4" fill="#FFECE0"/><path d="M20 12C20 14.1217 19.1571 16.1566 17.6569 17.6569C16.1566 19.1571 14.1217 20 12 20C9.87827 20 7.84344 19.1571 6.34315 17.6569C4.84285 16.1566 4 14.1217 4 12C4 9.87827 4.84285 7.84344 6.34315 6.34315C7.84344 4.84285 9.87827 4 12 4C14.1217 4 16.1566 4.84285 17.6569 6.34315C19.1571 7.84344 20 9.87827 20 12ZM12 7.5C12 7.36739 11.9473 7.24021 11.8536 7.14645C11.7598 7.05268 11.6326 7 11.5 7C11.3674 7 11.2402 7.05268 11.1464 7.14645C11.0527 7.24021 11 7.36739 11 7.5V13C11 13.0881 11.0234 13.1747 11.0676 13.2509C11.1119 13.3271 11.1755 13.3903 11.252 13.434L14.752 15.434C14.8669 15.4961 15.0014 15.5108 15.127 15.4749C15.2525 15.4391 15.3591 15.3556 15.4238 15.2422C15.4886 15.1288 15.5065 14.9946 15.4736 14.8683C15.4408 14.7419 15.3598 14.6334 15.248 14.566L12 12.71V7.5Z" fill="#EC6511"/></svg>`;
+
+        const html = `
+            <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+            <style>
+                * {
+                    font-family: 'Manrope', sans-serif !important;
+                }
+
+                * {
+                    -webkit-print-color-adjust: exact;
+                    print-color-adjust: exact;
+                }
+
+                @page {
+                    margin: 0;
+                    background: #E5E7EB !important;
+                }
+                body {
+                    margin: 0;
+                    background: #E5E7EB !important;
+                }
+                html {
+                    background: #E5E7EB !important;
+                }
+            </style>
+
+            <div style="background:rgb(245,245,245);padding:0 24px 24px 24px;width:100%; font-family:'Manrope', sans-serif;">
+
+                
+                <div style="
+                    background:#ffffff;
+                    padding:10px 14px;
+                    display:flex;
+                    align-items:center;
+                    height:40px;
+                    margin:0 -24px 8px -24px;
+                ">
+                    <h2 style="color:#111; font-weight:700; font-size:18px; margin:0;">Audit Report</h2>
+                </div>
+
+
+                <!-- DOC INFO BOX -->
+                <div style="
+                    border:1px solid #E2E8F0; 
+                    border-radius:8px; 
+                    background:#ffffff;
+                    padding:18px 20px;
+                    margin-bottom:8px;
+                ">
+                    <h3 style="margin:0 0 12px 0; color:#111; font-size:16px; font-weight:600;">Document Information</h3>
+
+                    <table style="width:100%; font-size:13px; border-collapse:collapse;">
+                        <tr>
+                            <td style="color:gray; padding-right:18px;">Sent Date:</td>
+                            <td style="text-align:right;color:black; padding-right:18px;">${new Date(doc.CreatedDate).toLocaleString()}</td>
+                            
+                            <td style="color:gray; padding-right:18px;">Document ID:</td>
+                            <td style="text-align:right;color:black; padding-left:18px;">${doc.Id || ""}</td>
+                        </tr>
+                        <tr>
+                            <td style="color:gray; padding-right:18px;">Document Name:</td>
+                            <td style="text-align:right;color:black; padding-right:18px;">${doc.Document_Name__c || ""}</td>
+                            
+                            <td style="color:gray; padding-right:18px;">Org ID:</td>
+                            <td style="text-align:right;color:black; padding-left:18px;">${orgId || ""}</td>
+                        </tr>
+                        <tr>
+                            <td style="color:gray; padding-right:18px;">Document Owner:</td>
+                            <td style="text-align:right;color:black; padding-right:18px;">${doc.CreatedBy?.Name || ""}</td>
+                            
+                            <td style="color:gray; padding-right:18px;">Document Status:</td>
+                            <td style="text-align:right; padding-left:18px;">
+                                <span style="color:#00BD42; font-weight:600;background:#E0FFEB;padding:3px 8px;border-radius:8px;font-size:11px;">${doc.Status__c || ""}</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="color:gray; padding-right:18px;">Doc. Owner Email:</td>
+                            <td style="text-align:right;color:black; padding-right:18px;">${doc.CreatedBy?.Email || ""}</td>
+                            
+                            <td style="color:gray; padding-right:18px;">Email Subject:</td>
+                            <td style="text-align:right;color:black;">${(doc.Email_Subject__c && doc.Email_Subject__c.length > 25) ? doc.Email_Subject__c.slice(0, 25) + "..." : (doc.Email_Subject__c || "")}</td>
+                        </tr>
+                        <tr>
+                            <td style="color:gray; padding-right:18px;">Document Pages:</td>
+                            <td style="text-align:right;color:black; padding-right:18px;">${totalPages || ""}</td>
+                            
+                        </tr>
+                    </table>
+
+                </div>
+
+                <!-- SIGNATURE SUMMARY -->
+                <div style="display:flex;gap:12px;margin-bottom:8px;">
+                    <div style="
+                        border:1px solid #E2E8F0;
+                        border-radius:8px;
+                        padding:14px 16px;
+                        display:flex;
+                        align-items:center;
+                        height:58px;
+                        flex:1;
+                        background:#fff;
+                        justify-content:space-between;
+                    ">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span style="font-size:16px;font-weight:700;color:#111;">${allFields.length}</span>
+                            <span style="font-size:12px; color:#444;">Total Signatures</span>
+                        </div>
+                        ${SVG_TOTAL}
+                    </div>
+
+                    <div style="
+                        border:1px solid #E2E8F0;
+                        border-radius:8px;
+                        padding:14px 16px;
+                        display:flex;
+                        align-items:center;
+                        height:58px;
+                        flex:1;
+                        background:#fff;
+                        justify-content:space-between;
+                    ">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span style="font-size:16px;font-weight:700;color:#111;">${signedFields.length}</span>
+                            <span style="font-size:12px; color:#444;">Signed</span>
+                        </div>
+                        ${SVG_SIGNED}
+                    </div>
+
+                    <div style="
+                        border:1px solid #E2E8F0;
+                        border-radius:8px;
+                        padding:14px 16px;
+                        display:flex;
+                        align-items:center;
+                        height:58px;
+                        flex:1;
+                        background:#fff;
+                        justify-content:space-between;
+                    ">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span style="font-size:16px;font-weight:700;color:#111;">${pendingFields.length}</span>
+                            <span style="font-size:12px; color:#444;">Pending</span>
+                        </div>
+                        ${SVG_PENDING}
+                    </div>
+                </div>
+
+                <!-- SIGNATURE EVENTS -->
+                <div style="
+                    border:1px solid #E2E8F0; 
+                    border-radius:8px; 
+                    background:#ffffff;
+                    padding:16px 0;
+                    margin-bottom:12px;
+                ">
+                    <h3 style="margin:0 0 10px 0;color:#111;font-weight:600;font-size:15px;margin-left:18px">Signature Events</h3>
+
+                    <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                        <thead>
+                            <tr style="background:#F1F3F4; color:#444;">
+                                <th style="padding:6px 26px 6px 6px; width:30%;text-align:center;">SIGNATURE</th>
+                                <th style="padding:6px 26px 6px 6px; width:10%;text-align:center;">TYPE</th>
+                                <th style="padding:6px 26px 6px 6px; width:30%;text-align:center;">SIGNATURE DETAILS</th>
+                                <th style="padding:6px 26px 6px 6px; width:30%;text-align:center;">USER DETAILS</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${allFields.map(f => `
+                            <tr style="border-bottom:1px solid #E2E8F0;">
+                                <td style="padding:8px 0 0 18px;width:80%;display:flex;justify-content:center;align-items:center;">
+                                    ${f.imageUrl 
+                                        ? `<img src="${f.imageUrl}" style="height:55px;width:110px;border-radius:4px;border:1px solid #CBD5E0;object-fit:contain;background:#fff;" />`
+                                        : `<div style="border:1px solid #CBD5E0;height:35px;width:60px;border-radius:4px;background:#fff;display:flex;align-items:center;justify-content:center;">
+                                            <span style="font-size:11px;color:#555;">#${f.index}</span>
+                                        </div>`
+                                    }
+                                </td>
+                                <td style="padding:8px;width:10%;">
+                                    <span style="color:#0066FF; font-weight:600;background:#E0F0FF;padding:3px 8px;border-radius:8px;font-size:11px;">
+                                        ${(f.signatureType || '--').toUpperCase()}
+                                    </span>
+                                </td>
+                                <td style="padding:8px;color:#444;width:40%;">
+                                    Signed On: ${f.timestamp || "--"} <br/>
+                                    Device: ${f.deviceInfo || "--"} <br/>
+                                    Location: ${f.locationInfo || "--"}
+                                </td>
+                                <td style="padding:8px 8px 8px 0;color:#444;width:30%;">
+                                    Name: ${f.name || "--"} <br/>
+                                    Email: ${f.email || "--"} <br/>
+                                    IP: ${f.ipAddress || "--"}
+                                </td>
+                            </tr>`).join("")}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+
+
+        document.getElementById("audit-html").innerHTML = html;
+        await new Promise(resolve => setTimeout(resolve, 300));
+    };
+
+    // Convert to PDF via html2pdf
+    const convertAuditHTMLToPDF = async () => {
+        const element = document.getElementById("audit-html");
+
+        element.style.visibility = "visible";
+        element.style.position = "static";    
+        element.style.zIndex = "9999";
+
+        await new Promise(res => setTimeout(res, 400));
+        console.log("oage")
+        const pdfBlob = await html2pdf().from(element).set({
+            margin: 0,
+            filename: "audit.pdf",
+            html2canvas: { scale: 2, useCORS: true },
+            jsPDF: { unit: "pt", format: 'a4', orientation: "portrait" }
+        }).output("blob");
+
+        // Download
+        // const url = URL.createObjectURL(pdfBlob);
+        // const a = document.createElement("a");
+        // a.href = url;
+        // a.download = "audit.pdf";
+        // a.click();
+        // URL.revokeObjectURL(url);
+
+        element.style.visibility = "hidden";
+        element.style.position = "absolute";  
+        element.style.top = "-9999px";        
+
+        return await pdfBlob.arrayBuffer();
+    };
+
     const handleReject = async () => {
         if (!salesforceConfig) return;
 
@@ -1212,651 +1517,10 @@ function App() {
         }
     };
 
-    // ========= AUDIT REPORT – dedicated helper =========
-    const generateAuditReportPages = async ({ pdfDoc, pages, documentRecord, signatureData, orgId, totalPages }) => {
-        if (!documentRecord) return;
 
-        // ---------- 1. Build audit data ----------
-        const buildAuditData = () => {
-            // Document information
-            const createdDate = documentRecord.CreatedDate ? new Date(documentRecord.CreatedDate) : null;
-            const modifiedDate = documentRecord.LastModifiedDate ? new Date(documentRecord.LastModifiedDate) : null;
-            const emailSubject = documentRecord.Email_Subject__c || null;
-            const ownerName = documentRecord.CreatedBy?.Name || null;
-            const ownerEmail = documentRecord.CreatedBy?.Email || null;
-
-            const documentName = documentRecord.Document_Name__c || documentRecord.Name || "";
-            const orgIdVal = orgId || "";
-
-            // Signatures summary - handle both flat and nested field structures
-            const sigs = Array.isArray(signatureData) ? signatureData : [];
-
-            // Flatten all signature fields from nested structure
-            const allSignatureFields = [];
-            sigs.forEach((sig, sigIdx) => {
-                if (sig.fields && Array.isArray(sig.fields)) {
-                    // New nested structure - extract fields
-                    sig.fields
-                        .filter((f) => (f.type || f.fieldType) === "signature")
-                        .forEach((field, fieldIdx) => {
-                            allSignatureFields.push({
-                                index: field.index ?? `${sig.index ?? sigIdx}-${fieldIdx}`,
-                                imagePresent: Boolean(field.filled && field.imageUrl),
-                                ipAddress: sig.ipAddress || field.ipAddress || "",
-                                deviceInfo: sig.deviceInfo || field.deviceInfo || "",
-                                locationInfo: sig.locationInfo || field.locationInfo || "",
-                                timeStamp: sig.signedTime || field.signedTime || sig.timeStamp || field.timeStamp || "",
-                                signeeName: sig.name || field.name || sig.signeeName || field.signeeName || "",
-                                signeeEmail: sig.email || field.email || sig.signeeEmail || field.signeeEmail || "",
-                                imageUrl: field.imageUrl || null,
-                                signatureType: field.signatureType || sig.signatureType || "--",
-                            });
-                        });
-                } else if ((sig.type || sig.fieldType) === "signature") {
-                    // Old flat structure - use signature directly
-                    allSignatureFields.push({
-                        index: sig.index ?? sigIdx,
-                        imagePresent: Boolean(sig.signed && (sig.imageUrl || sig.imagePresent)),
-                        ipAddress: sig.ipAddress || "",
-                        deviceInfo: sig.deviceInfo || "",
-                        locationInfo: sig.locationInfo || "",
-                        timeStamp: sig.signedTime || sig.timeStamp || "",
-                        signeeName: sig.name || sig.signeeName || "",
-                        signeeEmail: sig.email || sig.signeeEmail || "",
-                        imageUrl: sig.imageUrl || null,
-                        signatureType: sig.signatureType || "--",
-                    });
-                }
-            });
-
-            const totalSignatures = allSignatureFields.length;
-            const signedCount = allSignatureFields.filter((s) => s.imagePresent).length;
-            const pendingCount = totalSignatures - signedCount;
-
-            return {
-                createdDate,
-                modifiedDate,
-                emailSubject,
-                ownerName,
-                ownerEmail,
-                documentName,
-                orgId: orgIdVal,
-                documentId: documentRecord.Id,
-                documentStatus: pendingCount > 0 ? "Pending" : "Signed",
-                totalSignatures,
-                signedCount,
-                pendingCount,
-                signatures: allSignatureFields,
-            };
-        };
-
-        const data = buildAuditData();
-        if (!data) return;
-
-        // ---------- 2. Page sizing & common layout ----------
-        let PW = A4_WIDTH;
-        let PH = A4_HEIGHT;
-        try {
-            const sz = pages[0]?.getSize();
-            if (sz && sz.width && sz.height) {
-                PW = sz.width;
-                PH = sz.height;
-            }
-        } catch (error) {
-            console.warn("Exception while reading original page size:", error);
-        }
-
-        // Dynamic spacing based on page
-        const margin = Math.max(32, PW * 0.05);
-        const headerTitleSize = Math.max(14, PH * 0.017);
-        const sectionTitleSize = Math.max(11, PH * 0.013);
-        const textSize = Math.max(10, PH * 0.0105);
-        const lineHeight = Math.max(14, PH * 0.017);
-        const sectionSpacing = Math.max(16, PH * 0.019);
-        const boxSpacing = Math.max(8, PW * 0.01);
-        const rowHeight = Math.max(60, PH * 0.071);
-        const imgHeight = Math.max(50, rowHeight * 0.83);
-        const tableHeaderHeight = Math.max(24, PH * 0.028);
-        const bottomMargin = Math.max(40, PH * 0.047);
-
-        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        // Bold font for prominent headings in the audit report
-        const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-        const blue = rgb(0.12, 0.59, 0.95);
-        const darkBlue = rgb(0.1, 0.46, 0.82);
-        const green = rgb(0.18, 0.49, 0.2);
-        const orange = rgb(0.96, 0.49, 0.0);
-        const gray = rgb(0.2, 0.2, 0.2);
-        const lightGray = rgb(0.961, 0.961, 0.961);
-        const white = rgb(1, 1, 1);
-        // const summaryBlue = rgb(224,245,255);
-        // const summaryGreen = rgb(224,255,235);
-        // const summaryOrange = rgb(255,236,224);
-
-        const fmt = (d) => (d ? new Date(d).toLocaleString() : "");
-
-        // Table layout (Signature / Signature Type / Signature Details / User Details)
-        const totalTblW = PW - margin * 2;
-        const padding = Math.max(6, PW * 0.008);
-        const imgColW = Math.max(120, PW * 0.18);
-        const typeColW = Math.max(90, PW * 0.12);
-        const internalGaps = padding * 3;
-        const remW = totalTblW - (imgColW + typeColW + internalGaps);
-        const sigDetailsColW = Math.max(140, Math.floor(remW / 2));
-        const userColW = Math.max(120, remW - sigDetailsColW);
-
-        const colXs = [margin + padding, margin + padding + imgColW + padding, margin + padding + imgColW + padding + typeColW + padding, margin + padding + imgColW + padding + typeColW + padding + sigDetailsColW + padding];
-
-        // ---------- 3. Helper: draw one set of signature rows (used for page1 and continuation pages) ----------
-        const drawSignatureRows = async (page, signaturesToDraw, startRowYFromBottom) => {
-            const drawText = (text, opts) => page.drawText(String(text ?? ""), { font, ...opts });
-
-            let rowYFromBottom = startRowYFromBottom;
-            let rowsDrawn = 0;
-
-            for (const sign of signaturesToDraw) {
-                const signatureType = sign.signatureType.toUpperCase() || "--";
-                const isSigned = !!sign.imagePresent;
-                const backColour = rowsDrawn % 2 == 0 ? white : lightGray;
-
-                page.drawRectangle({
-                    x: margin,
-                    y: rowYFromBottom - rowHeight,
-                    width: PW - margin * 2,
-                    height: rowHeight,
-                    color: white,
-                    borderColor: backColour,
-                    borderWidth: 1,
-                });
-
-                // Signature thumbnail / index
-                if (isSigned && sign.imageUrl) {
-                    try {
-                        const imgBytes = await fetch(sign.imageUrl).then((res) => res.arrayBuffer());
-                        let img;
-                        if (sign.imageUrl.startsWith("data:image/png")) {
-                            img = await pdfDoc.embedPng(imgBytes);
-                        } else if (sign.imageUrl.startsWith("data:image/jpeg") || sign.imageUrl.startsWith("data:image/jpg")) {
-                            img = await pdfDoc.embedJpg(imgBytes);
-                        } else {
-                            img = await pdfDoc.embedPng(imgBytes);
-                        }
-
-                        const imgW = imgColW - padding * 2;
-                        const imgH = imgHeight;
-                        const imgYFromBottom = rowYFromBottom - (rowHeight - imgH) / 2 - imgH;
-
-                        // rounded container
-                        page.drawRectangle({
-                            x: colXs[0] - 2,
-                            y: imgYFromBottom - 2,
-                            width: imgW + 4,
-                            height: imgH + 4,
-                            borderColor: rgb(0.82, 0.84, 0.86),
-                            borderWidth: 1,
-                        });
-
-                        page.drawImage(img, {
-                            x: colXs[0],
-                            y: imgYFromBottom,
-                            width: imgW,
-                            height: imgH,
-                        });
-                    } catch {
-                        drawText(`#${sign.index}`, {
-                            x: colXs[0],
-                            y: rowYFromBottom - rowHeight / 2 - textSize / 3,
-                            size: textSize,
-                            color: gray,
-                        });
-                    }
-                } else {
-                    drawText(`#${sign.index}`, {
-                        x: colXs[0],
-                        y: rowYFromBottom - rowHeight / 2 - textSize / 3,
-                        size: textSize,
-                        color: gray,
-                    });
-                }
-
-                // Signature Type as pill
-                const pillText = signatureType;
-                const pillPaddingX = 12;
-                const pillPaddingY = 4;
-                const pillTextSize = Math.max(9, PH * 0.011);
-                const pillTextWidth = font.widthOfTextAtSize(pillText, pillTextSize);
-                const pillWidth = pillTextWidth + pillPaddingX * 2;
-                const pillHeight = pillTextSize + pillPaddingY * 2;
-                const pillX = colXs[1] + (typeColW - pillWidth) / 2;
-                const pillY = rowYFromBottom - rowHeight / 2 - pillHeight / 2;
-
-                // page.drawRectangle({
-                //     x: pillX,
-                //     y: pillY,
-                //     width: pillWidth,
-                //     height: pillHeight,
-                //     color: rgb(0.9, 0.97, 0.91),
-                //     borderColor: statusColor,
-                //     borderWidth: 1,
-                // });
-
-                drawText(pillText, {
-                    x: pillX + pillPaddingX,
-                    y: pillY + pillPaddingY + 1,
-                    size: pillTextSize,
-                    color: green,
-                });
-
-                // Signature details
-                const rowTextSize = Math.max(8, PH * 0.0095);
-                const signedOn = sign.timeStamp || (isSigned ? new Date().toLocaleString() : "--");
-                const ipLine = isSigned ? `IP: ${sign.ipAddress || "--"}` : "IP: --";
-                const deviceLine = isSigned ? `Device: ${sign.deviceInfo || "--"}` : "Device: --";
-                const locationLine = isSigned ? `Location: ${sign.locationInfo || "--"}` : "Location: --";
-
-                drawText(`Signed On: ${signedOn}`, {
-                    x: colXs[2],
-                    y: rowYFromBottom - rowHeight * 0.3,
-                    size: rowTextSize,
-                    color: gray,
-                });
-                drawText(deviceLine, {
-                    x: colXs[2],
-                    y: rowYFromBottom - rowHeight * 0.55,
-                    size: rowTextSize,
-                    color: gray,
-                });
-                drawText(locationLine, {
-                    x: colXs[2],
-                    y: rowYFromBottom - rowHeight * 0.77,
-                    size: rowTextSize,
-                    color: gray,
-                });
-
-                // User details
-                drawText(`Name: ${sign.signeeName || "--"}`, {
-                    x: colXs[3],
-                    y: rowYFromBottom - rowHeight * 0.3,
-                    size: rowTextSize,
-                    color: gray,
-                });
-                drawText(`Email: ${sign.signeeEmail || "--"}`, {
-                    x: colXs[3],
-                    y: rowYFromBottom - rowHeight * 0.55,
-                    size: rowTextSize,
-                    color: gray,
-                });
-                drawText(ipLine, {
-                    x: colXs[3],
-                    y: rowYFromBottom - rowHeight * 0.77,
-                    size: rowTextSize,
-                    color: gray,
-                });
-
-                rowYFromBottom -= rowHeight;
-                rowsDrawn++;
-            }
-
-            return rowsDrawn;
-        };
-
-        // ---------- 4. First page + continuation pages ----------
-        // slightly reduced document info box height to fit 1-2 fewer lines visually
-        const docInfoBoxHeight = Math.max(120, PH * 0.14);
-        const summaryBoxHeight = Math.max(50, PH * 0.059);
-
-        const fixedSectionsHeightFirst =
-            margin + // top
-            headerTitleSize * 1.5 +
-            sectionSpacing + // "Audit Report" + space
-            docInfoBoxHeight +
-            sectionSpacing +
-            sectionTitleSize * 1.5 +
-            sectionSpacing +
-            summaryBoxHeight +
-            sectionSpacing +
-            sectionTitleSize * 1.5 +
-            sectionSpacing +
-            tableHeaderHeight +
-            sectionSpacing +
-            bottomMargin;
-
-        const availableFirst = PH - fixedSectionsHeightFirst;
-        const maxRowsFirst = Math.max(0, Math.floor(availableFirst / rowHeight));
-
-        const availableCont = PH - (margin + sectionTitleSize * 1.5 + sectionSpacing + tableHeaderHeight + sectionSpacing + bottomMargin);
-        const maxRowsCont = Math.max(0, Math.floor(availableCont / rowHeight));
-
-        let signaturesRemaining = [...data.signatures];
-        let pageNumber = 1;
-
-        while (signaturesRemaining.length > 0) {
-            const page = pdfDoc.addPage([PW, PH]);
-            page.drawRectangle({
-                x: 0,
-                y: 0,
-                width: PW,
-                height: PH,
-                color: lightGray, // light gray background
-            });
-
-            const drawText = (text, opts) => page.drawText(String(text ?? ""), { font, ...opts });
-
-            let currentYFromTop = margin;
-            let currentYFromBottom = PH - currentYFromTop;
-
-            if (pageNumber === 1) {
-                // draw box for audit report header
-                page.drawRectangle({
-                    x: 0,
-                    y: PH - headerTitleSize * 1.5 - 10,
-                    width: PW,
-                    height: headerTitleSize * 1.5 + 22,
-                    color: white,
-                });
-                // ---- Header "Audit Report" (Header B – simple text) ----
-                drawText("Audit Report", {
-                    font: fontBold,
-                    x: margin,
-                    y: currentYFromBottom + 8,
-                    size: headerTitleSize,
-                    color: rgb(0, 0, 0),
-                });
-                currentYFromTop += headerTitleSize * 1.5;
-                currentYFromBottom = PH - currentYFromTop;
-
-                // ---- Document Information card ----
-                const cardY = currentYFromBottom - docInfoBoxHeight;
-                page.drawRectangle({
-                    x: margin,
-                    y: cardY,
-                    width: PW - margin * 2,
-                    height: docInfoBoxHeight - 20,
-                    color: rgb(1, 1, 1),
-                    borderColor: rgb(0.88, 0.9, 0.92),
-                    borderWidth: 1.5,
-                });
-
-                const cardInnerLeftX = margin + 18;
-                const cardInnerRightX = margin + (PW - margin * 2) / 2 + 12;
-
-                page.drawRectangle({
-                    x: margin,
-                    y: cardY + docInfoBoxHeight - 28,
-                    width: PW - margin * 2,
-                    height: 28,
-                    color: white,
-                });
-
-                // Draw top border
-                page.drawLine({
-                    start: { x: margin, y: cardY + docInfoBoxHeight - 28 + 28 },
-                    end: { x: margin + (PW - margin * 2), y: cardY + docInfoBoxHeight - 28 + 28 },
-                    color: rgb(0.88, 0.9, 0.92),
-                    thickness: 1.5,
-                });
-
-                // Draw left border
-                page.drawLine({
-                    start: { x: margin, y: cardY + docInfoBoxHeight - 28 },
-                    end: { x: margin, y: cardY + docInfoBoxHeight },
-                    color: rgb(0.88, 0.9, 0.92),
-                    thickness: 1.5,
-                });
-
-                // Draw right border
-                page.drawLine({
-                    start: { x: margin + (PW - margin * 2), y: cardY + docInfoBoxHeight - 28 },
-                    end: { x: margin + (PW - margin * 2), y: cardY + docInfoBoxHeight },
-                    color: rgb(0.88, 0.9, 0.92),
-                    thickness: 1.5,
-                });
-
-                // Make the Document Information heading slightly larger
-                const docInfoHeadingSize = Math.max(sectionTitleSize, sectionTitleSize + Math.round(PH * 0.002));
-                drawText("Document Information", {
-                    x: cardInnerLeftX,
-                    y: cardY + docInfoBoxHeight - 20,
-                    size: docInfoHeadingSize,
-                    color: rgb(0, 0, 0),
-                });
-
-                let infoY = cardY + docInfoBoxHeight - 45;
-
-                // Use a slightly reduced font size for the document info key/values
-                const infoTextSize = Math.max(8, textSize - 2);
-                const writeKV = (kx, ky, key, val) => {
-                    drawText(key, {
-                        x: kx,
-                        y: ky,
-                        size: infoTextSize,
-                        color: gray,
-                    });
-                    drawText(val || "", {
-                        x: kx + 120,
-                        y: ky,
-                        size: infoTextSize,
-                        color: gray,
-                    });
-                };
-
-                // Left column
-                writeKV(cardInnerLeftX, infoY, "Sent Date:", fmt(data.createdDate));
-                infoY -= lineHeight;
-                writeKV(cardInnerLeftX, infoY, "Document Name:", data.documentName);
-                infoY -= lineHeight;
-                writeKV(cardInnerLeftX, infoY, "Document Owner:", data.ownerName);
-                infoY -= lineHeight;
-                writeKV(cardInnerLeftX, infoY, "Document Owner Email:", data.ownerEmail);
-                infoY -= lineHeight;
-                writeKV(cardInnerLeftX, infoY, "Email Subject:", data.emailSubject);
-
-                // Right column
-                let infoYR = cardY + docInfoBoxHeight - 45;
-                writeKV(cardInnerRightX, infoYR, "Document ID:", data.documentId || "");
-                infoYR -= lineHeight;
-                writeKV(cardInnerRightX, infoYR, "Org ID:", data.orgId || "");
-                infoYR -= lineHeight;
-                writeKV(cardInnerRightX, infoYR, "Document Status:", data.documentStatus);
-                infoYR -= lineHeight;
-                writeKV(cardInnerRightX, infoYR, "Document Pages:", String(totalPages));
-
-                currentYFromTop += docInfoBoxHeight + Math.max(8, Math.floor(sectionSpacing / 2));
-                currentYFromBottom = PH - currentYFromTop;
-                currentYFromTop += sectionTitleSize * 1.5;
-                currentYFromBottom = PH - currentYFromTop;
-
-                const summaryY = currentYFromBottom - summaryBoxHeight;
-                const totalBoxWidth = PW - margin * 2;
-                const boxW = (totalBoxWidth - boxSpacing * 2) / 3;
-                const offsets = [margin, margin + boxW + boxSpacing, margin + (boxW + boxSpacing) * 2];
-                const labels = ["Total Signatures", "Signed", "Pending"];
-                const values = [data.totalSignatures, data.signedCount, data.pendingCount];
-                const colors = [blue, green, orange];
-                const summaryPaths = [
-                    "M4 6C4 4.89688 4.89688 4 6 4H10.6719C11.2031 4 11.7125 4.20938 12.0875 4.58438L15.4125 7.91563C15.7875 8.29063 15.9969 8.8 15.9969 9.33125V12.3781L11.8719 16.5031H10.5562L10.0531 14.8281C9.90625 14.3375 9.45625 14.0031 8.94375 14.0031C8.59063 14.0031 8.25937 14.1625 8.04062 14.4375L6.1625 16.7812C5.90313 17.1031 5.95625 17.5781 6.27813 17.8344C6.6 18.0906 7.075 18.0406 7.33125 17.7156L8.80313 15.8781L9.27812 17.4625C9.37187 17.7812 9.66562 17.9969 9.99687 17.9969H10.9812C10.9531 18.0938 10.9281 18.1937 10.9094 18.2937L10.5687 19.9969H6C4.89688 19.9969 4 19.1 4 17.9969V5.99688V6ZM10.5 5.82812V8.75C10.5 9.16563 10.8344 9.5 11.25 9.5H14.1719L10.5 5.82812ZM12.3812 18.5906C12.4594 18.2031 12.65 17.8469 12.9281 17.5688L16.6438 13.8531L19.1438 16.3531L15.4281 20.0688C15.15 20.3469 14.7937 20.5375 14.4062 20.6156L12.5437 20.9875C12.5156 20.9937 12.4844 20.9969 12.4531 20.9969C12.2031 20.9969 11.9969 20.7937 11.9969 20.5406C11.9969 20.5094 12 20.4813 12.0062 20.45L12.3781 18.5875L12.3812 18.5906ZM20.75 14.7469L19.85 15.6469L17.35 13.1469L18.25 12.2469C18.9406 11.5562 20.0594 11.5562 20.75 12.2469C21.4406 12.9375 21.4406 14.0562 20.75 14.7469Z",
-                    "M10.2882 4.11611C10.3768 4.1467 10.4636 4.18256 10.5485 4.2237L11.5635 4.72369C11.6993 4.79056 11.8487 4.82533 12.0002 4.82533C12.1516 4.82533 12.301 4.79056 12.4369 4.72369L13.4518 4.2237C13.7082 4.0975 13.9869 4.02304 14.272 4.00456C14.5571 3.98608 14.8431 4.02394 15.1136 4.11599C15.3841 4.20804 15.6338 4.35247 15.8484 4.54104C16.0631 4.7296 16.2385 4.9586 16.3647 5.21497L16.4224 5.34313L16.4723 5.47525L16.8362 6.54563C16.9351 6.83676 17.1637 7.0646 17.454 7.16349L18.5252 7.5274C18.8182 7.62709 19.0866 7.78815 19.3124 7.99982C19.5381 8.21149 19.7162 8.46891 19.8346 8.75487C19.9529 9.04084 20.0089 9.34877 19.9988 9.6581C19.9887 9.96744 19.9127 10.2711 19.7759 10.5487L19.2767 11.5637C19.2099 11.6995 19.1751 11.8489 19.1751 12.0004C19.1751 12.1518 19.2099 12.3012 19.2767 12.4371L19.7759 13.4521C19.9126 13.7297 19.9885 14.0332 19.9985 14.3425C20.0086 14.6517 19.9525 14.9595 19.8342 15.2454C19.7158 15.5313 19.5378 15.7886 19.3121 16.0002C19.0864 16.2118 18.8181 16.3729 18.5252 16.4726L17.454 16.8365C17.3108 16.8854 17.1806 16.9665 17.0736 17.0736C16.9666 17.1807 16.8857 17.311 16.837 17.4543L16.4723 18.5255C16.3726 18.8184 16.2115 19.0867 15.9999 19.3124C15.7883 19.5381 15.531 19.7161 15.2451 19.8345C14.9593 19.9529 14.6514 20.0089 14.3422 19.9989C14.033 19.9888 13.7294 19.9129 13.4518 19.7763L12.4369 19.2771C12.301 19.2102 12.1516 19.1754 12.0002 19.1754C11.8487 19.1754 11.6993 19.2102 11.5635 19.2771L10.5485 19.7763C10.2709 19.9129 9.96737 19.9888 9.65814 19.9989C9.3489 20.0089 9.04107 19.9529 8.75521 19.8345C8.46935 19.7161 8.21203 19.5381 8.00041 19.3124C7.7888 19.0867 7.62777 18.8184 7.52806 18.5255L7.16415 17.4543C7.1152 17.311 7.03395 17.1808 6.92668 17.0738C6.81942 16.9668 6.68901 16.8859 6.54551 16.8373L5.47515 16.4726C5.18218 16.3729 4.91384 16.212 4.68803 16.0004C4.46223 15.7888 4.28415 15.5315 4.1657 15.2456C4.04725 14.9597 3.99115 14.6519 4.00113 14.3426C4.01112 14.0333 4.08697 13.7297 4.22362 13.4521L4.7236 12.4371C4.79047 12.3012 4.82524 12.1518 4.82524 12.0004C4.82524 11.8489 4.79047 11.6995 4.7236 11.5637L4.22362 10.5487C4.08697 10.271 4.01112 9.96744 4.00113 9.65816C3.99115 9.34888 4.04725 9.04102 4.1657 8.75514C4.28415 8.46927 4.46223 8.21195 4.68803 8.00037C4.91384 7.78879 5.18218 7.62782 5.47515 7.52819L6.54551 7.16428C6.68903 7.11542 6.81939 7.03422 6.92652 6.92695C7.03366 6.81968 7.11469 6.68921 7.16336 6.54563L7.52727 5.47525C7.61926 5.20468 7.76366 4.95488 7.95222 4.74014C8.14077 4.52539 8.36978 4.34989 8.62618 4.22368C8.88257 4.09746 9.16132 4.023 9.4465 4.00454C9.73168 3.98609 10.0177 4.024 10.2882 4.11611ZM14.7453 9.6025L10.4575 13.8904L8.89588 12.0154C8.84671 11.9534 8.78563 11.9019 8.71625 11.8639C8.64688 11.8259 8.57059 11.8021 8.49189 11.794C8.41319 11.7859 8.33367 11.7936 8.258 11.8167C8.18232 11.8398 8.11203 11.8777 8.05125 11.9284C7.99047 11.979 7.94044 12.0413 7.90409 12.1116C7.86774 12.1819 7.84581 12.2587 7.8396 12.3376C7.83338 12.4165 7.843 12.4958 7.86789 12.5709C7.89278 12.646 7.93244 12.7153 7.98453 12.7749L9.96229 15.1482C10.015 15.2115 10.0804 15.2632 10.1542 15.2999C10.2279 15.3365 10.3086 15.3574 10.3909 15.3612C10.4732 15.365 10.5554 15.3516 10.6322 15.3219C10.7091 15.2922 10.7789 15.2468 10.8372 15.1886L15.5839 10.4419C15.6422 10.3876 15.6889 10.3221 15.7214 10.2493C15.7538 10.1765 15.7712 10.0979 15.7726 10.0183C15.774 9.93858 15.7594 9.85945 15.7295 9.78557C15.6997 9.71169 15.6553 9.64457 15.5989 9.58823C15.5426 9.53189 15.4755 9.48747 15.4016 9.45763C15.3277 9.42779 15.2486 9.41313 15.1689 9.41454C15.0893 9.41594 15.0107 9.43338 14.9379 9.46581C14.8651 9.49824 14.7996 9.545 14.7453 9.60329",
-                    "M20 12C20 14.1217 19.1571 16.1566 17.6569 17.6569C16.1566 19.1571 14.1217 20 12 20C9.87827 20 7.84344 19.1571 6.34315 17.6569C4.84285 16.1566 4 14.1217 4 12C4 9.87827 4.84285 7.84344 6.34315 6.34315C7.84344 4.84285 9.87827 4 12 4C14.1217 4 16.1566 4.84285 17.6569 6.34315C19.1571 7.84344 20 9.87827 20 12ZM12 7.5C12 7.36739 11.9473 7.24021 11.8536 7.14645C11.7598 7.05268 11.6326 7 11.5 7C11.3674 7 11.2402 7.05268 11.1464 7.14645C11.0527 7.24021 11 7.36739 11 7.5V13C11 13.0881 11.0234 13.1747 11.0676 13.2509C11.1119 13.3271 11.1755 13.3903 11.252 13.434L14.752 15.434C14.8669 15.4961 15.0014 15.5108 15.127 15.4749C15.2525 15.4391 15.3591 15.3556 15.4238 15.2422C15.4886 15.1288 15.5065 14.9946 15.4736 14.8683C15.4408 14.7419 15.3598 14.6334 15.248 14.566L12 12.71V7.5Z",
-                ];
-
-                for (let i = 0; i < 3; i++) {
-                    const bx = offsets[i];
-                    page.drawRectangle({
-                        x: bx,
-                        y: summaryY + 27,
-                        width: boxW,
-                        height: summaryBoxHeight - 10,
-                        color: rgb(1, 1, 1),
-                        borderColor: rgb(0.88, 0.9, 0.92),
-                        borderWidth: 1.2,
-                    });
-
-                    // Count (larger, centered, gray color)
-                    const countStr = String(values[i] ?? 0);
-                    const countSize = Math.max(headerTitleSize + 4, Math.round(headerTitleSize * 1.0 + PH * 0.002));
-                    const countFont = fontBold || font;
-                    const countW = countFont.widthOfTextAtSize(countStr, countSize);
-                    const label = labels[i];
-                    const labelSize = Math.max(9, textSize - 1);
-                    const iconW = 20,
-                        iconH = 20;
-                    const gap = 8;
-                    const leftPad = 18;
-                    const rightPad = 18;
-                    const centerY = summaryY + summaryBoxHeight / 2;
-
-                    // Draw count (bold)
-                    let leftX = bx + leftPad;
-                    page.drawText(countStr, {
-                        x: leftX,
-                        y: centerY - countSize / 2 + 24,
-                        size: countSize,
-                        font: countFont,
-                        color: rgb(0.25, 0.25, 0.25),
-                    });
-
-                    // Draw label (side by side, vertically centered)
-                    page.drawText(label, {
-                        x: leftX + countW + gap,
-                        y: centerY - labelSize / 2 + 23,
-                        size: labelSize,
-                        color: rgb(0.45, 0.45, 0.45),
-                    });
-
-                    // Small colored indicator on the right
-                    // page.drawRectangle({
-                    //     x: bx + boxW - 24,
-                    //     y: summaryY + summaryBoxHeight / 2 - 8,
-                    //     width: 16,
-                    //     height: 16,
-                    //     color: colors[i],
-                    // });
-
-                    page.drawSvgPath(summaryPaths[i], {
-                        x: bx + boxW - rightPad - iconW,
-                        y: centerY - iconH / 2 + 43,
-                        width: iconW,
-                        height: iconH,
-                        color: colors[i],
-                    });
-                }
-
-                // Keep a slightly smaller gap after the summary to visually group related info
-                currentYFromTop += summaryBoxHeight + Math.max(8, Math.floor(sectionSpacing / 2));
-                currentYFromBottom = PH - currentYFromTop;
-
-                // ---- Signature Events header strip ----
-                page.drawRectangle({
-                    x: margin,
-                    y: currentYFromBottom,
-                    width: PW - margin * 2,
-                    height: 28,
-                    color: white,
-                    borderColor: rgb(0.88, 0.9, 0.92),
-                    borderWidth: 1.5,
-                });
-
-                drawText("Signature Events", {
-                    x: margin + 12,
-                    y: currentYFromBottom + 9,
-                    size: sectionTitleSize,
-                    color: rgb(0, 0, 0),
-                });
-
-                currentYFromTop += 28 + sectionSpacing;
-                currentYFromBottom = PH - currentYFromTop;
-
-                // ---- Table header ----
-                const headerY = currentYFromBottom;
-                page.drawRectangle({
-                    x: margin,
-                    y: headerY - tableHeaderHeight + 46,
-                    width: totalTblW,
-                    height: tableHeaderHeight - 3,
-                    color: lightGray,
-                });
-
-                const headerTitles = ["SIGNATURE", "SIGNATURE TYPE", "SIGNATURE DETAILS", "USER DETAILS"];
-                const headerWidths = [imgColW, typeColW, sigDetailsColW, userColW];
-                const headerTextSize = Math.max(9, PH * 0.011);
-
-                for (let i = 0; i < headerTitles.length; i++) {
-                    const t = headerTitles[i];
-                    const w = font.widthOfTextAtSize(t, headerTextSize);
-                    const colStart = colXs[i];
-                    const colW = headerWidths[i];
-                    const tx = colStart + (colW - w) / 2;
-
-                    drawText(t, {
-                        x: tx,
-                        y: headerY - tableHeaderHeight / 2 - headerTextSize / 3 + 46,
-                        size: headerTextSize - 2,
-                        color: rgb(0, 0, 0),
-                    });
-                }
-
-                currentYFromTop += tableHeaderHeight + sectionSpacing;
-                currentYFromBottom = PH - currentYFromTop + 64;
-
-                // ---- Rows on first page ----
-                const firstSlice = signaturesRemaining.slice(0, maxRowsFirst);
-                await drawSignatureRows(page, firstSlice, currentYFromBottom);
-                signaturesRemaining = signaturesRemaining.slice(firstSlice.length);
-            } else {
-                // ---- Continuation pages ----
-
-                // small title
-                drawText(`Signature Events (continued) - Page ${pageNumber}`, {
-                    x: margin,
-                    y: currentYFromBottom,
-                    size: sectionTitleSize,
-                    color: darkBlue,
-                });
-
-                currentYFromTop += sectionTitleSize * 1.5;
-                currentYFromBottom = PH - currentYFromTop;
-
-                // table header
-                const headerY = currentYFromBottom;
-                page.drawRectangle({
-                    x: margin,
-                    y: headerY - tableHeaderHeight,
-                    width: totalTblW,
-                    height: tableHeaderHeight,
-                    color: darkBlue,
-                });
-
-                const headerTitles = ["Signature", "Signature Type", "Signature Details", "User Details"];
-                const headerWidths = [imgColW, typeColW, sigDetailsColW, userColW];
-                const headerTextSize = Math.max(9, PH * 0.011);
-
-                for (let i = 0; i < headerTitles.length; i++) {
-                    const t = headerTitles[i];
-                    const w = font.widthOfTextAtSize(t, headerTextSize);
-                    const colStart = colXs[i];
-                    const colW = headerWidths[i];
-                    const tx = colStart + (colW - w) / 2;
-
-                    drawText(t, {
-                        x: tx,
-                        y: headerY - tableHeaderHeight / 2 - headerTextSize / 3,
-                        size: headerTextSize,
-                        color: rgb(1, 1, 1),
-                    });
-                }
-
-                currentYFromTop += tableHeaderHeight + sectionSpacing;
-                currentYFromBottom = PH - currentYFromTop;
-
-                // rows on continuation page
-                const slice = signaturesRemaining.slice(0, maxRowsCont);
-                await drawSignatureRows(page, slice, currentYFromBottom);
-                signaturesRemaining = signaturesRemaining.slice(slice.length);
-            }
-
-            pageNumber++;
-        }
+    // Close toast
+    const handleCloseToast = () => {
+        setToast({ isVisible: false, message: "", type: "success" });
     };
 
     // Check if Save & Submit button should be shown
@@ -2043,11 +1707,18 @@ function App() {
 
                     <p className="expired-message">This document has expired and is no longer available for signing.</p>
 
-                    <p className="expired-hint">Please contact the document owner if you believe this is an error.</p>
-
-                    <button className="expired-button">Contact Support</button>
+                    <p className="expired-hint" style={{ fontWeight: 500, marginTop: "12px" }}>
+                        Please contact the document owner:
+                    </p>
+                    <p className="expired-hint" style={{ marginTop: "4px", fontSize: "14px" }}>
+                        <strong>{documentRecord?.CreatedBy?.Name || "Unknown User"}</strong>  
+                        <br/>
+                        <span style={{ color: "#555" }}>{documentRecord?.CreatedBy?.Email || "No Email Available"}</span>
+                    </p>
                 </div>
-            )}
+                )
+            }
+
 
             {pdfFile && !isExpired && (
                 <>
@@ -2166,6 +1837,7 @@ function App() {
             <SignatureModal isOpen={isModalOpen} onClose={handleModalClose} onSave={handleSignatureSave} signature={currentSignature} title={currentSignature?.type === "text" ? "Enter Text" : currentSignature?.type === "initials" ? "Enter Initials" : "Create Signature"} />
             <FieldModal isOpen={isFieldModalOpen} onClose={handleFieldModalClose} onSave={handleFieldSave} field={currentField} />
             <Toast isVisible={toast.isVisible} message={toast.message} type={toast.type} onClose={handleCloseToast} />
+            <div id="audit-html" style={{ position:'absolute', top:'-9999px', left:'-9999px' }}></div>
         </div>
     );
 }
