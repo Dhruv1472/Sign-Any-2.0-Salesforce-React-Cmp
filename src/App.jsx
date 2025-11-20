@@ -628,6 +628,50 @@ function App() {
                             width: pdfWidth,
                             height: pdfHeight,
                         });
+
+                        // Add timestamp and signer name below the signature
+                        const signerName = field._parentSigner?.name || field.name || "";
+                        const timestamp = field.timeStamp || field.timestamp || "";
+                        
+                        if (signerName || timestamp) {
+                            // Embed font for text
+                            const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+                            
+                            // Create the metadata text on one line
+                            let metadataText = "";
+                            if (signerName && timestamp) {
+                                metadataText = `${signerName} | ${timestamp}`;
+                            } else if (signerName) {
+                                metadataText = signerName;
+                            } else {
+                                metadataText = timestamp;
+                            }
+                            
+                            // Calculate font size relative to signature width (small text)
+                            const fontSize = 8;
+                            const textWidth = font.widthOfTextAtSize(metadataText, fontSize);
+                            
+                            // Center the text below the signature
+                            const textX = pdfX + (pdfWidth - textWidth) / 2;
+                            const textY = pdfY - fontSize - 2; // Position below signature with small gap
+                            
+                            // Draw a subtle line above the text
+                            page.drawLine({
+                                start: { x: pdfX, y: pdfY - 1 },
+                                end: { x: pdfX + pdfWidth, y: pdfY - 1 },
+                                thickness: 0.5,
+                                color: rgb(0.88, 0.88, 0.88),
+                            });
+                            
+                            // Draw the metadata text
+                            page.drawText(metadataText, {
+                                x: textX,
+                                y: textY,
+                                size: fontSize,
+                                font: font,
+                                color: rgb(0.4, 0.4, 0.4), // Gray color
+                            });
+                        }
                     } catch (error) {
                         console.error("Error adding signature to PDF:", field.index, error);
                     }

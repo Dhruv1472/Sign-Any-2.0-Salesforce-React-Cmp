@@ -36,7 +36,7 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false }) => 
     // If signature is already signed/filled, show the image
     if (isCompleted && imageUrl) {
         return (
-            <div className="signature-wrapper">
+            <>
                 <div className={`signature-image-container ${isCompleted ? "signed" : ""}`}>
                     <img src={imageUrl} alt={`Signature-${key}`} className="signature-image" style={{ width: `${width}px` }} />
                     {canDelete && (
@@ -47,11 +47,14 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false }) => 
                 </div>
                 {(signerName || signatureTimestamp) && (
                     <div className="signature-footer">
-                        {signerName && <div className="signature-footer-name">{signerName}</div>}
-                        {signatureTimestamp && <div className="signature-footer-timestamp">{signatureTimestamp}</div>}
+                        <span className="signature-footer-text">
+                            {signerName && <span className="signature-footer-name">{signerName}</span>}
+                            {signerName && signatureTimestamp && <span className="signature-footer-separator"> | </span>}
+                            {signatureTimestamp && <span className="signature-footer-timestamp">{signatureTimestamp}</span>}
+                        </span>
                     </div>
                 )}
-            </div>
+            </>
         );
     }
 
