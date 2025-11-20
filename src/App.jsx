@@ -382,7 +382,21 @@ function App() {
             const ipData = await ipRes.json();
             const ipAddress = ipData.ip;
 
-            const timeStamp = new Date().toLocaleString();
+            // Format timestamp as "MM dd yyyy, hh:mm:ss AM/PM TimeZone"
+            const now = new Date();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const year = now.getFullYear();
+            const timeString = now.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit', 
+                hour12: true 
+            });
+            // Get timezone abbreviation
+            const timeZone = now.toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop();
+            const timeStamp = `${month}/${day}/${year}, ${timeString} ${timeZone}`;
+            
             const userAgent = navigator.userAgent || "Unknown Device";
 
             const osMatch = userAgent.match(/\(([^;]+);/);

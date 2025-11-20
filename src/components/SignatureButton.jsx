@@ -11,7 +11,7 @@ import "./SignatureButton.css";
  * @param {boolean} canDelete - Whether the delete button should be shown
  */
 const SignatureButton = ({ signature, onSign, onDelete, canDelete = false }) => {
-    const { key, buttonName, width, signed, filled, imageUrl, disabled } = signature;
+    const { key, buttonName, width, signed, filled, imageUrl, disabled, timeStamp, timestamp, _parentSigner } = signature;
 
     const handleSignClick = () => {
         if (!disabled && onSign) {
@@ -29,15 +29,27 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false }) => 
     // Check both 'signed' (old structure) and 'filled' (new nested structure)
     const isCompleted = signed || filled;
     
+    // Get signer info and timestamp
+    const signerName = _parentSigner?.name || signature.name || "";
+    const signatureTimestamp = timeStamp || timestamp || "";
+    
     // If signature is already signed/filled, show the image
     if (isCompleted && imageUrl) {
         return (
-            <div className={`signature-image-container ${isCompleted ? "signed" : ""}`}>
-                <img src={imageUrl} alt={`Signature-${key}`} className="signature-image" style={{ width: `${width}px` }} />
-                {canDelete && (
-                    <button className="signature-delete-btn" onClick={handleDeleteClick} title="Delete signature">
-                        ×
-                    </button>
+            <div className="signature-wrapper">
+                <div className={`signature-image-container ${isCompleted ? "signed" : ""}`}>
+                    <img src={imageUrl} alt={`Signature-${key}`} className="signature-image" style={{ width: `${width}px` }} />
+                    {canDelete && (
+                        <button className="signature-delete-btn" onClick={handleDeleteClick} title="Delete signature">
+                            ×
+                        </button>
+                    )}
+                </div>
+                {(signerName || signatureTimestamp) && (
+                    <div className="signature-footer">
+                        {signerName && <div className="signature-footer-name">{signerName}</div>}
+                        {signatureTimestamp && <div className="signature-footer-timestamp">{signatureTimestamp}</div>}
+                    </div>
                 )}
             </div>
         );
