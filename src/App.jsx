@@ -412,71 +412,28 @@ function App() {
             const signerObject = signature._parentSigner;
 
             let updatedSignatures = updateSignatureWithImage(signatureData, signature.index, imageData, signature.type, signerObject);
-
-            // Check if document is expired
-            if (documentExpired) {
-                setDocumentRecord(documentData);
-                setIsExpired(true);
-                setPdfFile(null);
-                setTotalPages(0);
-                setPageDimensions([]);
-                pdfDocRef.current = null;
-                canvasRefsArray.current = [];
-                setLoading(false);
-                return;
-            }
-
-            console.log("Fetched Document__c record:", documentData);
-
-            console.log(`Fetched ContentVersion ID: ${contentVersionId}`);
-            console.log(`Signature Data:`, sigData);
-            console.log(`Field Data:`, fieldDataFromRecord);
-
-            // Store document record and data directly (no parsing needed)
-            setDocumentRecord(documentData);
-            const signatures = Array.isArray(sigData) ? sigData : [];
-            const fields = Array.isArray(fieldDataFromRecord) ? fieldDataFromRecord : [];
-            setSignatureData(signatures);
-            setFieldData(fields);
             
-            // Store initial data to detect changes later
-            setInitialSignatureData(JSON.parse(JSON.stringify(signatures)));
-            setInitialFieldData(JSON.parse(JSON.stringify(fields)));
-
-            // Step 2: Fetch PDF from ContentVersion
-            await fetchPdfFromContentVersion(contentVersionId, currentToken, instanceUrl);
-        } catch (error) {
-            console.error("Error in fetchDocumentAndPdf:", error);
-            setError(`Failed to load document: ${error.message}`);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Update Document__c record with signature and field data
-    const updateDocumentRecord = async (documentId, signatureData, fieldData, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
-        try {
-            let currentToken = accessToken;
-
-            // Step 1: Save imageUrl data to Signature__c records
-            await upsertSignatureRecords(documentId, signatureData, currentToken, instanceUrl, clientId, clientSecret);
-
-            // Step 2: Remove imageUrl from signature data before saving to Document__c
-            const sanitizedSignatureData = signatureData.map((sig) => {
-            // 3. Insert ipAddress in the correct signer's fields only
-            updatedSignatures = updatedSignatures.map((sig) => {
+            updatedSignatures = updatedSignatures.map(sig => {
                 // Only update the fields if this is the correct signer
                 if (sig.fields && Array.isArray(sig.fields)) {
                     const isCorrectSigner = signerObject && (sig.priority === signerObject.priority || sig.email === signerObject.email);
                     if (isCorrectSigner) {
                         return {
                             ...sig,
-                            fields: sig.fields.map((field) => {
+                            fields: sig.fields.map(field => {
                                 if (field.index === signature.index) {
-                                    return { ...field, ipAddress, deviceInfo, locationInfo, timeStamp, signatureType, filled: true };
+                                    return {
+                                        ...field,
+                                        ipAddress,
+                                        deviceInfo,
+                                        locationInfo,
+                                        timeStamp,
+                                        signatureType,      
+                                        filled: true        
+                                    };
                                 }
                                 return field;
-                            }),
+                            })
                         };
                     }
                 }
@@ -488,10 +445,10 @@ function App() {
         } catch (e) {
             console.warn("Could not fetch IP address:", e);
             // Fallback: Just update without IP
-
+            
             // Get the parent signer object (attached in handleSignatureClick)
             const signerObject = signature._parentSigner;
-
+            
             const updatedSignatures = updateSignatureWithImage(signatureData, signature.index, imageData, signature.type, signerObject);
             setSignatureData(updatedSignatures);
             setSessionSignedKeys((prev) => new Set(prev).add(signature.index));
@@ -545,11 +502,6 @@ function App() {
             newSet.delete(field.index);
             return newSet;
         });
-    };
-
-    // Close toast
-    const handleCloseToast = () => {
-        setToast({ isVisible: false, message: "", type: "success" });
     };
 
     const handleSignatureDelete = (signature) => {
