@@ -1281,36 +1281,37 @@ function App() {
                     <table style="width:100%; border-collapse:collapse; font-size:12px;">
                         <thead>
                             <tr style="background:#F1F3F4; color:#444;">
-                                <th style="padding:6px 26px 6px 6px; width:30%;text-align:center;">SIGNATURE</th>
-                                <th style="padding:6px 26px 6px 6px; width:10%;text-align:center;">TYPE</th>
-                                <th style="padding:6px 26px 6px 6px; width:30%;text-align:center;">SIGNATURE DETAILS</th>
-                                <th style="padding:6px 26px 6px 6px; width:30%;text-align:center;">USER DETAILS</th>
+                                <th style="padding:6px; width:22%; text-align:center;">SIGNATURE</th>
+                                <th style="padding:6px; width:10%; text-align:center;">TYPE</th>
+                                <th style="padding:6px; width:38%; text-align:center;">SIGNATURE DETAILS</th>
+                                <th style="padding:6px; width:30%; text-align:center;">USER DETAILS</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${allFields.map(f => `
                             <tr style="border-bottom:1px solid #E2E8F0;">
-                                <td style="padding:8px 0 0 18px;width:80%;display:flex;justify-content:center;align-items:center;">
+                                <td style="padding:8px 0 0 18px; text-align:center;">
                                     ${f.imageUrl 
-                                        ? `<img src="${f.imageUrl}" style="height:55px;width:110px;border-radius:4px;border:1px solid #CBD5E0;object-fit:contain;background:#fff;" />`
-                                        : `<div style="border:1px solid #CBD5E0;height:35px;width:60px;border-radius:4px;background:#fff;display:flex;align-items:center;justify-content:center;">
-                                            <span style="font-size:11px;color:#555;">#${f.index}</span>
+                                        ? `<img src="${f.imageUrl}" 
+                                            style="height:55px;width:110px;border-radius:4px;border:1px solid #CBD5E0;object-fit:contain;background:#fff;" />`
+                                        : `<div style="border:1px solid #CBD5E0;height:35px;width:60px;border-radius:4px;background:#fff;display:flex;align-items:center;justify-content:center;margin:auto;">
+                                                <span style="font-size:11px;color:#555;">#${f.index}</span>
                                         </div>`
                                     }
                                 </td>
-                                <td style="padding:8px;width:10%;">
+                                <td style="padding:8px; text-align:center;">
                                     <span style="color:#0066FF; font-weight:600;background:#E0F0FF;padding:3px 8px;border-radius:8px;font-size:11px;">
                                         ${(f.signatureType || '--').toUpperCase()}
                                     </span>
                                 </td>
-                                <td style="padding:8px;color:#444;width:35%;">
-                                    Signed On: ${f.timestamp || "--"} <br/>
+                                <td style="padding:8px;color:#444;">
+                                    Signed On: ${f.timeStamp || "--"} <br/>
                                     Device: ${f.deviceInfo || "--"} <br/>
                                     Location: ${f.locationInfo || "--"}
                                 </td>
-                                <td style="padding:8px 8px 8px 0;color:#444;width:35%;">
-                                    Name: ${f.signerName  || "--"} <br/>
-                                    Email: ${f.signerEmail  || "--"} <br/>
+                                <td style="padding:8px;color:#444;">
+                                    Name: ${f.signerName || "--"} <br/>
+                                    Email: ${f.signerEmail || "--"} <br/>
                                     IP: ${f.ipAddress || "--"}
                                 </td>
                             </tr>`).join("")}
