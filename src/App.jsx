@@ -79,6 +79,7 @@ function App() {
             // Check if document is expired
             if (documentExpired) {
                 setIsExpired(true);
+                if (documentData) setDocumentRecord(documentData);
                 setPdfFile(null);
                 setTotalPages(0);
                 pdfDocRef.current = null;
@@ -151,6 +152,7 @@ function App() {
 
                 if (expirationDate < today) {
                     setIsExpired(true);
+                    setDocumentRecord(documentData);
                     setError(null);
                     return { isExpired: true };
                 }
