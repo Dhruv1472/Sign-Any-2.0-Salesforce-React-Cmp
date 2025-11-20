@@ -1108,7 +1108,7 @@ function App() {
     const generateAuditHTML = async (doc, sigData, orgId, totalPages) => {
         console.log("Generating audit report HTML with document and signatures:", doc, sigData, orgId, totalPages);
 
-        const allFields = sigData.flatMap(s => s.fields || []);
+        const allFields = sigData.flatMap(s =>(s.fields || []).map(f => ({...f,signerName: s.name || "--",signerEmail: s.email || "--"})));
         const signedFields = allFields.filter(f => f.filled);
         const pendingFields = allFields.filter(f => !f.filled);
 
@@ -1309,8 +1309,8 @@ function App() {
                                     Location: ${f.locationInfo || "--"}
                                 </td>
                                 <td style="padding:8px 8px 8px 0;color:#444;width:30%;">
-                                    Name: ${f.name || "--"} <br/>
-                                    Email: ${f.email || "--"} <br/>
+                                    Name: ${f.signerName  || "--"} <br/>
+                                    Email: ${f.signerEmail  || "--"} <br/>
                                     IP: ${f.ipAddress || "--"}
                                 </td>
                             </tr>`).join("")}
