@@ -9,13 +9,11 @@ import SignatureModal from "./components/SignatureModal";
 import FieldOverlay from "./components/FieldOverlay";
 import FieldModal from "./components/FieldModal";
 import Toast from "./components/Toast";
-import { updateSignatureWithImage, deleteSignatureImage, updateFieldWithValue, deleteFieldValue } from "./utils/signatureUtils";
 import html2pdf from "html2pdf.js";
+import { updateSignatureWithImage, deleteSignatureImage, updateFieldWithValue, deleteFieldValue, updateNestedFieldValue, deleteNestedFieldValue } from "./utils/signatureUtils";
 
-// Set up the worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = "./pdfjs/pdf.worker.min.mjs";
 
-// A4 page dimensions in pixels at 72 DPI
 const A4_WIDTH = 595;
 const A4_HEIGHT = 842;
 
@@ -24,12 +22,11 @@ function App() {
     const [totalPages, setTotalPages] = useState(0);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [isExpired, setIsExpired] = useState(false); // Track if document is expired
-    const [initialAccepted, setInitialAccepted] = useState(false); // Show initial accept/reject popup on first load
+    const [isExpired, setIsExpired] = useState(false);
+    const [initialAccepted, setInitialAccepted] = useState(false);
     const [signatureData, setSignatureData] = useState([]);
-    const [fieldData, setFieldData] = useState([]); // Fields data
+    const [fieldData, setFieldData] = useState([]);
     const [documentRecord, setDocumentRecord] = useState(null);
-    const [pageDimensions, setPageDimensions] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isFieldModalOpen, setIsFieldModalOpen] = useState(false);
     const [currentSignature, setCurrentSignature] = useState(null);
@@ -37,246 +34,73 @@ function App() {
     const [toast, setToast] = useState({ isVisible: false, message: "", type: "success" });
     const [salesforceConfig, setSalesforceConfig] = useState(null);
     const [urlPriority, setUrlPriority] = useState(null);
-    const [isSubmitted, setIsSubmitted] = useState(false); // Track if document has been submitted
-    const [sessionSignedKeys, setSessionSignedKeys] = useState(new Set()); // Track signatures signed in this session
-    const [sessionFilledKeys, setSessionFilledKeys] = useState(new Set()); // Track fields filled in this session
-    const [originalPdfBytes, setOriginalPdfBytes] = useState(null); // Store original PDF bytes for modification
-    const [initialSignatureData, setInitialSignatureData] = useState([]); // Store initial signature data to detect changes
-    const [initialFieldData, setInitialFieldData] = useState([]); // Store initial field data to detect changes
-    const [orgIdState, setOrgIdState] = useState(null); // Salesforce Organization Id
+    const [isSubmitted, setIsSubmitted] = useState(false);
+    const [sessionSignedKeys, setSessionSignedKeys] = useState(new Set());
+    const [sessionFilledKeys, setSessionFilledKeys] = useState(new Set());
+    const [originalPdfBytes, setOriginalPdfBytes] = useState(null);
+    const [initialSignatureData, setInitialSignatureData] = useState([]);
+    const [orgIdState, setOrgIdState] = useState(null);
     const canvasRefsArray = useRef([]);
     const pdfDocRef = useRef(null);
 
-    // Load PDF from array buffer
-    const loadPdfFromArrayBuffer = async (arrayBuffer, fileName = "document.pdf") => {
-        try {
-            const typedArray = new Uint8Array(arrayBuffer);
-            const loadingTask = pdfjsLib.getDocument(typedArray);
-            const pdf = await loadingTask.promise;
-            pdfDocRef.current = pdf;
-            setTotalPages(pdf.numPages);
-            setPdfFile(fileName);
-            setError(null);
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const accessToken = urlParams.get("act");
+        const recordId = urlParams.get("recordId");
+        const instanceUrl = urlParams.get("instanceUrl");
+        const clientId = urlParams.get("clientId");
+        const clientSecret = urlParams.get("clientSecret");
+        const priority = urlParams.get("priority");
 
-            // Store original PDF bytes for later modification
-            // setOriginalPdfBytes(typedArray);
-        } catch (error) {
-            console.error("Error loading PDF:", error);
-            setError("Error loading PDF file");
+        const parsedPriority = priority ? parseInt(priority, 10) : 1;
+        setUrlPriority(parsedPriority);
+
+        if (recordId && instanceUrl) {
+            setSalesforceConfig({ accessToken, recordId, instanceUrl, clientId, clientSecret });
+            fetchDocumentAndPdf(recordId, accessToken, instanceUrl, clientId, clientSecret);
+
+            fetchOrganizationId(accessToken, instanceUrl, clientId, clientSecret)
+                .then((id) => setOrgIdState(id))
+                .catch(() => setOrgIdState(null));
         }
-    };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
-    // Refresh access token using client credentials
-    // Helper to update access token in the url and component state so refresh persists across reloads
-    const updateUrlAccessToken = (token) => {
+    // Main function to fetch Document and then PDF
+    const fetchDocumentAndPdf = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+        setLoading(true);
+        setError(null);
+        setIsExpired(false);
+
         try {
-            const url = new URL(window.location.href);
-            url.searchParams.set("act", token);
-            // Replace the current history entry without reloading
-            window.history.replaceState({}, document.title, url.toString());
+            // Step 1: Fetch Document__c record to get ContentVersion ID and signature/field data
+            const { contentVersionId, currentToken, documentData, signatureData: sigData, fieldData: fieldDataFromRecord, isExpired: documentExpired } = await fetchDocumentRecord(documentId, accessToken, instanceUrl, clientId, clientSecret);
 
-            // Keep salesforceConfig state in sync if present
-            setSalesforceConfig((prev) => (prev ? { ...prev, accessToken: token } : prev));
-        } catch (err) {
-            console.warn("Could not update URL access token:", err);
-        }
-    };
-
-    // Refresh access token using client credentials
-    const refreshAccessToken = async (instanceUrl, clientId, clientSecret) => {
-        try {
-            const tokenUrl = `${instanceUrl}/services/oauth2/token`;
-            const params = new URLSearchParams({
-                grant_type: "client_credentials",
-                client_id: clientId,
-                client_secret: clientSecret,
-            });
-
-            const response = await fetch(tokenUrl, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                body: params,
-            });
-
-            if (!response.ok) {
-                throw new Error(`Failed to refresh token: ${response.status} ${response.statusText}`);
+            // Check if document is expired
+            if (documentExpired) {
+                setIsExpired(true);
+                setPdfFile(null);
+                setTotalPages(0);
+                pdfDocRef.current = null;
+                canvasRefsArray.current = [];
+                setLoading(false);
+                return;
             }
 
-            const data = await response.json();
-            const newToken = data.access_token;
+            setDocumentRecord(documentData);
+            const signatures = Array.isArray(sigData) ? sigData : [];
+            const fields = Array.isArray(fieldDataFromRecord) ? fieldDataFromRecord : [];
+            setSignatureData(signatures);
+            setFieldData(fields);
+            setInitialSignatureData(JSON.parse(JSON.stringify(signatures)));
 
-            // Persist the refreshed token in the URL and component state so reloads keep using it
-            if (newToken) {
-                updateUrlAccessToken(newToken);
-            }
-
-            return newToken;
+            // Step 2: Fetch PDF from ContentVersion
+            await fetchPdfFromContentVersion(contentVersionId, currentToken, instanceUrl);
         } catch (error) {
-            console.error("Error refreshing access token:", error);
-            throw error;
-        }
-    };
-
-    // Fetch all Signature__c records for a document
-    const fetchSignatureRecords = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
-        try {
-            let currentToken = accessToken;
-            const query = `SELECT Id, Field_Index__c, Signing_Details__c FROM Signature__c WHERE Document__c = '${documentId}'`;
-            
-            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
-            
-            let response = await fetch(apiUrl, {
-                method: "GET",
-                headers: {
-                    Authorization: `Bearer ${currentToken}`,
-                    "Content-Type": "application/json",
-                },
-            });
-
-            // If token expired (401), try to refresh it
-            if (response.status === 401 && clientId && clientSecret) {
-                console.log("Access token expired, attempting to refresh...");
-                currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
-
-                // Retry the request with new token
-                response = await fetch(apiUrl, {
-                    method: "GET",
-                    headers: {
-                        Authorization: `Bearer ${currentToken}`,
-                        "Content-Type": "application/json",
-                    },
-                });
-            }
-
-            if (!response.ok) {
-                throw new Error(`Failed to fetch Signature records: ${response.status} ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            return data.records || [];
-        } catch (error) {
-            console.error("Error fetching Signature records:", error);
-            return [];
-        }
-    };
-
-    // Create or update Signature__c records
-    const upsertSignatureRecords = async (documentId, signatureData, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
-        try {
-            let currentToken = accessToken;
-
-            // Extract all fields with imageUrl from signatureData
-            const fieldsWithImages = [];
-            signatureData.forEach((sig) => {
-                if (sig.fields && Array.isArray(sig.fields)) {
-                    sig.fields.forEach((field) => {
-                        if (field.filled && field.imageUrl) {
-                            fieldsWithImages.push({
-                                fieldIndex: field.index,
-                                imageUrl: field.imageUrl,
-                                ipAddress: field.ipAddress || "",
-                                timestamp: field.timestamp || field.signedTime || "",
-                            });
-                        }
-                    });
-                }
-            });
-
-            // First, fetch existing Signature__c records to get their IDs
-            const existingRecords = await fetchSignatureRecords(documentId, currentToken, instanceUrl, clientId, clientSecret);
-            const existingMap = new Map();
-            existingRecords.forEach((record) => {
-                existingMap.set(record.Field_Index__c, record.Id);
-            });
-
-            // Prepare records for upsert (create or update)
-            const recordsToUpsert = [];
-            for (const field of fieldsWithImages) {
-                const signingDetails = JSON.stringify({
-                    imageUrl: field.imageUrl,
-                    ipAddress: field.ipAddress,
-                    timestamp: field.timestamp,
-                });
-
-                const recordData = {
-                    Document__c: documentId,
-                    Field_Index__c: field.fieldIndex,
-                    Signing_Details__c: signingDetails,
-                };
-
-                // If record exists, add Id for update
-                const existingId = existingMap.get(field.fieldIndex);
-                if (existingId) {
-                    recordData.Id = existingId;
-                }
-
-                recordsToUpsert.push(recordData);
-            }
-
-            if (recordsToUpsert.length === 0) {
-                console.log("No signature records to upsert");
-                return true;
-            }
-
-            console.log("recordsToUpsert==> ", recordsToUpsert);
-
-            // Use Promise.all to create/update records individually
-            const upsertPromises = recordsToUpsert.map(async (record) => {
-                const isUpdate = !!record.Id;
-                const method = isUpdate ? "PATCH" : "POST";
-                const apiUrl = isUpdate 
-                    ? `${instanceUrl}/services/data/v65.0/sobjects/Signature__c/${record.Id}`
-                    : `${instanceUrl}/services/data/v65.0/sobjects/Signature__c`;
-
-                // Remove Id from body if updating (Id is in URL)
-                const body = isUpdate ? { ...record } : record;
-                if (isUpdate) {
-                    delete body.Id;
-                }
-
-                let response = await fetch(apiUrl, {
-                    method: method,
-                    headers: {
-                        Authorization: `Bearer ${currentToken}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(body),
-                });
-
-                // If token expired (401), try to refresh it
-                if (response.status === 401 && clientId && clientSecret) {
-                    console.log("Access token expired, attempting to refresh...");
-                    currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
-
-                    // Retry the request with new token
-                    response = await fetch(apiUrl, {
-                        method: method,
-                        headers: {
-                            Authorization: `Bearer ${currentToken}`,
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify(body),
-                    });
-                }
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Failed to ${isUpdate ? 'update' : 'create'} Signature record (Field Index: ${record.Field_Index__c}): ${response.status} ${response.statusText} - ${errorText}`);
-                }
-
-                const result = await response.json();
-                return result;
-            });
-
-            // Execute all upsert operations in parallel
-            const results = await Promise.all(upsertPromises);
-            console.log("Signature records upserted successfully:", results);
-            return true;
-        } catch (error) {
-            console.error("Error upserting Signature records:", error);
-            throw error;
+            console.error("Error in fetchDocumentAndPdf:", error);
+            setError(`Failed to load document: ${error.message}`);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -284,9 +108,8 @@ function App() {
     const fetchDocumentRecord = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
-            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(`SELECT Id, Uploaded_Document_Id__c, Signing_Details__c, Status__c, CreatedDate, CreatedBy.Name, CreatedBy.Email, Email_Subject__c, Document_Name__c, Expiration_Date__c FROM Document__c WHERE Id='${documentId}' LIMIT 1`)}`;
             // Salesforce REST API endpoint to get Document__c record
-            // const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(objQuery)}`;
+            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(`SELECT Id, Uploaded_Document_Id__c, Signing_Details__c, Status__c, CreatedDate, CreatedBy.Name, CreatedBy.Email, Email_Subject__c, Document_Name__c, Expiration_Date__c FROM Document__c WHERE Id='${documentId}' LIMIT 1`)}`;
 
             let response = await fetch(apiUrl, {
                 method: "GET",
@@ -315,10 +138,9 @@ function App() {
                 throw new Error(`Failed to fetch Document record: ${response.status} ${response.statusText}`);
             }
 
-            let documentData = await response.json();
-            documentData = documentData.records[0];
-            console.log('documentData', documentData);
-            
+            const data = await response.json();
+            const documentData = data.records[0];
+
             // Check if document is expired
             if (documentData.Expiration_Date__c) {
                 const expirationDate = new Date(documentData.Expiration_Date__c);
@@ -326,14 +148,14 @@ function App() {
                 // Set time to start of day for fair comparison
                 today.setHours(0, 0, 0, 0);
                 expirationDate.setHours(0, 0, 0, 0);
-                
+
                 if (expirationDate < today) {
                     setIsExpired(true);
                     setError(null);
                     return { isExpired: true };
                 }
             }
-            
+
             const contentVersionId = documentData.Uploaded_Document_Id__c;
             const signatureDataJson = documentData.Signing_Details__c;
 
@@ -351,29 +173,25 @@ function App() {
                         parsedData.forEach((entry) => {
                             // Check if entry has nested fields (new structure)
                             if (entry.fields && Array.isArray(entry.fields)) {
-                                // Process nested fields
-                                entry.fields.forEach((field) => {
+                                // Check if any field in this entry is a signature type
+                                const hasSignatureFields = entry.fields.some((field) => {
                                     const typeLower = typeof field.type === "string" ? field.type.toLowerCase() : "";
                                     const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(typeLower);
                                     const isSignatureType = ["signature"].includes(typeLower) || (!isFieldType && !field.fieldType);
-                                    
-                                    if (isFieldType) {
-                                        parsedFieldData.push({
-                                            ...field,
-                                            fieldType: typeLower,
-                                            filled: Boolean(field.filled),
-                                            // Attach signer info to field
-                                            signerPriority: entry.priority,
-                                            signerEmail: entry.email,
-                                            signerName: entry.name,
-                                        });
-                                    } else if (isSignatureType) {
-                                        parsedSignatureData.push({
-                                            ...entry,
-                                            signed: Boolean(entry.signed),
-                                        });
-                                    }
+                                    return isSignatureType;
                                 });
+
+                                // If this entry has signature fields, add the entire entry once
+                                // All fields (signature + text/date/etc) stay together in nested structure
+                                if (hasSignatureFields) {
+                                    parsedSignatureData.push({
+                                        ...entry,
+                                        signed: Boolean(entry.signed),
+                                    });
+                                }
+                                
+                                // DO NOT extract text fields from nested structure to fieldData
+                                // They will be rendered by SignatureOverlay along with signature fields
                             } else {
                                 // Old flat structure (backward compatibility)
                                 const typeLower = typeof entry.type === "string" ? entry.type.toLowerCase() : "";
@@ -401,49 +219,45 @@ function App() {
 
             // Fetch Signature__c records to get imageUrl data
             const signatureRecords = await fetchSignatureRecords(documentId, currentToken, instanceUrl, clientId, clientSecret);
-            
-            console.log("Fetched Signature__c records:", signatureRecords);
-            
-            // Create a map of fieldIndex -> signature data
-            // Store with both string and number keys to handle type mismatches
+
             const signatureMap = new Map();
             signatureRecords.forEach((record) => {
                 try {
                     const sigDetails = JSON.parse(record.Signing_Details__c);
-                    const fieldIndex = record.Field_Index__c;
-                    // Store with original value (string)
-                    signatureMap.set(fieldIndex, sigDetails);
-                    // Also store with number if it's numeric
-                    if (!isNaN(fieldIndex)) {
-                        signatureMap.set(Number(fieldIndex), sigDetails);
-                    }
-                    // Also store with string if it's a number
-                    signatureMap.set(String(fieldIndex), sigDetails);
-                    console.log(`Mapped field index ${fieldIndex} to signature data:`, sigDetails);
-                } catch (e) {
-                    console.warn(`Failed to parse Signature record ${record.Id}:`, e);
+                    const fieldIndexStr = String(record.Field_Index__c);
+                    signatureMap.set(fieldIndexStr, sigDetails);
+                } catch (error) {
+                    console.warn(`Failed to parse Signature record ${record.Id}:`, error);
                 }
             });
 
-            // Merge imageUrl data back into parsedSignatureData fields
-            parsedSignatureData = parsedSignatureData.map((sig) => {
+            const consumedLegacyKeys = new Set();
+            const sortedSignatureData = [...parsedSignatureData].sort((a, b) => a.priority - b.priority);
+            
+            parsedSignatureData = sortedSignatureData.map((sig) => {
                 if (sig.fields && Array.isArray(sig.fields)) {
                     return {
                         ...sig,
                         fields: sig.fields.map((field) => {
-                            console.log(`Looking up signature data for field index: ${field.index} (type: ${typeof field.index})`);
-                            const sigData = signatureMap.get(field.index);
+                            const compositeKey = `${String(sig.priority)}_${String(field.index)}`;
+                            const legacyKey = String(field.index);
+                            let sigData = signatureMap.get(compositeKey);
+                            
+                            if (!sigData && field.filled && !consumedLegacyKeys.has(legacyKey)) {
+                                sigData = signatureMap.get(legacyKey);
+                                if (sigData) {
+                                    consumedLegacyKeys.add(legacyKey);
+                                }
+                            }
+                            
                             if (sigData) {
-                                console.log(`Found signature data for field ${field.index}:`, sigData);
                                 return {
                                     ...field,
                                     imageUrl: sigData.imageUrl || null,
                                     ipAddress: sigData.ipAddress || field.ipAddress || "",
                                     timestamp: sigData.timestamp || field.timestamp || "",
-                                    filled: Boolean(sigData.imageUrl), // Set filled based on imageUrl presence
+                                    filled: Boolean(sigData.imageUrl),
                                 };
-                            } else {
-                                console.log(`No signature data found for field ${field.index}`);
                             }
                             return field;
                         }),
@@ -456,6 +270,54 @@ function App() {
         } catch (error) {
             console.error("Error fetching Document record:", error);
             throw error;
+        }
+    };
+
+    // Fetch PDF from Salesforce ContentVersion
+    const fetchPdfFromContentVersion = async (contentVersionId, accessToken, instanceUrl) => {
+        try {
+            // Salesforce REST API endpoint to get ContentVersion
+            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/ContentVersion/${contentVersionId}/VersionData`;
+
+            const response = await fetch(apiUrl, {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "Content-Type": "application/pdf",
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+
+            // Create a copy for pdf-lib before pdfjs consumes the original
+            const arrayBufferCopy = arrayBuffer.slice(0);
+            setOriginalPdfBytes(arrayBufferCopy);
+
+            // Pass original to pdfjs (it will consume/detach this buffer)
+            await loadPdfFromArrayBuffer(arrayBuffer, `Document_${contentVersionId}.pdf`);
+        } catch (error) {
+            console.error("Error fetching PDF from ContentVersion:", error);
+            throw error;
+        }
+    };
+
+    // Load PDF from array buffer
+    const loadPdfFromArrayBuffer = async (arrayBuffer, fileName = "document.pdf") => {
+        try {
+            const typedArray = new Uint8Array(arrayBuffer);
+            const loadingTask = pdfjsLib.getDocument(typedArray);
+            const pdf = await loadingTask.promise;
+            pdfDocRef.current = pdf;
+            setTotalPages(pdf.numPages);
+            setPdfFile(fileName);
+            setError(null);
+        } catch (error) {
+            console.error("Error loading PDF:", error);
+            setError("Error loading PDF file");
         }
     };
 
@@ -497,47 +359,59 @@ function App() {
         }
     };
 
-    // Fetch PDF from Salesforce ContentVersion
-    const fetchPdfFromContentVersion = async (contentVersionId, accessToken, instanceUrl) => {
-        try {
-            // Salesforce REST API endpoint to get ContentVersion
-            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/ContentVersion/${contentVersionId}/VersionData`;
-
-            const response = await fetch(apiUrl, {
-                method: "GET",
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    "Content-Type": "application/pdf",
-                },
-            });
-
-            if (!response.ok) {
-                throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
-            }
-
-            const arrayBuffer = await response.arrayBuffer();
-
-            // Create a copy for pdf-lib before pdfjs consumes the original
-            const arrayBufferCopy = arrayBuffer.slice(0);
-            setOriginalPdfBytes(arrayBufferCopy);
-
-            // Pass original to pdfjs (it will consume/detach this buffer)
-            await loadPdfFromArrayBuffer(arrayBuffer, `Document_${contentVersionId}.pdf`);
-        } catch (error) {
-            console.error("Error fetching PDF from ContentVersion:", error);
-            throw error;
-        }
+    const handleSignatureClick = (signature) => {
+        if (isSubmitted) return;
+        setCurrentSignature(signature);
+        setIsModalOpen(true);
     };
 
-    // Main function to fetch Document and then PDF
-    const fetchDocumentAndPdf = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
-        setLoading(true);
-        setError(null);
-        setIsExpired(false);
+    // Handle modal close
+    const handleModalClose = () => {
+        setIsModalOpen(false);
+        setCurrentSignature(null);
+    };
+
+    const handleSignatureSave = async (imageData, signature, signatureType) => {
+        if (signature.fieldType) {
+            console.error("Attempted to save signature image to a field:", signature);
+            return;
+        }
 
         try {
-            // Step 1: Fetch Document__c record to get ContentVersion ID and signature/field data
-            const { contentVersionId, currentToken, documentData, signatureData: sigData, fieldData: fieldDataFromRecord, isExpired: documentExpired } = await fetchDocumentRecord(documentId, accessToken, instanceUrl, clientId, clientSecret);
+            // 1. Get user's public IP address
+            const ipRes = await fetch("https://api.ipify.org?format=json");
+            const ipData = await ipRes.json();
+            const ipAddress = ipData.ip;
+
+            // Format timestamp as "MM dd yyyy, hh:mm:ss AM/PM TimeZone"
+            const now = new Date();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const year = now.getFullYear();
+            const timeString = now.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit', 
+                hour12: true 
+            });
+            // Get timezone abbreviation
+            const timeZone = now.toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop();
+            const timeStamp = `${month}/${day}/${year}, ${timeString} ${timeZone}`;
+            
+            const userAgent = navigator.userAgent || "Unknown Device";
+
+            const osMatch = userAgent.match(/\(([^;]+);/);
+            const osVersion = osMatch ? osMatch[1].trim() : "Unknown OS";
+
+            const chromeMatch = userAgent.match(/Chrome\/([\d.]+)/);
+            const chromeVersion = chromeMatch ? chromeMatch[1] : "Unknown Chrome Version";
+
+            const deviceInfo = `${osVersion} Chrome/${chromeVersion}`;
+
+            const locationInfo = await getLocationLive();
+            const signerObject = signature._parentSigner;
+
+            let updatedSignatures = updateSignatureWithImage(signatureData, signature.index, imageData, signature.type, signerObject);
 
             // Check if document is expired
             if (documentExpired) {
@@ -589,66 +463,399 @@ function App() {
 
             // Step 2: Remove imageUrl from signature data before saving to Document__c
             const sanitizedSignatureData = signatureData.map((sig) => {
+            // 3. Insert ipAddress in the correct signer's fields only
+            updatedSignatures = updatedSignatures.map((sig) => {
+                // Only update the fields if this is the correct signer
                 if (sig.fields && Array.isArray(sig.fields)) {
-                    return {
-                        ...sig,
-                        fields: sig.fields.map((field) => {
-                            // eslint-disable-next-line no-unused-vars
-                            const { imageUrl, ...fieldWithoutImage } = field;
-                            return fieldWithoutImage;
-                        }),
-                    };
+                    const isCorrectSigner = signerObject && (sig.priority === signerObject.priority || sig.email === signerObject.email);
+                    if (isCorrectSigner) {
+                        return {
+                            ...sig,
+                            fields: sig.fields.map((field) => {
+                                if (field.index === signature.index) {
+                                    return { ...field, ipAddress, deviceInfo, locationInfo, timeStamp, signatureType, filled: true };
+                                }
+                                return field;
+                            }),
+                        };
+                    }
                 }
                 return sig;
             });
 
-            // Salesforce REST API endpoint to update Document__c record
-            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/Document__c/${documentId}`;
+            setSignatureData(updatedSignatures);
+            setSessionSignedKeys((prev) => new Set(prev).add(signature.index));
+        } catch (e) {
+            console.warn("Could not fetch IP address:", e);
+            // Fallback: Just update without IP
 
-            // Combine sanitized signature and field data into a single array
-            const combinedData = [...(sanitizedSignatureData || []), ...(fieldData || [])];
-            
-            // Convert combined data to JSON string
-            const signatureDataJson = JSON.stringify(combinedData);
+            // Get the parent signer object (attached in handleSignatureClick)
+            const signerObject = signature._parentSigner;
 
-            let response = await fetch(apiUrl, {
-                method: "PATCH",
-                headers: {
-                    Authorization: `Bearer ${currentToken}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    Signing_Details__c: signatureDataJson,
-                }),
+            const updatedSignatures = updateSignatureWithImage(signatureData, signature.index, imageData, signature.type, signerObject);
+            setSignatureData(updatedSignatures);
+            setSessionSignedKeys((prev) => new Set(prev).add(signature.index));
+        }
+    };
+
+    // Handle field modal close
+    const handleFieldModalClose = () => {
+        setIsFieldModalOpen(false);
+        setCurrentField(null);
+    };
+
+    const handleFieldSave = (value, field) => {
+        if (!field.fieldType && !field.type) {
+            console.error("Attempted to save field value to a signature:", field);
+            return;
+        }
+        
+        // Check if this field belongs to nested structure (has _parentSigner)
+        if (field._parentSigner) {
+            // Update nested field within signatureData
+            const signerObject = field._parentSigner;
+            const updatedSignatures = updateNestedFieldValue(signatureData, field.index, value, field.fieldType || field.type, signerObject);
+            setSignatureData(updatedSignatures);
+        } else {
+            // Update flat field structure
+            const updatedFields = updateFieldWithValue(fieldData, field.index, value, field.fieldType || field.type);
+            setFieldData(updatedFields);
+        }
+
+        // Track that this field was filled in the current session
+        setSessionFilledKeys((prev) => new Set(prev).add(field.index));
+    };
+
+    const handleFieldDelete = (field) => {
+        // Check if this field belongs to nested structure (has _parentSigner)
+        if (field._parentSigner) {
+            // Delete nested field within signatureData
+            const signerObject = field._parentSigner;
+            const updatedSignatures = deleteNestedFieldValue(signatureData, field.index, field.fieldType || field.type, signerObject);
+            setSignatureData(updatedSignatures);
+        } else {
+            // Delete flat field structure
+            const updatedFields = deleteFieldValue(fieldData, field.index, field.fieldType || field.type);
+            setFieldData(updatedFields);
+        }
+
+        // Remove from session filled keys
+        setSessionFilledKeys((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(field.index);
+            return newSet;
+        });
+    };
+
+    // Close toast
+    const handleCloseToast = () => {
+        setToast({ isVisible: false, message: "", type: "success" });
+    };
+
+    const handleSignatureDelete = (signature) => {
+        const signerObject = signature._parentSigner;
+
+        const updatedSignatures = deleteSignatureImage(signatureData, signature.index, signature.type, signerObject);
+        setSignatureData(updatedSignatures);
+
+        // Remove from session signed keys
+        setSessionSignedKeys((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(signature.index);
+            return newSet;
+        });
+    };
+
+    const handleFieldClick = (field) => {
+        if (isSubmitted) return;
+        // For checkbox, toggle directly without opening modal
+        const fType = (field.fieldType || field.type || "").toLowerCase();
+        if (fType === "checkbox") {
+            const current = field.value === true || field.value === "true" || field.value === "True";
+            if (current) {
+                // Check if nested structure
+                if (field._parentSigner) {
+                    const signerObject = field._parentSigner;
+                    const updated = deleteNestedFieldValue(signatureData, field.index, "checkbox", signerObject);
+                    setSignatureData(updated);
+                } else {
+                    const updated = deleteFieldValue(fieldData, field.index, "checkbox");
+                    setFieldData(updated);
+                }
+                setSessionFilledKeys((prev) => {
+                    const s = new Set(prev);
+                    s.delete(field.index);
+                    return s;
+                });
+            } else {
+                // Check if nested structure
+                if (field._parentSigner) {
+                    const signerObject = field._parentSigner;
+                    const updated = updateNestedFieldValue(signatureData, field.index, true, "checkbox", signerObject);
+                    setSignatureData(updated);
+                } else {
+                    const updated = updateFieldWithValue(fieldData, field.index, true, "checkbox");
+                    setFieldData(updated);
+                }
+                setSessionFilledKeys((prev) => new Set(prev).add(field.index));
+            }
+            return;
+        }
+        // Otherwise open modal
+        setCurrentField(field);
+        setIsFieldModalOpen(true);
+    };
+
+    // Handle Save & Submit
+    const handleSaveAndSubmit = async () => {
+        // Validate if all signature fields are filled for current priority
+        const unfilledFields = signatureData
+            .filter((sig) => sig.priority == urlPriority)
+            .flatMap((sig) => sig.fields || [])
+            .filter((field) => !field.filled);
+
+        if (unfilledFields.length > 0) {
+            // Show error toast
+            setToast({
+                isVisible: true,
+                message: `Please complete all signatures. ${unfilledFields.length} signature(s) remaining.`,
+                type: "error",
             });
+        } else {
+            try {
+                // All signatures are completed
+                if (!originalPdfBytes) {
+                    throw new Error("Original PDF data not available");
+                }
 
-            // If token expired (401), try to refresh it
-            if (response.status === 401 && clientId && clientSecret) {
-                console.log("Access token expired, attempting to refresh...");
-                currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
+                // Load the original PDF using pdf-lib
+                const pdfDoc = await PDFDocument.load(originalPdfBytes);
+                const pages = pdfDoc.getPages();
 
-                // Retry the request with new token
-                response = await fetch(apiUrl, {
-                    method: "PATCH",
-                    headers: {
-                        Authorization: `Bearer ${currentToken}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        Signing_Details__c: signatureDataJson,
-                    }),
+                // Get all filled signature fields across all signatures
+                const filledFieldsNew = signatureData.flatMap((sig) => sig.fields || []).filter((field) => field.filled && field.imageUrl);
+
+                // Process each signature field
+                for (const field of filledFieldsNew) {
+                    try {
+                        const pageIndex = field.pageNumber - 1; // Convert to 0-indexed
+                        if (pageIndex < 0 || pageIndex >= pages.length) {
+                            console.warn(`Invalid page number ${field.pageNumber} for field ${field.index}`);
+                            continue;
+                        }
+
+                        const page = pages[pageIndex];
+                        const { width: pageWidth, height: pageHeight } = page.getSize();
+
+                        // Convert base64 image to bytes
+                        const imageBytes = await fetch(field.imageUrl).then((res) => res.arrayBuffer());
+
+                        // Embed image in PDF (supports PNG and JPEG)
+                        let image;
+                        if (field.imageUrl.startsWith("data:image/png")) {
+                            image = await pdfDoc.embedPng(imageBytes);
+                        } else if (field.imageUrl.startsWith("data:image/jpeg") || field.imageUrl.startsWith("data:image/jpg")) {
+                            image = await pdfDoc.embedJpg(imageBytes);
+                        } else {
+                            // Default to PNG
+                            image = await pdfDoc.embedPng(imageBytes);
+                        }
+
+                        // Use percentage-based coordinates from the field data
+                        const pdfX = (field.xPercent / 100) * pageWidth;
+                        const pdfY = pageHeight - (field.yPercent / 100) * pageHeight - (field.heightPercent / 100) * pageHeight;
+                        const pdfWidth = (field.widthPercent / 100) * pageWidth;
+                        const pdfHeight = (field.heightPercent / 100) * pageHeight;
+
+                        // Draw the image on the page
+                        page.drawImage(image, {
+                            x: pdfX,
+                            y: pdfY,
+                            width: pdfWidth,
+                            height: pdfHeight,
+                        });
+                    } catch (error) {
+                        console.error("Error adding signature to PDF:", field.index, error);
+                    }
+                }
+
+                // Get all filled fields (check both filled flag and value presence)
+                const filledFields = fieldData.filter((field) => {
+                    const hasValue = field.value !== null && field.value !== undefined && field.value !== "";
+                    // For checkbox, false is a valid value
+                    if (field.fieldType === "checkbox") {
+                        return hasValue || field.value === false;
+                    }
+                    return (field.filled || hasValue) && hasValue;
+                });
+
+                // Embed font for text rendering
+                const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+                // Process each form field
+                for (const field of filledFields) {
+                    try {
+                        const pageIndex = field.pageNumber - 1; // Convert to 0-indexed
+                        if (pageIndex < 0 || pageIndex >= pages.length) {
+                            console.warn(`Invalid page number ${field.pageNumber} for field ${field.index}`);
+                            continue;
+                        }
+
+                        const page = pages[pageIndex];
+                        const { width: pageWidth, height: pageHeight } = page.getSize();
+
+                        // Use percentage-based coordinates from the field data
+                        const pdfX = (field.xPercent / 100) * pageWidth;
+                        const pdfY = pageHeight - (field.yPercent / 100) * pageHeight - (field.heightPercent / 100) * pageHeight;
+                        const pdfWidth = (field.widthPercent / 100) * pageWidth;
+                        const pdfHeight = (field.heightPercent / 100) * pageHeight;
+
+                        // Format the value based on field type
+                        let displayValue = "";
+                        let isCheckbox = false;
+                        let checkboxChecked = false;
+
+                        if (field.fieldType === "checkbox") {
+                            isCheckbox = true;
+                            checkboxChecked = field.value === true || field.value === "true" || field.value === "True";
+                        } else if (field.fieldType === "date" && field.value) {
+                            displayValue = new Date(field.value).toLocaleDateString();
+                        } else {
+                            displayValue = String(field.value || "");
+                        }
+
+                        // Draw checkbox
+                        if (isCheckbox) {
+                            const checkboxSize = Math.min(pdfWidth, pdfHeight) * 0.8;
+                            const checkboxX = pdfX + (pdfWidth - checkboxSize) / 2;
+                            const checkboxY = pdfY + (pdfHeight - checkboxSize) / 2;
+
+                            // Draw checkbox border
+                            page.drawRectangle({
+                                x: checkboxX,
+                                y: checkboxY,
+                                width: checkboxSize + 5,
+                                height: checkboxSize,
+                                borderColor: rgb(0, 0, 0),
+                                borderWidth: 2,
+                            });
+
+                            // Draw checkmark if checked
+                            if (checkboxChecked) {
+                                const path = "M2 12 L10 20 L22 4";
+                                page.drawSvgPath(path, {
+                                    x: checkboxX + checkboxSize * 0.1,
+                                    y: checkboxY + checkboxSize * 0.1 + 22,
+                                    width: checkboxSize - 12,
+                                    height: checkboxSize - 7,
+                                    borderColor: rgb(0, 0, 0),
+                                    borderWidth: 1.5,
+                                });
+                            }
+                        } else if (displayValue) {
+                            // Draw text field
+                            // Calculate font size based on field height (leave some padding)
+                            const fontSize = Math.min(pdfHeight * 0.6, 12);
+
+                            // Draw background rectangle for better visibility
+                            // page.drawRectangle({
+                            //     x: pdfX,
+                            //     y: pdfY,
+                            //     width: pdfWidth,
+                            //     height: pdfHeight,
+                            //     color: rgb(0.95, 0.95, 0.95),
+                            //     borderColor: rgb(0.7, 0.7, 0.7),
+                            //     borderWidth: 1,
+                            // });
+
+                            // Draw the text
+                            page.drawText(displayValue, {
+                                x: pdfX + 4,
+                                y: pdfY + pdfHeight / 2 - fontSize / 3,
+                                size: fontSize,
+                                font: font,
+                                color: rgb(0, 0, 0),
+                                maxWidth: pdfWidth - 8,
+                            });
+                        }
+                    } catch (error) {
+                        console.error("Error adding form field to PDF:", field.index, error);
+                    }
+                }
+
+                // Build audit report data from Salesforce record and signatures
+                try {
+                    await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages);
+                } catch (e) {
+                    console.warn("Failed to append audit report page:", e);
+                }
+
+
+				// Merge audit report HTML as extra pages
+                const htmlPdfBytes = await convertAuditHTMLToPDF();
+                const finalDoc = await PDFDocument.load(await pdfDoc.save());
+                const extraDoc = await PDFDocument.load(htmlPdfBytes);
+                const htmlPages = await finalDoc.copyPages(extraDoc, extraDoc.getPageIndices());
+                htmlPages.forEach(p => finalDoc.addPage(p));
+
+                const pdfBytes = await finalDoc.save();
+
+
+                // Upload to Salesforce if config is available
+                if (salesforceConfig) {
+                    // Determine FirstPublishLocationId
+                    const firstPublishLocationId = documentRecord?.Record_Id__c || salesforceConfig.recordId;
+
+                    // Check if all fields are filled before uploading
+                    const allFieldsFilled = signatureData.every((sig) => (sig.fields || []).every((field) => field.filled));
+
+                    // Upload signed PDF as ContentVersion
+                    if (allFieldsFilled) {
+                        await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
+                    }
+
+                    // Update Document record with signature and field data
+                    await updateDocumentRecord(salesforceConfig.recordId, signatureData, fieldData, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
+
+                    // Mark as submitted
+                    setIsSubmitted(true);
+
+                    // Show success toast
+                    setToast({
+                        isVisible: true,
+                        message: "All signatures completed successfully! Signed PDF uploaded to Salesforce.",
+                        type: "success",
+                    });
+                } else {
+                    // Fallback: Download the PDF if no Salesforce config
+                    const blob = new Blob([pdfBytes], { type: "application/pdf" });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.href = url;
+                    link.download = pdfFile.replace(".pdf", "") + "-signed.pdf";
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+
+                    // Mark as submitted
+                    setIsSubmitted(true);
+
+                    // Show success toast
+                    setToast({
+                        isVisible: true,
+                        message: "All signatures completed successfully! Signed PDF downloaded.",
+                        type: "success",
+                    });
+                }
+            } catch (error) {
+                console.error("Error in save and submit:", error);
+                setToast({
+                    isVisible: true,
+                    message: `Error creating signed PDF: ${error.message}`,
+                    type: "error",
                 });
             }
-
-            if (!response.ok) {
-                throw new Error(`Failed to update Document record: ${response.status} ${response.statusText}`);
-            }
-
-            console.log("Document record updated successfully");
-            return true;
-        } catch (error) {
-            console.error("Error updating Document record:", error);
-            throw error;
         }
     };
 
@@ -702,7 +909,6 @@ function App() {
             }
 
             const result = await response.json();
-            console.log("Signed PDF uploaded successfully. ContentVersion ID:", result.id);
             return result.id;
         } catch (error) {
             console.error("Error uploading signed PDF to Salesforce:", error);
@@ -710,549 +916,239 @@ function App() {
         }
     };
 
-    // Check URL parameters on mount
-    useEffect(() => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const accessToken = urlParams.get("act");
-        const recordId = urlParams.get("recordId");
-        const instanceUrl = urlParams.get("instanceUrl");
-        const clientId = urlParams.get("clientId");
-        const clientSecret = urlParams.get("clientSecret");
-        const priority = urlParams.get("priority");
-
-        // Parse and store priority if provided
-        const parsedPriority = priority ? parseInt(priority, 10) : 1;
-        setUrlPriority(parsedPriority);
-
-        if (recordId && instanceUrl) {
-            // Store Salesforce config for later use
-            setSalesforceConfig({ accessToken, recordId, instanceUrl, clientId, clientSecret });
-
-            // Fetch Document__c record and then PDF
-            fetchDocumentAndPdf(recordId, accessToken, instanceUrl, clientId, clientSecret);
-
-            // Also fetch Organization Id
-            fetchOrganizationId(accessToken, instanceUrl, clientId, clientSecret)
-                .then((id) => setOrgIdState(id))
-                .catch(() => setOrgIdState(null));
-        }
-
-        // window.history.replaceState({}, document.title, window.location.pathname);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    const renderPage = async (pdf, pageNumber, canvas, targetWidth) => {
-        if (!canvas) {
-            console.error("Canvas not available for page", pageNumber);
-            return null;
-        }
-
-        const page = await pdf.getPage(pageNumber);
-        const originalViewport = page.getViewport({ scale: 1 });
-
-        // Calculate scale to fit target width or use original dimensions
-        const pageWidth = originalViewport.width || A4_WIDTH;
-        const pageHeight = originalViewport.height || A4_HEIGHT;
-        const calculatedScale = targetWidth / pageWidth;
-
-        const viewport = page.getViewport({ scale: calculatedScale });
-        const context = canvas.getContext("2d");
-
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-
-        const renderContext = {
-            canvasContext: context,
-            viewport: viewport,
-        };
-
-        await page.render(renderContext).promise;
-
-        // Return actual dimensions for this page
-        return {
-            width: viewport.width,
-            height: viewport.height,
-            scale: calculatedScale,
-        };
-    };
-
-    const renderAllPages = async (pdf) => {
-        const numPages = pdf.numPages;
-        const dimensions = [];
-
-        // Get container width for responsive sizing
-        const containerWidth = 800; // Fixed width for consistency
-
-        for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-            const canvas = canvasRefsArray.current[pageNum - 1];
-            if (canvas) {
-                const dims = await renderPage(pdf, pageNum, canvas, containerWidth);
-                dimensions.push(dims);
-            }
-        }
-
-        setPageDimensions(dimensions);
-    };
-
-    const renderThumbnailPages = async (pdf) => {
-        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-            const canvas = canvasRefsArray.current[`thumb-${pageNum - 1}`];
-            if (!canvas) continue;
-
-            try {
-                const page = await pdf.getPage(pageNum);
-
-                const viewport = page.getViewport({ scale: 0.25 }); // Small thumbnail scale
-                const ctx = canvas.getContext("2d");
-
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-
-                await page.render({
-                    canvasContext: ctx,
-                    viewport: viewport,
-                }).promise;
-            } catch (error) {
-                console.warn("Thumbnail render failed:", error);
-            }
-        }
-    };
-
-
-    // Handle signature button click - will open signature modal
-    const handleSignatureClick = (signature) => {
-        if (isSubmitted) return;
-        console.log("Signature clicked:", signature);
-        setCurrentSignature(signature);
-        setIsModalOpen(true);
-    };
-
-    // Handle signature save from modal
-    const handleSignatureSave = async (imageData, signature, signatureType) => {
-        console.log("signatureType==> ", signatureType);
-        console.log("imageData==> ", imageData);
-        console.log("signature==> ", signature);
-        // Validate that this is actually a signature, not a field
-        if (signature.fieldType) {
-            console.error("Attempted to save signature image to a field:", signature);
-            return;
-        }
-
+    // Update Document__c record with signature and field data
+    const updateDocumentRecord = async (documentId, signatureData, fieldData, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
-            // 1. Get user's public IP address
-            const ipRes = await fetch('https://api.ipify.org?format=json');
-            const ipData = await ipRes.json();
-            const ipAddress = ipData.ip;
+            let currentToken = accessToken;
 
-            const timeStamp = new Date().toLocaleString();
-            let userAgent = navigator.userAgent || "Unknown Device";
+            // Step 1: Save imageUrl data to Signature__c records
+            await upsertSignatureRecords(documentId, signatureData, currentToken, instanceUrl, clientId, clientSecret);
 
-            // Extract OS and Chrome version
-            const osMatch = userAgent.match(/\(([^;]+);/);
-            const osVersion = osMatch ? osMatch[1].trim() : "Unknown OS";
-            
-            const chromeMatch = userAgent.match(/Chrome\/([\d.]+)/);
-            const chromeVersion = chromeMatch ? chromeMatch[1] : "Unknown Chrome Version";
-
-            // Final clean string
-            const deviceInfo = `${osVersion} Chrome/${chromeVersion}`;
-            console.log("extractedDeviceInfo==> ", deviceInfo);
-
-            let locationInfo = await getLocationLive();
-            console.log("locationInfo==> ", locationInfo);
-            // Get the parent signer object (attached in handleSignatureClick)
-            const signerObject = signature._parentSigner;
-            
-            // 2. Update signatures array with image and ipAddress, passing signer object for correct matching
-            let updatedSignatures = updateSignatureWithImage(signatureData, signature.index, imageData, signature.type, signerObject);
-            console.log("updatedSignatures==> ", updatedSignatures);
-            
-            // 3. Insert ipAddress in the correct signer's fields only
-            updatedSignatures = updatedSignatures.map(sig => {
-                // Only update the fields if this is the correct signer
+            // Step 2: Remove imageUrl from signature data before saving to Document__c
+            const sanitizedSignatureData = signatureData.map((sig) => {
                 if (sig.fields && Array.isArray(sig.fields)) {
-                    const isCorrectSigner = signerObject && (sig.priority === signerObject.priority || sig.email === signerObject.email);
-                    if (isCorrectSigner) {
-                        return {
-                            ...sig,
-                            fields: sig.fields.map(field => {
-                                if (field.index === signature.index) {
-                                    return {
-                                        ...field,
-                                        ipAddress,
-                                        deviceInfo,
-                                        locationInfo,
-                                        timeStamp,
-                                        signatureType,      
-                                        filled: true        
-                                    };
-                                }
-                                return field;
-                            })
-                        };
-                    }
+                    return {
+                        ...sig,
+                        fields: sig.fields.map((field) => {
+                            // eslint-disable-next-line no-unused-vars
+                            const { imageUrl, ...fieldWithoutImage } = field;
+                            return fieldWithoutImage;
+                        }),
+                    };
                 }
                 return sig;
             });
 
-            setSignatureData(updatedSignatures);
-            setSessionSignedKeys((prev) => new Set(prev).add(signature.index));
-        } catch (e) {
-            console.warn("Could not fetch IP address:", e);
-            // Fallback: Just update without IP
-            
-            // Get the parent signer object (attached in handleSignatureClick)
-            const signerObject = signature._parentSigner;
-            
-            const updatedSignatures = updateSignatureWithImage(signatureData, signature.index, imageData, signature.type, signerObject);
-            setSignatureData(updatedSignatures);
-            setSessionSignedKeys((prev) => new Set(prev).add(signature.index));
-        }
-    };
+            // Salesforce REST API endpoint to update Document__c record
+            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/Document__c/${documentId}`;
 
-    // Handle modal close
-    const handleModalClose = () => {
-        setIsModalOpen(false);
-        setCurrentSignature(null);
-    };
+            // Combine sanitized signature and field data into a single array
+            const combinedData = [...(sanitizedSignatureData || []), ...(fieldData || [])];
 
-    // Handle signature deletion
-    const handleSignatureDelete = (signature) => {
-        console.log("Delete signature:", signature);
-        
-        // Get the parent signer object (attached in handleSignatureClick)
-        const signerObject = signature._parentSigner;
-        
-        const updatedSignatures = deleteSignatureImage(signatureData, signature.index, signature.type, signerObject);
-        setSignatureData(updatedSignatures);
+            // Convert combined data to JSON string
+            const signatureDataJson = JSON.stringify(combinedData);
 
-        // Remove from session signed keys
-        setSessionSignedKeys((prev) => {
-            const newSet = new Set(prev);
-            newSet.delete(signature.index);
-            return newSet;
-        });
-    };
-
-    // Handle field button click
-    const handleFieldClick = (field) => {
-        if (isSubmitted) return;
-        console.log("Field clicked:", field);
-        // For checkbox, toggle directly without opening modal
-        const fType = (field.fieldType || field.type || "").toLowerCase();
-        if (fType === "checkbox") {
-            const current = field.value === true || field.value === "true" || field.value === "True";
-            if (current) {
-                const updated = deleteFieldValue(fieldData, field.index, "checkbox");
-                setFieldData(updated);
-                setSessionFilledKeys((prev) => {
-                    const s = new Set(prev);
-                    s.delete(field.index);
-                    return s;
-                });
-            } else {
-                const updated = updateFieldWithValue(fieldData, field.index, true, "checkbox");
-                setFieldData(updated);
-                setSessionFilledKeys((prev) => new Set(prev).add(field.index));
-            }
-            return;
-        }
-        // Otherwise open modal
-        setCurrentField(field);
-        setIsFieldModalOpen(true);
-    };
-
-    // Handle field save from modal
-    const handleFieldSave = (value, field) => {
-        // Validate that this is actually a field, not a signature
-        if (!field.fieldType) {
-            console.error("Attempted to save field value to a signature:", field);
-            return;
-        }
-        
-        console.log("Field saved:", field.index, value);
-        const updatedFields = updateFieldWithValue(fieldData, field.index, value, field.fieldType || field.type);
-        setFieldData(updatedFields);
-
-        // Track that this field was filled in the current session
-        setSessionFilledKeys((prev) => new Set(prev).add(field.index));
-    };
-
-    // Handle field modal close
-    const handleFieldModalClose = () => {
-        setIsFieldModalOpen(false);
-        setCurrentField(null);
-    };
-
-    // Handle field deletion
-    const handleFieldDelete = (field) => {
-        console.log("Delete field:", field);
-        const updatedFields = deleteFieldValue(fieldData, field.index, field.fieldType || field.type);
-        setFieldData(updatedFields);
-
-        // Remove from session filled keys
-        setSessionFilledKeys((prev) => {
-            const newSet = new Set(prev);
-            newSet.delete(field.index);
-            return newSet;
-        });
-    };
-
-    // Handle Save & Submit
-    const handleSaveAndSubmit = async () => {
-        // Validate if all signature fields are filled for current priority
-        const unfilledFields = signatureData
-            .filter(sig => sig.priority == urlPriority)
-            .flatMap(sig => sig.fields || [])
-            .filter(field => !field.filled);
-
-        if (unfilledFields.length > 0) {
-            // Show error toast
-            setToast({
-                isVisible: true,
-                message: `Please complete all signatures. ${unfilledFields.length} signature(s) remaining.`,
-                type: "error",
+            let response = await fetch(apiUrl, {
+                method: "PATCH",
+                headers: {
+                    Authorization: `Bearer ${currentToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    Signing_Details__c: signatureDataJson,
+                }),
             });
-        } else {
-            try {
-                // All signatures are completed
-                if (!originalPdfBytes) {
-                    throw new Error("Original PDF data not available");
-                }
 
-                // Load the original PDF using pdf-lib
-                const pdfDoc = await PDFDocument.load(originalPdfBytes);
-                const pages = pdfDoc.getPages();
+            // If token expired (401), try to refresh it
+            if (response.status === 401 && clientId && clientSecret) {
+                console.log("Access token expired, attempting to refresh...");
+                currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
 
-                // Get all filled signature fields across all signatures
-                const filledFieldsNew = signatureData
-                    .flatMap(sig => sig.fields || [])
-                    .filter(field => field.filled && field.imageUrl);
-
-                // Process each signature field
-                for (const field of filledFieldsNew) {
-                    try {
-                        const pageIndex = field.pageNumber - 1; // Convert to 0-indexed
-                        if (pageIndex < 0 || pageIndex >= pages.length) {
-                            console.warn(`Invalid page number ${field.pageNumber} for field ${field.index}`);
-                            continue;
-                        }
-
-                        const page = pages[pageIndex];
-                        const { width: pageWidth, height: pageHeight } = page.getSize();
-
-                        // Convert base64 image to bytes
-                        const imageBytes = await fetch(field.imageUrl).then((res) => res.arrayBuffer());
-
-                        // Embed image in PDF (supports PNG and JPEG)
-                        let image;
-                        if (field.imageUrl.startsWith("data:image/png")) {
-                            image = await pdfDoc.embedPng(imageBytes);
-                        } else if (field.imageUrl.startsWith("data:image/jpeg") || field.imageUrl.startsWith("data:image/jpg")) {
-                            image = await pdfDoc.embedJpg(imageBytes);
-                        } else {
-                            // Default to PNG
-                            image = await pdfDoc.embedPng(imageBytes);
-                        }
-
-                        // Use percentage-based coordinates from the field data
-                        const pdfX = (field.xPercent / 100) * pageWidth;
-                        const pdfY = pageHeight - ((field.yPercent / 100) * pageHeight) - ((field.heightPercent / 100) * pageHeight);
-                        const pdfWidth = (field.widthPercent / 100) * pageWidth;
-                        const pdfHeight = (field.heightPercent / 100) * pageHeight;
-
-                        // Draw the image on the page
-                        page.drawImage(image, {
-                            x: pdfX,
-                            y: pdfY,
-                            width: pdfWidth,
-                            height: pdfHeight,
-                        });
-                    } catch (error) {
-                        console.error("Error adding signature to PDF:", field.index, error);
-                    }
-                }
-
-                // Get all filled fields (check both filled flag and value presence)
-                const filledFields = fieldData.filter((field) => {
-                    const hasValue = field.value !== null && field.value !== undefined && field.value !== "";
-                    // For checkbox, false is a valid value
-                    if (field.fieldType === "checkbox") {
-                        return hasValue || field.value === false;
-                    }
-                    return (field.filled || hasValue) && hasValue;
-                });
-
-                // Embed font for text rendering
-                const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-
-                // Process each form field
-                for (const field of filledFields) {
-                    try {
-                        const pageIndex = field.pageNumber - 1; // Convert to 0-indexed
-                        if (pageIndex < 0 || pageIndex >= pages.length) {
-                            console.warn(`Invalid page number ${field.pageNumber} for field ${field.index}`);
-                            continue;
-                        }
-
-                        const page = pages[pageIndex];
-                        const { width: pageWidth, height: pageHeight } = page.getSize();
-
-                        // Use percentage-based coordinates from the field data
-                        const pdfX = (field.xPercent / 100) * pageWidth;
-                        const pdfY = pageHeight - ((field.yPercent / 100) * pageHeight) - ((field.heightPercent / 100) * pageHeight);
-                        const pdfWidth = (field.widthPercent / 100) * pageWidth;
-                        const pdfHeight = (field.heightPercent / 100) * pageHeight;
-
-                        // Format the value based on field type
-                        let displayValue = "";
-                        let isCheckbox = false;
-                        let checkboxChecked = false;
-                        
-                        if (field.fieldType === "checkbox") {
-                            isCheckbox = true;
-                            // Handle both boolean and string values
-                            checkboxChecked = field.value === true || field.value === "true" || field.value === "True";
-                        } else if (field.fieldType === "date" && field.value) {
-                            displayValue = new Date(field.value).toLocaleDateString();
-                        } else {
-                            displayValue = String(field.value || "");
-                        }
-
-                        // Draw checkbox
-                        if (isCheckbox) {
-                            const checkboxSize = Math.min(pdfWidth, pdfHeight) * 0.8;
-                            const checkboxX = pdfX + (pdfWidth - checkboxSize) / 2;
-                            const checkboxY = pdfY + (pdfHeight - checkboxSize) / 2;
-                            
-                            // Draw checkbox border
-                            page.drawRectangle({
-                                x: checkboxX,
-                                y: checkboxY,
-                                width: checkboxSize + 5,
-                                height: checkboxSize,
-                                borderColor: rgb(0, 0, 0),
-                                borderWidth: 2,
-                            });
-                            
-                            // Draw checkmark if checked
-                            if (checkboxChecked) {
-                                const path = "M2 12 L10 20 L22 4";
-                                page.drawSvgPath(path, {
-                                    x: checkboxX + (checkboxSize * 0.1),
-                                    y: checkboxY + (checkboxSize * 0.1) + 22,
-                                    width: checkboxSize - 12,
-                                    height: checkboxSize - 7,
-                                    borderColor: rgb(0, 0, 0),
-                                    borderWidth: 1.5,
-                                });
-                            }
-                        } else if (displayValue) {
-                            // Draw text field
-                            // Calculate font size based on field height (leave some padding)
-                            const fontSize = Math.min(pdfHeight * 0.6, 12);
-                            
-                            // Draw background rectangle for better visibility
-                            // page.drawRectangle({
-                            //     x: pdfX,
-                            //     y: pdfY,
-                            //     width: pdfWidth,
-                            //     height: pdfHeight,
-                            //     color: rgb(0.95, 0.95, 0.95),
-                            //     borderColor: rgb(0.7, 0.7, 0.7),
-                            //     borderWidth: 1,
-                            // });
-
-                            // Draw the text
-                            page.drawText(displayValue, {
-                                x: pdfX + 4,
-                                y: pdfY + (pdfHeight / 2) - (fontSize / 3),
-                                size: fontSize,
-                                font: font,
-                                color: rgb(0, 0, 0),
-                                maxWidth: pdfWidth - 8,
-                            });
-                        }
-                    } catch (error) {
-                        console.error("Error adding form field to PDF:", field.index, error);
-                    }
-                }
-
-				// Build audit report data from Salesforce record and signatures
-                try {
-                    await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages);
-                } catch (e) {
-                    console.warn("Failed to append audit report page:", e);
-                }
-
-
-				// Merge audit report HTML as extra pages
-                const htmlPdfBytes = await convertAuditHTMLToPDF();
-                const finalDoc = await PDFDocument.load(await pdfDoc.save());
-                const extraDoc = await PDFDocument.load(htmlPdfBytes);
-                const htmlPages = await finalDoc.copyPages(extraDoc, extraDoc.getPageIndices());
-                htmlPages.forEach(p => finalDoc.addPage(p));
-
-                const pdfBytes = await finalDoc.save();
-
-
-                // Upload to Salesforce if config is available
-                if (salesforceConfig) {
-                    // Determine FirstPublishLocationId
-                    const firstPublishLocationId = documentRecord?.Record_Id__c || salesforceConfig.recordId;
-
-                    // Check if all fields are filled before uploading
-                    const allFieldsFilled = signatureData.every(sig => 
-                        (sig.fields || []).every(field => field.filled)
-                    );
-
-                    // Upload signed PDF as ContentVersion
-                    if (allFieldsFilled) {
-                        await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
-                    }
-
-                    // Update Document record with signature and field data
-                    await updateDocumentRecord(salesforceConfig.recordId, signatureData, fieldData, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
-
-                    // Mark as submitted
-                    setIsSubmitted(true);
-
-                    // Show success toast
-                    setToast({
-                        isVisible: true,
-                        message: "All signatures completed successfully! Signed PDF uploaded to Salesforce.",
-                        type: "success",
-                    });
-                } else {
-                    // Fallback: Download the PDF if no Salesforce config
-                    const blob = new Blob([pdfBytes], { type: "application/pdf" });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    link.href = url;
-                    link.download = pdfFile.replace(".pdf", "") + "-signed.pdf";
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
-
-                    // Mark as submitted
-                    setIsSubmitted(true);
-
-                    // Show success toast
-                    setToast({
-                        isVisible: true,
-                        message: "All signatures completed successfully! Signed PDF downloaded.",
-                        type: "success",
-                    });
-                }
-            } catch (error) {
-                console.error("Error in save and submit:", error);
-                setToast({
-                    isVisible: true,
-                    message: `Error creating signed PDF: ${error.message}`,
-                    type: "error",
+                // Retry the request with new token
+                response = await fetch(apiUrl, {
+                    method: "PATCH",
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        Signing_Details__c: signatureDataJson,
+                    }),
                 });
             }
+
+            if (!response.ok) {
+                throw new Error(`Failed to update Document record: ${response.status} ${response.statusText}`);
+            }
+
+            return true;
+        } catch (error) {
+            console.error("Error updating Document record:", error);
+            throw error;
+        }
+    };
+
+    // Create or update Signature__c records
+    const upsertSignatureRecords = async (documentId, signatureData, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+        try {
+            let currentToken = accessToken;
+
+            // Extract all fields with imageUrl from signatureData
+            const fieldsWithImages = [];
+            signatureData.forEach((sig) => {
+                if (sig.fields && Array.isArray(sig.fields)) {
+                    sig.fields.forEach((field) => {
+                        if (field.filled && field.imageUrl) {
+                            // Use composite key: priority_fieldIndex to prevent cross-priority contamination
+                            // Ensure both values are converted to strings
+                            const compositeKey = `${String(sig.priority)}_${String(field.index)}`;
+                            fieldsWithImages.push({
+                                fieldIndex: compositeKey, // Store as priority_fieldIndex
+                                imageUrl: field.imageUrl,
+                                ipAddress: field.ipAddress || "",
+                                timestamp: field.timestamp || field.signedTime || "",
+                            });
+                        }
+                    });
+                }
+            });
+
+            // First, fetch existing Signature__c records to get their IDs
+            const existingRecords = await fetchSignatureRecords(documentId, currentToken, instanceUrl, clientId, clientSecret);
+            const existingMap = new Map();
+            existingRecords.forEach((record) => {
+                existingMap.set(record.Field_Index__c, record.Id);
+            });
+
+            // Prepare records for upsert (create or update)
+            const recordsToUpsert = [];
+            for (const field of fieldsWithImages) {
+                const signingDetails = JSON.stringify({
+                    imageUrl: field.imageUrl,
+                    ipAddress: field.ipAddress,
+                    timestamp: field.timestamp,
+                });
+
+                const recordData = {
+                    Field_Index__c: field.fieldIndex,
+                    Signing_Details__c: signingDetails,
+                };
+
+                // If record exists, add Id for update
+                const existingId = existingMap.get(field.fieldIndex);
+                if (existingId) {
+                    recordData.Id = existingId;
+                } else {
+                    recordData.Document__c = documentId;
+                }
+
+                recordsToUpsert.push(recordData);
+            }
+
+            if (recordsToUpsert.length === 0) {
+                return true;
+            }
+
+            // Use Promise.all to create/update records individually
+            const upsertPromises = recordsToUpsert.map(async (record) => {
+                const isUpdate = !!record.Id;
+                const method = isUpdate ? "PATCH" : "POST";
+                console.log("isUpdate==> ", isUpdate);
+                const apiUrl = isUpdate ? `${instanceUrl}/services/data/v65.0/sobjects/Signature__c/${record.Id}` : `${instanceUrl}/services/data/v65.0/sobjects/Signature__c`;
+
+                // Remove Id from body if updating (Id is in URL)
+                const body = isUpdate ? { ...record } : record;
+                if (isUpdate) {
+                    delete body.Id;
+                }
+
+                let response = await fetch(apiUrl, {
+                    method: method,
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(body),
+                });
+
+                // If token expired (401), try to refresh it
+                if (response.status === 401 && clientId && clientSecret) {
+                    console.log("Access token expired, attempting to refresh...");
+                    currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
+
+                    // Retry the request with new token
+                    response = await fetch(apiUrl, {
+                        method: method,
+                        headers: {
+                            Authorization: `Bearer ${currentToken}`,
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify(body),
+                    });
+                }
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Failed to ${isUpdate ? "update" : "create"} Signature record (Field Index: ${record.Field_Index__c}): ${response.status} ${response.statusText} - ${errorText}`);
+                }
+
+                if (response.status === 201 || response.status === 204) {
+                    return { success: true };
+                }
+
+                const result = await response.json();
+                return result;
+            });
+
+            // Execute all upsert operations in parallel
+            await Promise.all(upsertPromises);
+            return true;
+        } catch (error) {
+            console.error("Error upserting Signature records:", error);
+            throw error;
+        }
+    };
+
+    // Fetch all Signature__c records for a document
+    const fetchSignatureRecords = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+        try {
+            let currentToken = accessToken;
+            const query = `SELECT Id, Field_Index__c, Signing_Details__c FROM Signature__c WHERE Document__c = '${documentId}'`;
+
+            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
+
+            let response = await fetch(apiUrl, {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${currentToken}`,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            // If token expired (401), try to refresh it
+            if (response.status === 401 && clientId && clientSecret) {
+                console.log("Access token expired, attempting to refresh...");
+                currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
+
+                // Retry the request with new token
+                response = await fetch(apiUrl, {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                        "Content-Type": "application/json",
+                    },
+                });
+            }
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch Signature records: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return data.records || [];
+        } catch (error) {
+            console.error("Error fetching Signature records:", error);
+            return [];
         }
     };
 
@@ -1525,7 +1421,7 @@ function App() {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    Status__c: "Rejected"
+                    Status__c: "Rejected",
                 }),
             });
 
@@ -1542,7 +1438,7 @@ function App() {
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
-                        Status__c: "Rejected"
+                        Status__c: "Rejected",
                     }),
                 });
             }
@@ -1556,16 +1452,68 @@ function App() {
             setToast({
                 isVisible: true,
                 message: "Document has been rejected.",
-                type: "error"
+                type: "error",
             });
-
         } catch (error) {
             console.error("Reject error:", error);
             setToast({
                 isVisible: true,
                 message: `Error rejecting document: ${error.message}`,
-                type: "error"
+                type: "error",
             });
+        }
+    };
+
+    // Refresh access token using client credentials
+    const refreshAccessToken = async (instanceUrl, clientId, clientSecret) => {
+        try {
+            const tokenUrl = `${instanceUrl}/services/oauth2/token`;
+            const params = new URLSearchParams({
+                grant_type: "client_credentials",
+                client_id: clientId,
+                client_secret: clientSecret,
+            });
+
+            const response = await fetch(tokenUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: params,
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to refresh token: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            const newToken = data.access_token;
+
+            // Persist the refreshed token in the URL and component state so reloads keep using it
+            if (newToken) {
+                updateUrlAccessToken(newToken);
+            }
+
+            return newToken;
+        } catch (error) {
+            console.error("Error refreshing access token:", error);
+            throw error;
+        }
+    };
+
+    // Refresh access token using client credentials
+    // Helper to update access token in the url and component state so refresh persists across reloads
+    const updateUrlAccessToken = (token) => {
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set("act", token);
+            // Replace the current history entry without reloading
+            window.history.replaceState({}, document.title, url.toString());
+
+            // Keep salesforceConfig state in sync if present
+            setSalesforceConfig((prev) => (prev ? { ...prev, accessToken: token } : prev));
+        } catch (err) {
+            console.warn("Could not update URL access token:", err);
         }
     };
 
@@ -1578,20 +1526,14 @@ function App() {
     // Check if Save & Submit button should be shown
     const shouldShowSaveButton = () => {
         // If already submitted in this session, hide button
-        
         if (isSubmitted) {
-            console.log(1);
             return false;
         }
 
         // Get all fields for current priority from all signatures
-        const currentPriorityFields = signatureData
-            .filter((sig) => sig.priority == urlPriority)
-            .flatMap(sig => sig.fields || []);
-            
-        const initialPriorityFields = initialSignatureData
-            .filter((sig) => sig.priority == urlPriority)
-            .flatMap(sig => sig.fields || []);
+        const currentPriorityFields = signatureData.filter((sig) => sig.priority == urlPriority).flatMap((sig) => sig.fields || []);
+
+        const initialPriorityFields = initialSignatureData.filter((sig) => sig.priority == urlPriority).flatMap((sig) => sig.fields || []);
 
         // If no fields for current priority, hide button
         if (currentPriorityFields.length === 0) {
@@ -1600,7 +1542,7 @@ function App() {
 
         // Check if all fields for current priority were already filled initially
         const allInitiallyFilled = initialPriorityFields.every((field) => field.filled);
-        
+
         if (allInitiallyFilled) {
             // Check if there are any changes from initial state
             const hasChanges = currentPriorityFields.some((currentField) => {
@@ -1608,7 +1550,7 @@ function App() {
                 // Check if imageUrl has changed
                 return !initialField || currentField.imageUrl !== initialField.imageUrl;
             });
-            
+
             // Only show button if there are changes
             return hasChanges;
         }
@@ -1628,6 +1570,79 @@ function App() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [totalPages]);
 
+    const renderAllPages = async (pdf) => {
+        const numPages = pdf.numPages;
+        const dimensions = [];
+
+        // Get container width for responsive sizing
+        const containerWidth = 800; // Fixed width for consistency
+
+        for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+            const canvas = canvasRefsArray.current[pageNum - 1];
+            if (canvas) {
+                const dims = await renderPage(pdf, pageNum, canvas, containerWidth);
+                dimensions.push(dims);
+            }
+        }
+    };
+
+    const renderPage = async (pdf, pageNumber, canvas, targetWidth) => {
+        if (!canvas) {
+            console.error("Canvas not available for page", pageNumber);
+            return null;
+        }
+
+        const page = await pdf.getPage(pageNumber);
+        const originalViewport = page.getViewport({ scale: 1 });
+
+        const pageWidth = originalViewport.width || A4_WIDTH;
+        const calculatedScale = targetWidth / pageWidth;
+
+        const viewport = page.getViewport({ scale: calculatedScale });
+        const context = canvas.getContext("2d");
+
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        const renderContext = {
+            canvasContext: context,
+            viewport: viewport,
+        };
+
+        await page.render(renderContext).promise;
+
+        // Return actual dimensions for this page
+        return {
+            width: viewport.width,
+            height: viewport.height,
+            scale: calculatedScale,
+        };
+    };
+
+    const renderThumbnailPages = async (pdf) => {
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const canvas = canvasRefsArray.current[`thumb-${pageNum - 1}`];
+            if (!canvas) continue;
+
+            try {
+                const page = await pdf.getPage(pageNum);
+
+                const viewport = page.getViewport({ scale: 0.25 }); // Small thumbnail scale
+                const ctx = canvas.getContext("2d");
+
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+
+                await page.render({
+                    canvasContext: ctx,
+                    viewport: viewport,
+                }).promise;
+            } catch (error) {
+                console.warn("Thumbnail render failed:", error);
+            }
+        }
+    };
+
     const getLocationLive = async () => {
         try {
             // Try GPS first
@@ -1642,9 +1657,7 @@ function App() {
             const { latitude, longitude } = coords.coords;
 
             // Reverse geocode to city/state/country
-            const res = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
-            );
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
             const data = await res.json();
             const address = data.address;
 
@@ -1685,27 +1698,14 @@ function App() {
             {isExpired && (
                 <div className="expired-card">
                     <div className="expired-icon">
-                    <svg
-                        className="expired-svg"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                        />
-                    </svg>
+                        <svg className="expired-svg" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
                     </div>
 
                     <h3 className="expired-title">Document Expired</h3>
 
-                    <p className="expired-message">
-                    This document has expired and is no longer available for signing.
-                    </p>
+                    <p className="expired-message">This document has expired and is no longer available for signing.</p>
 
                     <p className="expired-hint" style={{ fontWeight: 500, marginTop: "12px" }}>
                         Please contact the document owner:
@@ -1724,7 +1724,7 @@ function App() {
                 <>
                     <div className="pdf-container">
                         <div className="heading">
-                            <h1 class="document-header">Send Document for Signing</h1>
+                            <h1 className="document-header">Send Document for Signing</h1>
                         </div>
                         <div className="content-section">
                             <div className="preview-section">
@@ -1732,9 +1732,10 @@ function App() {
                                     {Array.from({ length: totalPages }, (_, index) => {
                                         const pageNumber = index + 1;
                                         return (
-                                            <div key={index} className="preview-page-wrapper" onClick={() => handleScrollToPage(pageNumber)} >
+                                            <div key={index} className="preview-page-wrapper" onClick={() => handleScrollToPage(pageNumber)}>
                                                 <div className="preview-canvas-wrapper">
-                                                    <canvas ref={(el) => (canvasRefsArray.current[`thumb-${index}`] = el)} className="preview-thumbnail"/>                                                </div>
+                                                    <canvas ref={(el) => (canvasRefsArray.current[`thumb-${index}`] = el)} className="preview-thumbnail" />{" "}
+                                                </div>
                                                 <div className="preview-page-number">{pageNumber}</div>
                                             </div>
                                         );
@@ -1743,39 +1744,40 @@ function App() {
                                 {shouldShowSaveButton() && (
                                     <div className="bottom-bar">
                                         <div className="bottom-bar-left">
-                                            <input
-                                                type="checkbox"
-                                                checked={initialAccepted}
-                                                onChange={(e) => setInitialAccepted(e.target.checked)}
-                                                style={{ cursor: 'pointer', width: '18px', height: '18px' }}
-                                            />
-                                            <span> I have accept the <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">t & c ↗</a></span>
+                                            <input type="checkbox" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px" }} />
+                                            <span>
+                                                {" "}
+                                                I accept the{" "}
+                                                <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">
+                                                    t & c ↗
+                                                </a>
+                                            </span>
                                         </div>
                                         <div className="bottom-bar-right">
-                                                <div className="action-btns">
-                                                    <button className="reject-btn" onClick={handleReject}>
-                                                        Reject
-                                                    </button>
-                                                    <button className="save-submit-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted}>
-                                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white"/>
-                                                        </svg>
-                                                        Submit
-                                                    </button>
-                                                </div>
+                                            <div className="action-btns">
+                                                <button className="reject-btn" onClick={handleReject}>
+                                                    Reject
+                                                </button>
+                                                <button className="save-submit-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted}>
+                                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                        <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white" />
+                                                    </svg>
+                                                    Submit
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
                             </div>
                             <div className="canvas-container">
-                                <div class="pdf-header">
+                                <div className="pdf-header">
                                     <h4>Document Preview</h4>
                                     <span> {totalPages} pages</span>
-                                    <div class="pdf-file-info">
+                                    <div className="pdf-file-info">
                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                             <path d="M6 3C4.89688 3 4 3.89688 4 5V17C4 18.1031 4.89688 19 6 19H8.5V15.5C8.5 14.3969 9.39687 13.5 10.5 13.5H16V8.32812C16 7.79688 15.7906 7.2875 15.4156 6.9125L12.0844 3.58438C11.7094 3.20938 11.2031 3 10.6719 3H6ZM14.1719 8.5H11.25C10.8344 8.5 10.5 8.16563 10.5 7.75V4.82812L14.1719 8.5ZM10.5 14.875C10.1562 14.875 9.875 15.1562 9.875 15.5V19.5C9.875 19.8438 10.1562 20.125 10.5 20.125C10.8438 20.125 11.125 19.8438 11.125 19.5V18.625H11.5C12.5344 18.625 13.375 17.7844 13.375 16.75C13.375 15.7156 12.5344 14.875 11.5 14.875H10.5ZM11.5 17.375H11.125V16.125H11.5C11.8438 16.125 12.125 16.4062 12.125 16.75C12.125 17.0938 11.8438 17.375 11.5 17.375ZM14.5 14.875C14.1562 14.875 13.875 15.1562 13.875 15.5V19.5C13.875 19.8438 14.1562 20.125 14.5 20.125H15.5C16.3969 20.125 17.125 19.3969 17.125 18.5V16.5C17.125 15.6031 16.3969 14.875 15.5 14.875H14.5ZM15.125 18.875V16.125H15.5C15.7063 16.125 15.875 16.2937 15.875 16.5V18.5C15.875 18.7063 15.7063 18.875 15.5 18.875H15.125ZM17.875 15.5V19.5C17.875 19.8438 18.1562 20.125 18.5 20.125C18.8438 20.125 19.125 19.8438 19.125 19.5V18.125H20C20.3438 18.125 20.625 17.8438 20.625 17.5C20.625 17.1562 20.3438 16.875 20 16.875H19.125V16.125H20C20.3438 16.125 20.625 15.8438 20.625 15.5C20.625 15.1562 20.3438 14.875 20 14.875H18.5C18.1562 14.875 17.875 15.1562 17.875 15.5Z" fill="#FF8282" />
                                         </svg>
-                                        <span>{documentRecord?.Document_Name__c || 'document'}</span>
+                                        <span>{documentRecord?.Document_Name__c || "document"}</span>
                                     </div>
                                 </div>
                                 {Array.from({ length: totalPages }, (_, index) => {
@@ -1785,7 +1787,7 @@ function App() {
                                             {/* <div className="page-number">Page {pageNumber}</div> */}
                                             <div className="canvas-wrapper">
                                                 <canvas ref={(el) => (canvasRefsArray.current[index] = el)}></canvas>
-                                                {signatureData.length > 0 && <SignatureOverlay pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onDelete={handleSignatureDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} />}
+                                                {signatureData.length > 0 && <SignatureOverlay pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} />}
                                                 {fieldData.length > 0 && <FieldOverlay pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} />}
                                             </div>
                                         </div>
@@ -1793,16 +1795,17 @@ function App() {
                                 })}
                             </div>
                         </div>
-                        {shouldShowSaveButton() && (        
+                        {shouldShowSaveButton() && (
                             <div className="footer">
                                 <div className="bottom-bar-left">
-                                    <input
-                                        type="checkbox"
-                                        checked={initialAccepted}
-                                        onChange={(e) => setInitialAccepted(e.target.checked)}
-                                        style={{ cursor: 'pointer', width: '18px', height: '18px' }}
-                                    />
-                                    <span> I have accept the <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">t & c ↗</a></span>
+                                    <input type="checkbox" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px" }} />
+                                    <span>
+                                        {" "}
+                                        I accept the{" "}
+                                        <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">
+                                            t & c ↗
+                                        </a>
+                                    </span>
                                 </div>
                                 <div className="bottom-bar-right">
                                     <div className="action-btns">
@@ -1811,7 +1814,7 @@ function App() {
                                         </button>
                                         <button className="save-submit-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted}>
                                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white"/>
+                                                <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white" />
                                             </svg>
                                             Submit
                                         </button>
@@ -1823,7 +1826,7 @@ function App() {
                 </>
             )}
 
-            {!pdfFile && !loading && !error && !isExpired &&(
+            {!pdfFile && !loading && !error && !isExpired && (
                 <div className="placeholder">
                     <div className="placeholder-content">
                         <p>The URL is incorrect. Please contact the owner or sender of this link.</p>
