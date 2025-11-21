@@ -40,6 +40,9 @@ function App() {
     const [originalPdfBytes, setOriginalPdfBytes] = useState(null);
     const [initialSignatureData, setInitialSignatureData] = useState([]);
     const [orgIdState, setOrgIdState] = useState(null);
+    const [userIpAddress, setUserIpAddress] = useState(null);
+    const [userLocation, setUserLocation] = useState(null);
+    const [userMacAddress, setUserMacAddress] = useState(null);
     const canvasRefsArray = useRef([]);
     const pdfDocRef = useRef(null);
 
@@ -64,6 +67,33 @@ function App() {
                 .catch(() => setOrgIdState(null));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Fetch IP address, location, and MAC address when the component mounts
+    useEffect(() => {
+        const fetchUserInfo = async () => {
+            try {
+                // Fetch IP address
+                const ipRes = await fetch("https://api.ipify.org?format=json");
+                const ipData = await ipRes.json();
+                setUserIpAddress(ipData.ip);
+
+                // Fetch location
+                const location = await getLocationLive();
+                setUserLocation(location);
+
+                // Fetch MAC address (browser-based fingerprint as proxy)
+                const macAddress = await getMacAddress();
+                setUserMacAddress(macAddress);
+            } catch (error) {
+                console.warn("Could not fetch user info:", error);
+                setUserIpAddress("Unknown IP");
+                setUserLocation("Location Unavailable");
+                setUserMacAddress("Unavailable");
+            }
+        };
+
+        fetchUserInfo();
     }, []);
 
     // Main function to fetch Document and then PDF
@@ -253,12 +283,21 @@ function App() {
                             }
                             
                             if (sigData) {
+                                // For checkboxes, value can be false which is valid
+                                const fieldType = (field.fieldType || field.type || "").toLowerCase();
+                                const hasValue = sigData.value !== undefined && sigData.value !== null && (sigData.value !== "" || fieldType === "checkbox");
+                                
                                 return {
                                     ...field,
                                     imageUrl: sigData.imageUrl || null,
                                     ipAddress: sigData.ipAddress || field.ipAddress || "",
-                                    timestamp: sigData.timestamp || field.timestamp || "",
-                                    filled: Boolean(sigData.imageUrl),
+                                    timestamp: sigData.timestamp || field.timestamp || field.timeStamp || "",
+                                    deviceInfo: sigData.deviceInfo || field.deviceInfo || "",
+                                    locationInfo: sigData.locationInfo || field.locationInfo || "",
+                                    macAddress: sigData.macAddress || field.macAddress || "",
+                                    signatureType: sigData.signatureType || field.signatureType || "",
+                                    value: sigData.value !== undefined && sigData.value !== null ? sigData.value : field.value,
+                                    filled: Boolean(sigData.imageUrl || hasValue),
                                 };
                             }
                             return field;
@@ -379,82 +418,60 @@ function App() {
             return;
         }
 
-        try {
-            // 1. Get user's public IP address
-            const ipRes = await fetch("https://api.ipify.org?format=json");
-            const ipData = await ipRes.json();
-            const ipAddress = ipData.ip;
+        // Use pre-fetched IP, location, and MAC address data
+        const ipAddress = userIpAddress || "Unknown IP";
+        const locationInfo = userLocation || "Location Unavailable";
+        const macAddress = userMacAddress || "Unavailable";
 
-            // Format timestamp as "MM dd yyyy, hh:mm:ss AM/PM TimeZone"
-            const now = new Date();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const year = now.getFullYear();
-            const timeString = now.toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
-                minute: '2-digit', 
-                second: '2-digit', 
-                hour12: true 
-            });
-            // Get timezone abbreviation
-            const timeZone = now.toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop();
-            const timeStamp = `${month}/${day}/${year}, ${timeString} ${timeZone}`;
-            
-            const userAgent = navigator.userAgent || "Unknown Device";
+        // Format timestamp as "MM dd yyyy, hh:mm:ss AM/PM TimeZone"
+        const now = new Date();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const year = now.getFullYear();
+        const timeString = now.toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            second: '2-digit', 
+            hour12: true 
+        });
+        // Get timezone abbreviation
+        const timeZone = now.toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop();
+        const timeStamp = `${month}/${day}/${year}, ${timeString} ${timeZone}`;
+        
+        const userAgent = navigator.userAgent || "Unknown Device";
 
-            const osMatch = userAgent.match(/\(([^;]+);/);
-            const osVersion = osMatch ? osMatch[1].trim() : "Unknown OS";
+        const osMatch = userAgent.match(/\(([^;]+);/);
+        const osVersion = osMatch ? osMatch[1].trim() : "Unknown OS";
 
-            const chromeMatch = userAgent.match(/Chrome\/([\d.]+)/);
-            const chromeVersion = chromeMatch ? chromeMatch[1] : "Unknown Chrome Version";
+        const chromeMatch = userAgent.match(/Chrome\/([\d.]+)/);
+        const chromeVersion = chromeMatch ? chromeMatch[1] : "Unknown Chrome Version";
 
-            const deviceInfo = `${osVersion} Chrome/${chromeVersion}`;
+        const deviceInfo = `${osVersion} Chrome/${chromeVersion}`;
 
-            const locationInfo = await getLocationLive();
-            const signerObject = signature._parentSigner;
+        const signerObject = signature._parentSigner;
 
-            let updatedSignatures = updateSignatureWithImage(signatureData, signature.index, imageData, signature.type, signerObject);
-            
-            updatedSignatures = updatedSignatures.map(sig => {
-                // Only update the fields if this is the correct signer
-                if (sig.fields && Array.isArray(sig.fields)) {
-                    const isCorrectSigner = signerObject && (sig.priority === signerObject.priority || sig.email === signerObject.email);
-                    if (isCorrectSigner) {
-                        return {
-                            ...sig,
-                            fields: sig.fields.map(field => {
-                                if (field.index === signature.index) {
-                                    return {
-                                        ...field,
-                                        ipAddress,
-                                        deviceInfo,
-                                        locationInfo,
-                                        timeStamp,
-                                        signatureType,      
-                                        filled: true        
-                                    };
-                                }
-                                return field;
-                            })
-                        };
-                    }
-                }
-                return sig;
-            });
+        // Create metadata object with all signature details
+        const metadata = {
+            ipAddress,
+            deviceInfo,
+            locationInfo,
+            macAddress,
+            timeStamp,
+            signatureType
+        };
 
-            setSignatureData(updatedSignatures);
-            setSessionSignedKeys((prev) => new Set(prev).add(signature.index));
-        } catch (e) {
-            console.warn("Could not fetch IP address:", e);
-            // Fallback: Just update without IP
-            
-            // Get the parent signer object (attached in handleSignatureClick)
-            const signerObject = signature._parentSigner;
-            
-            const updatedSignatures = updateSignatureWithImage(signatureData, signature.index, imageData, signature.type, signerObject);
-            setSignatureData(updatedSignatures);
-            setSessionSignedKeys((prev) => new Set(prev).add(signature.index));
-        }
+        // Pass metadata to updateSignatureWithImage function
+        const updatedSignatures = updateSignatureWithImage(
+            signatureData, 
+            signature.index, 
+            imageData, 
+            signature.type, 
+            signerObject,
+            metadata
+        );
+
+        setSignatureData(updatedSignatures);
+        setSessionSignedKeys((prev) => new Set(prev).add(signature.index));
     };
 
     // Handle field modal close
@@ -677,8 +694,8 @@ function App() {
                     }
                 }
 
-                // Get all filled fields (check both filled flag and value presence)
-                const filledFields = fieldData.filter((field) => {
+                // Get all filled fields from both flat fieldData and nested signatureData structures
+                const flatFilledFields = fieldData.filter((field) => {
                     const hasValue = field.value !== null && field.value !== undefined && field.value !== "";
                     // For checkbox, false is a valid value
                     if (field.fieldType === "checkbox") {
@@ -686,6 +703,27 @@ function App() {
                     }
                     return (field.filled || hasValue) && hasValue;
                 });
+
+                // Get filled fields from nested structure (inside signatureData)
+                const nestedFilledFields = signatureData.flatMap((sig) => 
+                    (sig.fields || []).filter((field) => {
+                        // Check if it's a field type (not signature)
+                        const fieldType = (field.fieldType || field.type || "").toLowerCase();
+                        const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(fieldType);
+                        
+                        if (!isFieldType) return false;
+                        
+                        const hasValue = field.value !== null && field.value !== undefined && field.value !== "";
+                        // For checkbox, false is a valid value
+                        if (fieldType === "checkbox") {
+                            return hasValue || field.value === false;
+                        }
+                        return (field.filled || hasValue) && hasValue;
+                    })
+                );
+
+                // Combine both flat and nested fields
+                const filledFields = [...flatFilledFields, ...nestedFilledFields];
 
                 // Embed font for text rendering
                 const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -713,10 +751,12 @@ function App() {
                         let isCheckbox = false;
                         let checkboxChecked = false;
 
-                        if (field.fieldType === "checkbox") {
+                        const fieldType = (field.fieldType || field.type || "").toLowerCase();
+
+                        if (fieldType === "checkbox") {
                             isCheckbox = true;
                             checkboxChecked = field.value === true || field.value === "true" || field.value === "True";
-                        } else if (field.fieldType === "date" && field.value) {
+                        } else if (fieldType === "date" && field.value) {
                             displayValue = new Date(field.value).toLocaleDateString();
                         } else {
                             displayValue = String(field.value || "");
@@ -753,7 +793,7 @@ function App() {
                         } else if (displayValue) {
                             // Draw text field
                             // Calculate font size based on field height (leave some padding)
-                            const fontSize = Math.min(pdfHeight * 0.6, 12);
+                            const fontSize = 12;
 
                             // Draw background rectangle for better visibility
                             // page.drawRectangle({
@@ -769,8 +809,9 @@ function App() {
                             // Draw the text
                             page.drawText(displayValue, {
                                 x: pdfX + 4,
-                                y: pdfY + pdfHeight / 2 - fontSize / 3,
+                                y: pdfY + pdfHeight / 2 + 10,
                                 size: fontSize,
+                                lineHeight: fontSize * 1.25,
                                 font: font,
                                 color: rgb(0, 0, 0),
                                 maxWidth: pdfWidth - 8,
@@ -780,7 +821,6 @@ function App() {
                         console.error("Error adding form field to PDF:", field.index, error);
                     }
                 }
-
                 // Build audit report data from Salesforce record and signatures
                 try {
                     await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages);
@@ -991,20 +1031,46 @@ function App() {
         try {
             let currentToken = accessToken;
 
-            // Extract all fields with imageUrl from signatureData
+            // Extract all fields with imageUrl and nested field values from signatureData
             const fieldsWithImages = [];
             signatureData.forEach((sig) => {
                 if (sig.fields && Array.isArray(sig.fields)) {
                     sig.fields.forEach((field) => {
+                        const compositeKey = `${String(sig.priority)}_${String(field.index)}`;
+                        
+                        // Store signature fields with images
                         if (field.filled && field.imageUrl) {
-                            // Use composite key: priority_fieldIndex to prevent cross-priority contamination
-                            // Ensure both values are converted to strings
-                            const compositeKey = `${String(sig.priority)}_${String(field.index)}`;
                             fieldsWithImages.push({
-                                fieldIndex: compositeKey, // Store as priority_fieldIndex
+                                fieldIndex: compositeKey,
                                 imageUrl: field.imageUrl,
                                 ipAddress: field.ipAddress || "",
-                                timestamp: field.timestamp || field.signedTime || "",
+                                timestamp: field.timestamp || field.timeStamp || field.signedTime || "",
+                                deviceInfo: field.deviceInfo || "",
+                                locationInfo: field.locationInfo || "",
+                                macAddress: field.macAddress || "",
+                                signatureType: field.signatureType || "",
+                                fieldType: "",
+                                value: null,
+                            });
+                        }
+                        
+                        // Also store nested text/date/number/email/checkbox fields with values
+                        const fieldType = (field.fieldType || field.type || "").toLowerCase();
+                        const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(fieldType);
+                        const hasValue = field.value !== null && field.value !== undefined && (field.value !== "" || field.value === false);
+                        
+                        if (isFieldType && hasValue && !field.imageUrl) {
+                            fieldsWithImages.push({
+                                fieldIndex: compositeKey,
+                                imageUrl: "",
+                                ipAddress: "",
+                                timestamp: "",
+                                deviceInfo: "",
+                                locationInfo: "",
+                                macAddress: "",
+                                signatureType: "",
+                                fieldType: fieldType,
+                                value: field.value,
                             });
                         }
                     });
@@ -1025,6 +1091,12 @@ function App() {
                     imageUrl: field.imageUrl,
                     ipAddress: field.ipAddress,
                     timestamp: field.timestamp,
+                    deviceInfo: field.deviceInfo,
+                    locationInfo: field.locationInfo,
+                    macAddress: field.macAddress,
+                    signatureType: field.signatureType,
+                    fieldType: field.fieldType || "",
+                    value: field.value !== undefined ? field.value : null,
                 });
 
                 const recordData = {
@@ -1143,6 +1215,7 @@ function App() {
             }
 
             const data = await response.json();
+            console.log("Fetched Signature records:", data);
             return data.records || [];
         } catch (error) {
             console.error("Error fetching Signature records:", error);
@@ -1152,13 +1225,21 @@ function App() {
 
     // Build HTML for audit report
     const generateAuditHTML = async (doc, sigData, orgId, totalPages) => {
-        console.log("Generating audit report HTML with document and signatures:", doc, sigData, orgId, totalPages);
+        console.log("Generating audit report HTML with document and signatures:", doc);
+        console.log("Signature data:", sigData);
 
-        const allFields = sigData.flatMap(s =>(s.fields || []).map(f => ({...f,signerName: s.name || "--",signerEmail: s.email || "--"})));
+
+
+        // Only include signature fields (those with imageUrl), exclude other field types
+        const allFields = sigData.flatMap(s =>
+            (s.fields || [])
+                .filter(f => f.imageUrl) // Only include fields with signature images
+                .map(f => ({...f, signerName: s.name || "--", signerEmail: s.email || "--"}))
+        );
         const signedFields = allFields.filter(f => f.filled);
         const pendingFields = allFields.filter(f => !f.filled);
 
-        console.log("All fields:", allFields);
+        console.log("All signature fields:", allFields);
         console.log("Signed fields:", signedFields);
         console.log("Pending fields:", pendingFields);
 
@@ -1178,21 +1259,9 @@ function App() {
                     -webkit-print-color-adjust: exact;
                     print-color-adjust: exact;
                 }
-
-                @page {
-                    margin: 0;
-                    background: #E5E7EB !important;
-                }
-                body {
-                    margin: 0;
-                    background: #E5E7EB !important;
-                }
-                html {
-                    background: #E5E7EB !important;
-                }
             </style>
 
-            <div style="background:rgb(245,245,245);padding:0 24px 24px 24px;width:100%; font-family:'Manrope', sans-serif;">
+            <div style="background:#FFFFFF;padding:0 24px 24px 24px;width:100%; font-family:'Manrope', sans-serif;">
 
                 
                 <div style="
@@ -1203,7 +1272,7 @@ function App() {
                     height:40px;
                     margin:0 -24px 8px -24px;
                 ">
-                    <h2 style="color:#111; font-weight:700; font-size:18px; margin:0;">Audit Report</h2>
+                    <h2 style="color:#111; font-weight:700; font-size:16px; margin:0;">Audit Report</h2>
                 </div>
 
 
@@ -1233,16 +1302,16 @@ function App() {
                             <td style="text-align:right;color:black; padding-left:18px;">${orgId || ""}</td>
                         </tr>
                         <tr>
-                            <td style="color:gray; padding-right:18px;">Document Owner:</td>
+                            <td style="color:gray; padding-right:18px;">Document Sender:</td>
                             <td style="text-align:right;color:black; padding-right:18px;">${doc.CreatedBy?.Name || ""}</td>
                             
                             <td style="color:gray; padding-right:18px;">Document Status:</td>
                             <td style="text-align:right; padding-left:18px;">
-                                <span style="color:#00BD42; font-weight:600;background:#E0FFEB;padding:3px 8px;border-radius:8px;font-size:11px;">${doc.Status__c || ""}</span>
+                                <span style="color:#00BD42; font-weight:600;background:#E0FFEB;padding:0px 8px 4px 8px;border-radius:8px;font-size:11px;align-items:center;">${doc.Status__c || ""}</span>
                             </td>
                         </tr>
                         <tr>
-                            <td style="color:gray; padding-right:18px;">Doc. Owner Email:</td>
+                            <td style="color:gray; padding-right:18px;">Doc. Sender Email:</td>
                             <td style="text-align:right;color:black; padding-right:18px;">${doc.CreatedBy?.Email || ""}</td>
                             
                             <td style="color:gray; padding-right:18px;">Email Subject:</td>
@@ -1324,11 +1393,10 @@ function App() {
                 ">
                     <h3 style="margin:0 0 10px 0;color:#111;font-weight:600;font-size:15px;margin-left:18px">Signature Events</h3>
 
-                    <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                    <table style="width:100%; border-collapse:collapse; font-size:10px;">
                         <thead>
                             <tr style="background:#F1F3F4; color:#444;">
                                 <th style="padding:6px; width:22%; text-align:center;">SIGNATURE</th>
-                                <th style="padding:6px; width:10%; text-align:center;">TYPE</th>
                                 <th style="padding:6px; width:38%; text-align:center;">SIGNATURE DETAILS</th>
                                 <th style="padding:6px; width:30%; text-align:center;">USER DETAILS</th>
                             </tr>
@@ -1336,29 +1404,58 @@ function App() {
                         <tbody>
                             ${allFields.map(f => `
                             <tr style="border-bottom:1px solid #E2E8F0;">
-                                <td style="padding:8px 0 0 18px; text-align:center;">
+                                <td style="padding:8px 0 8px 18px; text-align:center;">
                                     ${f.imageUrl 
                                         ? `<img src="${f.imageUrl}" 
-                                            style="height:55px;width:110px;border-radius:4px;border:1px solid #CBD5E0;object-fit:contain;background:#fff;" />`
+                                            style="height:55px;width:110px;object-fit:contain;background:#fff;" />`
                                         : `<div style="border:1px solid #CBD5E0;height:35px;width:60px;border-radius:4px;background:#fff;display:flex;align-items:center;justify-content:center;margin:auto;">
                                                 <span style="font-size:11px;color:#555;">#${f.index}</span>
                                         </div>`
                                     }
                                 </td>
-                                <td style="padding:8px; text-align:center;">
-                                    <span style="color:#0066FF; font-weight:600;background:#E0F0FF;padding:3px 8px;border-radius:8px;font-size:11px;">
-                                        ${(f.signatureType || '--').toUpperCase()}
-                                    </span>
+                                <td style="padding:8px; vertical-align:middle;">
+                                    <table style="width:100%; border-collapse:collapse;">
+                                        <tr>
+                                            <td style="color:gray; padding-right:12px; width:80px;">Signed On:</td>
+                                            <td style="color:black;">${f.timestamp || "--"}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="color:gray; padding-right:12px; width:80px;">Device:</td>
+                                            <td style="color:black;">${f.deviceInfo || "--"}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="color:gray; padding-right:12px; width:80px;">Location:</td>
+                                            <td style="color:black;">${f.locationInfo || "--"}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="color:gray; padding-right:12px; width:80px;">Sign Type:</td>
+                                            <td style="color:black;">
+                                                <span style="color:#0066FF; font-weight:600;background:#E0F0FF;padding:0px 8px 4px 8px;border-radius:8px;font-size:9px;">
+                                                    ${(f.signatureType || '--').toUpperCase()}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </table>
                                 </td>
-                                <td style="padding:8px;color:#444;">
-                                    Signed On: ${f.timeStamp || "--"} <br/>
-                                    Device: ${f.deviceInfo || "--"} <br/>
-                                    Location: ${f.locationInfo || "--"}
-                                </td>
-                                <td style="padding:8px;color:#444;">
-                                    Name: ${f.signerName || "--"} <br/>
-                                    Email: ${f.signerEmail || "--"} <br/>
-                                    IP: ${f.ipAddress || "--"}
+                                <td style="padding:8px; vertical-align:middle;">
+                                    <table style="width:100%; border-collapse:collapse;">
+                                        <tr>
+                                            <td style="color:gray; padding-right:12px; width:50px;">Name:</td>
+                                            <td style="color:black;">${f.signerName || "--"}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="color:gray; padding-right:12px; width:50px;">Email:</td>
+                                            <td style="color:black;">${f.signerEmail || "--"}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="color:gray; padding-right:12px; width:50px;">IP:</td>
+                                            <td style="color:black;">${f.ipAddress || "--"}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="color:gray; padding-right:12px; width:50px;">MAC:</td>
+                                            <td style="color:black;">${f.macAddress || "--"}</td>
+                                        </tr>
+                                    </table>
                                 </td>
                             </tr>`).join("")}
                         </tbody>
@@ -1648,8 +1745,9 @@ function App() {
             const coords = await new Promise((resolve, reject) => {
                 if (!navigator.geolocation) return reject("No GPS");
                 navigator.geolocation.getCurrentPosition(resolve, reject, {
-                    enableHighAccuracy: true,
-                    timeout: 4000,
+                    enableHighAccuracy: false, // Changed to false for faster response
+                    timeout: 8000, // Increased timeout
+                    maximumAge: 60000 // Accept cached position up to 1 minute old
                 });
             });
 
@@ -1660,13 +1758,64 @@ function App() {
             const data = await res.json();
             const address = data.address;
 
-            const city = address.state_district || "Unknown City";
+            const city = address.city || address.state_district || address.town || address.village || "Unknown City";
             const state = address.state || "Unknown State";
             const country = address.country || "Unknown Country";
             return `${city}, ${state}, ${country}`;
         } catch (gpsError) {
-            console.warn("GPS failed, fallback to IP:", gpsError);
-            return "Location Unavailable";
+            console.warn("GPS failed, fallback to IP-based location:", gpsError);
+            
+            // Fallback to IP-based geolocation
+            try {
+                const ipGeoRes = await fetch('https://ipapi.co/json/');
+                const ipGeoData = await ipGeoRes.json();
+                
+                if (ipGeoData.city && ipGeoData.region && ipGeoData.country_name) {
+                    return `${ipGeoData.city}, ${ipGeoData.region}, ${ipGeoData.country_name}`;
+                }
+                return "Location Unavailable";
+            } catch (ipError) {
+                console.warn("IP-based location also failed:", ipError);
+                return "Location Unavailable";
+            }
+        }
+    };
+
+    const getMacAddress = async () => {
+        try {
+            // Note: True MAC address cannot be retrieved from browser for security reasons
+            // We'll create a browser fingerprint as a unique identifier instead
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.textBaseline = 'top';
+            ctx.font = '14px Arial';
+            ctx.fillText('Browser Fingerprint', 2, 2);
+            const canvasData = canvas.toDataURL();
+            
+            // Create a hash-like identifier from canvas fingerprint + user agent + screen info
+            const fingerprint = [
+                canvasData.slice(-50),
+                navigator.userAgent,
+                navigator.language,
+                screen.colorDepth,
+                screen.width + 'x' + screen.height,
+                new Date().getTimezoneOffset()
+            ].join('|');
+            
+            // Generate a MAC-like format from the fingerprint
+            let hash = 0;
+            for (let i = 0; i < fingerprint.length; i++) {
+                hash = ((hash << 5) - hash) + fingerprint.charCodeAt(i);
+                hash = hash & hash;
+            }
+            
+            const macLike = Math.abs(hash).toString(16).padStart(12, '0').slice(0, 12);
+            const formatted = macLike.match(/.{1,2}/g).join(':').toUpperCase();
+            
+            return formatted;
+        } catch (error) {
+            console.warn("Could not generate device fingerprint:", error);
+            return "Unavailable";
         }
     };
 
@@ -1689,7 +1838,7 @@ function App() {
             {error && !pdfFile && !isExpired && (
                 <div className="placeholder">
                     <div className="placeholder-content">
-                        <p style={{ color: "#d32f2f" }}>The URL is not right. Please contact the owner or sender of this link.</p>
+                        <p style={{ color: "#d32f2f" }}>The URL is not right. Please contact the sender of this link.</p>
                     </div>
                 </div>
             )}
@@ -1707,7 +1856,7 @@ function App() {
                     <p className="expired-message">This document has expired and is no longer available for signing.</p>
 
                     <p className="expired-hint" style={{ fontWeight: 500, marginTop: "12px" }}>
-                        Please contact the document owner:
+                        Please contact the document sender:
                     </p>
                     <p className="expired-hint" style={{ marginTop: "4px", fontSize: "14px" }}>
                         <strong>{documentRecord?.CreatedBy?.Name || "Unknown User"}</strong>  
@@ -1723,7 +1872,7 @@ function App() {
                 <>
                     <div className="pdf-container">
                         <div className="heading">
-                            <h1 className="document-header">Send Document for Signing</h1>
+                            <h1 className="document-header">Review & Sign Document : {documentRecord?.Document_Name__c || ""}</h1>
                         </div>
                         <div className="content-section">
                             <div className="preview-section">
@@ -1786,8 +1935,8 @@ function App() {
                                             {/* <div className="page-number">Page {pageNumber}</div> */}
                                             <div className="canvas-wrapper">
                                                 <canvas ref={(el) => (canvasRefsArray.current[index] = el)}></canvas>
-                                                {signatureData.length > 0 && <SignatureOverlay pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} />}
-                                                {fieldData.length > 0 && <FieldOverlay pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} />}
+                                                {signatureData.length > 0 && <SignatureOverlay pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} />}
+                                                {fieldData.length > 0 && <FieldOverlay pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} />}
                                             </div>
                                         </div>
                                     );
@@ -1828,7 +1977,7 @@ function App() {
             {!pdfFile && !loading && !error && !isExpired && (
                 <div className="placeholder">
                     <div className="placeholder-content">
-                        <p>The URL is incorrect. Please contact the owner or sender of this link.</p>
+                        <p>The URL is incorrect. Please contact the sender of this link.</p>
                     </div>
                 </div>
             )}

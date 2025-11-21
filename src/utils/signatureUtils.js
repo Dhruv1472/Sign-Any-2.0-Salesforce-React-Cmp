@@ -21,16 +21,16 @@ export const isFieldEntry = (entry) => {
 /**
  * Update signature data when a signature is added
  * Only updates entries that are signatures; optionally restrict by expectedType
- * Now supports nested fields structure
+ * Now supports nested fields structure and metadata storage
  */
-export const updateSignatureWithImage = (signatures, index, imageUrl, expectedType, signerObject = null) => {
+export const updateSignatureWithImage = (signatures, index, imageUrl, expectedType, signerObject = null, metadata = {}) => {
     const expected = normalizeType(expectedType);
     return signatures.map((sig) => {
         // Check if this signature has the index directly
         const sigType = normalizeType(sig.type);
         const typeMatches = expected ? sigType === expected : true;
         if (sig.index === index && isSignatureEntry(sig) && typeMatches) {
-            return { ...sig, signed: true, imageUrl };
+            return { ...sig, signed: true, imageUrl, ...metadata };
         }
         
         // Check if this signature has fields array with the matching index
@@ -50,7 +50,7 @@ export const updateSignatureWithImage = (signatures, index, imageUrl, expectedTy
                         ...sig,
                         fields: sig.fields.map(field => 
                             field.index === index 
-                                ? { ...field, filled: true, imageUrl } 
+                                ? { ...field, filled: true, imageUrl, ...metadata } 
                                 : field
                         )
                     };

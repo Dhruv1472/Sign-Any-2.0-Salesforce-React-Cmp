@@ -1,23 +1,130 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import "./FieldButton.css";
 
 /**
  * FieldButton Component
- * Renders field buttons or filled field values
+ * Renders field buttons or filled field values with inline editing for text fields
  *
  * @param {Object} field - Field configuration object
  * @param {Function} onFieldClick - Callback when field button is clicked
  * @param {Function} onDelete - Callback when delete button is clicked
+ * @param {Function} onSave - Callback when inline edit is saved
  * @param {boolean} canDelete - Whether the delete button should be shown
  */
-const FieldButton = ({ field, onFieldClick, onDelete, canDelete = false, disabled = false }) => {
+const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false, disabled = false }) => {
     const { key, fieldName, fieldType, value, filled, disabled: fieldDisabled, required } = field;
     const isDisabled = Boolean(disabled || fieldDisabled);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editValue, setEditValue] = useState("");
+    const [showLimitWarning, setShowLimitWarning] = useState(false);
+    const inputRef = useRef(null);
+    const warningTimeoutRef = useRef(null);
+
+    // Get max length for the field
+    const maxLength = field.maxLength ? parseInt(field.maxLength, 10) : 100;
+
+    // Focus input when editing starts
+    useEffect(() => {
+        if (isEditing && inputRef.current) {
+            inputRef.current.focus();
+        }
+    }, [isEditing]);
+
+    // Cleanup warning timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (warningTimeoutRef.current) {
+                clearTimeout(warningTimeoutRef.current);
+            }
+        };
+    }, []);
 
     const handleFieldClick = () => {
         if (isDisabled) return;
+        
+        // For text fields, enable inline editing
+        if (fieldType === "text") {
+            // Prefill with existing value, defaultValue, or empty string
+            const initialValue = value || field.defaultValue || "";
+            setEditValue(initialValue);
+            setIsEditing(true);
+            return;
+        }
+        
+        // For other fields, use the modal
         if (onFieldClick) {
             onFieldClick(field);
+        }
+    };
+
+    const handleSaveInline = () => {
+        if (required && (!editValue || editValue.trim() === "")) {
+            alert("This field is required");
+            return;
+        }
+        
+        if (onSave) {
+            onSave(editValue, field);
+        }
+        setIsEditing(false);
+    };
+
+    const handleCancelInline = () => {
+        setIsEditing(false);
+        setEditValue("");
+        setShowLimitWarning(false);
+        if (warningTimeoutRef.current) {
+            clearTimeout(warningTimeoutRef.current);
+        }
+    };
+
+    const handleInputChange = (e) => {
+        const newValue = e.target.value;
+        
+        // Check if trying to exceed max length
+        if (newValue.length > maxLength) {
+            // Show warning
+            setShowLimitWarning(true);
+            
+            // Clear any existing timeout
+            if (warningTimeoutRef.current) {
+                clearTimeout(warningTimeoutRef.current);
+            }
+            
+            // Hide warning after 3 seconds
+            warningTimeoutRef.current = setTimeout(() => {
+                setShowLimitWarning(false);
+            }, 3000);
+            
+            // Don't update value beyond max length
+            return;
+        }
+        
+        setEditValue(newValue);
+        
+        // Hide warning if user is within limit
+        if (showLimitWarning && newValue.length < maxLength) {
+            setShowLimitWarning(false);
+            if (warningTimeoutRef.current) {
+                clearTimeout(warningTimeoutRef.current);
+            }
+        }
+    };
+
+    const handleKeyDown = (e) => {
+        if (e.key === "Enter") {
+            handleSaveInline();
+        } else if (e.key === "Escape") {
+            handleCancelInline();
+        }
+    };
+
+    const handleBlur = () => {
+        // Save on blur
+        if (editValue.trim() !== "") {
+            handleSaveInline();
+        } else {
+            handleCancelInline();
         }
     };
 
@@ -30,7 +137,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, canDelete = false, disable
 
     // If field is filled, show the value (for checkbox, false is a valid value)
     const hasValue = value !== null && value !== undefined && (fieldType === "checkbox" ? true : value !== "");
-    if (filled && hasValue) {
+    if (filled && hasValue && !isEditing) {
         return (
             <div className={`field-container ${filled ? "filled" : ""}`}>
                 <div className="field-value" onClick={handleFieldClick}>
@@ -51,6 +158,57 @@ const FieldButton = ({ field, onFieldClick, onDelete, canDelete = false, disable
                     <button className="field-delete-btn" onClick={handleDeleteClick} title="Clear field">
                         ×
                     </button>
+                )}
+            </div>
+        );
+    }
+
+    // For checkbox field type, render actual checkbox instead of button
+    if (fieldType === "checkbox") {
+        // Checkbox is checked if it's filled and value is true
+        const isChecked = filled && (value === true || value === "true" || value === "True");
+        return (
+            <div className="checkbox-wrapper" onClick={handleFieldClick}>
+                <input 
+                    type="checkbox" 
+                    checked={isChecked}
+                    disabled={isDisabled}
+                    readOnly
+                    data-key={key}
+                />
+            </div>
+        );
+    }
+
+    // If editing inline (text field)
+    if (isEditing && fieldType === "text") {
+        const remainingChars = maxLength - editValue.length;
+        const isNearLimit = remainingChars <= 10;
+        const isAtLimit = remainingChars === 0;
+        
+        return (
+            <div className="field-inline-edit">
+                <input
+                    ref={inputRef}
+                    type="text"
+                    className="field-inline-input"
+                    value={editValue}
+                    onChange={handleInputChange}
+                    onKeyDown={handleKeyDown}
+                    onBlur={handleBlur}
+                    placeholder="Enter text..."
+                    disabled={isDisabled}
+                    maxLength={maxLength}
+                />
+                {showLimitWarning && (
+                    <div className="field-limit-warning">
+                        Max character limit reached ({maxLength})
+                    </div>
+                )}
+                {!showLimitWarning && isNearLimit && editValue.length > 0 && (
+                    <div className={`field-char-counter ${isAtLimit ? 'at-limit' : ''}`}>
+                        {remainingChars} character{remainingChars !== 1 ? 's' : ''} remaining
+                    </div>
                 )}
             </div>
         );
