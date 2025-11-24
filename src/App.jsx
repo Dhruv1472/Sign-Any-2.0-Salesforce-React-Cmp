@@ -1619,6 +1619,28 @@ function App() {
         setToast({ isVisible: false, message: "", type: "success" });
     };
 
+    // Check if all signatures for current priority are completed
+    const areAllSignaturesCompleted = () => {
+        if (isSubmitted) {
+            return false;
+        }
+
+        // Get all fields for current priority
+        const currentPriorityFields = signatureData
+            .filter((sig) => sig.priority == urlPriority)
+            .flatMap((sig) => sig.fields || []);
+
+        // If no fields, return false
+        if (currentPriorityFields.length === 0) {
+            return false;
+        }
+
+        // Check if all fields are filled
+        const allFilled = currentPriorityFields.every((field) => field.filled);
+        
+        return allFilled;
+    };
+
     // Check if Save & Submit button should be shown
     const shouldShowSaveButton = () => {
         // If already submitted in this session, hide button
@@ -1889,7 +1911,7 @@ function App() {
                                         );
                                     })}
                                 </div>
-                                {shouldShowSaveButton() && (
+                                {shouldShowSaveButton() && !areAllSignaturesCompleted() && (
                                     <div className="bottom-bar">
                                         <div className="bottom-bar-left">
                                             <input type="checkbox" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px" }} />
@@ -1943,6 +1965,38 @@ function App() {
                                 })}
                             </div>
                         </div>
+                        {areAllSignaturesCompleted() && (
+                            <div className={`completion-footer ${areAllSignaturesCompleted() ? 'show' : ''}`}>
+                                <div className="completion-content">
+                                    <div className="completion-icon">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <circle cx="12" cy="12" r="10" fill="#626262"/>
+                                            <path d="M8 12L11 15L16 9" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                        </svg>
+                                    </div>
+                                    <div className="completion-text">
+                                        <h3>All Signatures Completed!</h3>
+                                        <p>You have successfully signed all required fields in this document.</p>
+                                    </div>
+                                    <div className="completion-actions">
+                                        <input type="checkbox" id="accept-terms" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px" }} />
+                                        <label htmlFor="accept-terms" style={{ cursor: "pointer", marginLeft: "8px" }}>
+                                            I accept the{" "}
+                                            <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">
+                                                terms & conditions ↗
+                                            </a>
+                                        </label>
+                                        <button className="submit-final-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted}>
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white" />
+                                            </svg>
+                                            Submit Document
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        {/* this is replacte  html code of submit button footer for responsive page */}
                         {shouldShowSaveButton() && (
                             <div className="footer">
                                 <div className="bottom-bar-left">
