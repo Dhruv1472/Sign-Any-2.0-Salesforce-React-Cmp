@@ -9,4 +9,7 @@
 
 .signature-position {
     pointer-events: all;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }

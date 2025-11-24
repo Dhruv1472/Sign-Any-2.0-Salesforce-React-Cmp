@@ -8,6 +8,9 @@
 }
 
 .field-position {
+    display: flex;
     pointer-events: all;
+    flex-direction: column;
+    align-items: center;
 }
 

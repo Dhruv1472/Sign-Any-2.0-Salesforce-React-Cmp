@@ -146,7 +146,7 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
             ctx.lineWidth = penSize;
         } else {
             ctx.strokeStyle = "#ffffff";
-            ctx.lineWidth = eraseSize;
+            ctx.lineWidth = eraseSize * 5;
         }
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
