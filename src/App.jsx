@@ -766,7 +766,7 @@ function App() {
 
                         // Draw checkbox
                         if (isCheckbox) {
-                            const checkboxSize = Math.min(pdfWidth, pdfHeight) * 0.8;
+                            const checkboxSize = Math.min(pdfWidth, pdfHeight) * 0.85;
                             const checkboxX = pdfX + (pdfWidth - checkboxSize) / 2;
                             const checkboxY = pdfY + (pdfHeight - checkboxSize) / 2;
 
@@ -774,22 +774,36 @@ function App() {
                             page.drawRectangle({
                                 x: checkboxX,
                                 y: checkboxY,
-                                width: checkboxSize + 5,
+                                width: checkboxSize,
                                 height: checkboxSize,
                                 borderColor: rgb(0, 0, 0),
-                                borderWidth: 2,
+                                borderWidth: 1,
                             });
 
                             // Draw checkmark if checked
                             if (checkboxChecked) {
-                                const path = "M2 12 L10 20 L22 4";
-                                page.drawSvgPath(path, {
-                                    x: checkboxX + checkboxSize * 0.1,
-                                    y: checkboxY + checkboxSize * 0.1 + 22,
-                                    width: checkboxSize - 12,
-                                    height: checkboxSize - 7,
-                                    borderColor: rgb(0, 0, 0),
-                                    borderWidth: 1.5,
+                                const padding = checkboxSize * 0.25;
+                                const checkStartX = checkboxX + padding;
+                                const checkMidX = checkboxX + checkboxSize * 0.42;
+                                const checkEndX = checkboxX + checkboxSize - padding;
+                                const checkStartY = checkboxY + checkboxSize * 0.48;
+                                const checkMidY = checkboxY + padding;
+                                const checkEndY = checkboxY + checkboxSize - padding;
+
+                                // Draw left part of checkmark (short line going down-right)
+                                page.drawLine({
+                                    start: { x: checkStartX, y: checkStartY },
+                                    end: { x: checkMidX, y: checkMidY },
+                                    thickness: 1.5,
+                                    color: rgb(0, 0, 0),
+                                });
+
+                                // Draw right part of checkmark (long line going up-right)
+                                page.drawLine({
+                                    start: { x: checkMidX, y: checkMidY },
+                                    end: { x: checkEndX, y: checkEndY },
+                                    thickness: 1.5,
+                                    color: rgb(0, 0, 0),
                                 });
                             }
                         } else if (displayValue) {
