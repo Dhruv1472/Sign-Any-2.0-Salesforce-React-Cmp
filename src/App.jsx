@@ -45,6 +45,7 @@ function App() {
     const [userIpAddress, setUserIpAddress] = useState(null);
     const [userLocation, setUserLocation] = useState(null);
     const [userMacAddress, setUserMacAddress] = useState(null);
+    const [adminProperties, setAdminProperties] = useState(null);
     const canvasRefsArray = useRef([]);
     const pdfDocRef = useRef(null);
 
@@ -67,6 +68,10 @@ function App() {
             fetchOrganizationId(accessToken, instanceUrl, clientId, clientSecret)
                 .then((id) => setOrgIdState(id))
                 .catch(() => setOrgIdState(null));
+            
+            fetchAdminProperties(accessToken, instanceUrl, clientId, clientSecret)
+                .then((properties) => setAdminProperties(properties))
+                .catch(() => setAdminProperties(null));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -398,6 +403,45 @@ function App() {
             return id;
         } catch (e) {
             console.warn("Unable to fetch Organization Id:", e);
+            return null;
+        }
+    };
+
+    // Fetch Admin_Properties__c custom setting from Salesforce
+    const fetchAdminProperties = async (accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+        try {
+            let currentToken = accessToken;
+            const query = `SELECT Email_Object_Field__c, Email_Address__c, Audit_Report_Behaviour__c, Available_Fonts__c, Default_Brush_Size__c, Default_Font_Size__c, Default_Font_Style__c, Hide_Available_Fonts__c, Hide_Bold_Option__c, Hide_Brush_Size__c, Hide_Font_Size_Option__c, Hide_Italic_Option__c, Hide_Pen_And_Erase__c, Hide_Undo_Redo__c FROM Admin_Properties__c LIMIT 1`;
+            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
+
+            let response = await fetch(apiUrl, {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${currentToken}`,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (response.status === 401 && clientId && clientSecret) {
+                currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
+                response = await fetch(apiUrl, {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                        "Content-Type": "application/json",
+                    },
+                });
+            }
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch Admin Properties: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            const properties = data?.records?.[0] || null;
+            return properties;
+        } catch (e) {
+            console.warn("Unable to fetch Admin Properties:", e);
             return null;
         }
     };
@@ -2100,7 +2144,7 @@ function App() {
                 </div>
             )}
 
-            <SignatureModal isOpen={isModalOpen} onClose={handleModalClose} onSave={handleSignatureSave} signature={currentSignature} title={currentSignature?.type === "text" ? "Enter Text" : currentSignature?.type === "initials" ? "Enter Initials" : "Create Signature"} />
+            <SignatureModal isOpen={isModalOpen} onClose={handleModalClose} onSave={handleSignatureSave} signature={currentSignature} title={currentSignature?.type === "text" ? "Enter Text" : currentSignature?.type === "initials" ? "Enter Initials" : "Create Signature"} adminProperties={adminProperties} />
             <FieldModal isOpen={isFieldModalOpen} onClose={handleFieldModalClose} onSave={handleFieldSave} field={currentField} />
             <Toast isVisible={toast.isVisible} message={toast.message} type={toast.type} onClose={handleCloseToast} />
             <div id="audit-html" style={{ position:'absolute', top:'-9999px', left:'-9999px' }}></div>
