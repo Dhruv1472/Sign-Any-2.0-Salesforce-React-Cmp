@@ -10,11 +10,12 @@ import "./FieldOverlay.css";
  * @param {number} priority - The priority level for filtering fields
  * @param {Array} fields - Array of field configurations for this page
  * @param {Function} onFieldClick - Callback when field button is clicked
+ * @param {Function} onFieldSave - Callback when inline field is saved
  * @param {Function} onDelete - Callback when delete is clicked
  * @param {boolean} isSubmitted - Whether document has been submitted
  * @param {Set} sessionFilledKeys - Set of field keys filled in current session
  */
-const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onDelete, isSubmitted, sessionFilledKeys }) => {
+const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave, onDelete, isSubmitted, sessionFilledKeys }) => {
     // Filter fields for this page and exclude hidden ones
     // IMPORTANT: Only show items that are actually fields (have fieldType property)
     const pageFields = fields.filter((field) => 
@@ -46,7 +47,14 @@ const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onDelete, is
                             width: `${field.widthPercent}%`,
                             height: `${field.heightPercent}%`,
                         }}>
-                        <FieldButton field={field} onFieldClick={onFieldClick} onDelete={onDelete} canDelete={canDelete} disabled={isSubmitted} />
+                        <FieldButton 
+                            field={field} 
+                            onFieldClick={onFieldClick} 
+                            onSave={onFieldSave}
+                            onDelete={onDelete} 
+                            canDelete={canDelete} 
+                            disabled={isSubmitted} 
+                        />
                     </div>
                 );
             })}

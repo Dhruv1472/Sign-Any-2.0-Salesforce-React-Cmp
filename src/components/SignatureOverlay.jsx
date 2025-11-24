@@ -12,6 +12,7 @@ import "./SignatureOverlay.css";
  * @param {Array} signatures - Array of signature configurations for this page
  * @param {Function} onSign - Callback when sign button is clicked
  * @param {Function} onFieldClick - Callback when field button is clicked
+ * @param {Function} onFieldSave - Callback when inline field is saved
  * @param {Function} onDelete - Callback when delete is clicked
  * @param {Function} onFieldDelete - Callback when field delete is clicked
  * @param {boolean} isSubmitted - Whether document has been submitted
@@ -19,7 +20,7 @@ import "./SignatureOverlay.css";
  * @param {Set} sessionFilledKeys - Set of field keys filled in current session
  * @param {Object} canvasDimensions - Canvas width and height for positioning
  */
-const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onFieldClick, onDelete, onFieldDelete, isSubmitted, sessionSignedKeys, sessionFilledKeys, canvasDimensions }) => {
+const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onFieldClick, onFieldSave, onDelete, onFieldDelete, isSubmitted, sessionSignedKeys, sessionFilledKeys, canvasDimensions }) => {
     // Filter signatures for this page
     // Show: 1. Current priority fields (editable), 2. Lower priority filled fields (read-only, already signed)
     const pageSignatures = signatures
@@ -105,6 +106,7 @@ const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onFieldCli
                             <FieldButton 
                                 field={{ ...field, fieldType: fieldType }} 
                                 onFieldClick={onFieldClick} 
+                                onSave={onFieldSave}
                                 onDelete={onFieldDelete} 
                                 canDelete={canDelete} 
                                 disabled={field.disabled}
