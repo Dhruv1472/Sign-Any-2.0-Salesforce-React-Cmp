@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import * as pdfjsLib from "pdfjs-dist";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { Buffer } from "buffer";
@@ -18,6 +19,7 @@ const A4_WIDTH = 595;
 const A4_HEIGHT = 842;
 
 function App() {
+    const navigate = useNavigate();
     const [pdfFile, setPdfFile] = useState(null);
     const [totalPages, setTotalPages] = useState(0);
     const [loading, setLoading] = useState(false);
@@ -864,6 +866,12 @@ function App() {
                         message: "All signatures completed successfully! Signed PDF uploaded to Salesforce.",
                         type: "success",
                     });
+
+                    // Navigate to thank you page and replace history so user can't go back
+                    // setTimeout(() => {
+                        navigate('/thank-you', { replace: true });
+                    // }, 1500);
+
                 } else {
                     // Fallback: Download the PDF if no Salesforce config
                     const blob = new Blob([pdfBytes], { type: "application/pdf" });
@@ -885,6 +893,11 @@ function App() {
                         message: "All signatures completed successfully! Signed PDF downloaded.",
                         type: "success",
                     });
+
+                    // Navigate to thank you page and replace history so user can't go back
+                    // setTimeout(() => {
+                        navigate('/thank-you', { replace: true });
+                    // }, 1500);
                 }
             } catch (error) {
                 console.error("Error in save and submit:", error);
@@ -1965,7 +1978,7 @@ function App() {
                                 })}
                             </div>
                         </div>
-                        {areAllSignaturesCompleted() && (
+                        {shouldShowSaveButton() && areAllSignaturesCompleted() && (
                             <div className={`completion-footer ${areAllSignaturesCompleted() ? 'show' : ''}`}>
                                 <div className="completion-content">
                                     <div className="completion-icon">
