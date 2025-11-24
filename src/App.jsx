@@ -1241,12 +1241,30 @@ function App() {
         console.log("Generating audit report HTML with document and signatures:", doc);
         console.log("Signature data:", sigData);
 
+        // Helper function to format timestamp with smaller timezone
+        const formatTimestamp = (timestamp) => {
+            if (!timestamp || timestamp === "--") return "--";
+            
+            // Check if timestamp contains AM or PM
+            const ampmRegex = /(.*?\s+(?:AM|PM|am|pm))(\s+.+)?$/;
+            const match = timestamp.match(ampmRegex);
+            
+            if (match) {
+                const mainPart = match[1]; // Date, time, AM/PM
+                const timezonePart = match[2] || ""; // Everything after AM/PM
+                
+                if (timezonePart.trim()) {
+                    return `${mainPart}<span style="font-size:8px;"> (${timezonePart.trim()})</span>`;
+                }
+            }
+            
+            return timestamp;
+        };
 
-
-        // Only include signature fields (those with imageUrl), exclude other field types
+        // Only include signature fields (those with type="signature"), exclude other field types
         const allFields = sigData.flatMap(s =>
             (s.fields || [])
-                .filter(f => f.imageUrl) // Only include fields with signature images
+                .filter(f => (f.type || f.fieldType || "").toLowerCase() == "signature") // Only include fields with type="signature"
                 .map(f => ({...f, signerName: s.name || "--", signerEmail: s.email || "--"}))
         );
         const signedFields = allFields.filter(f => f.filled);
@@ -1430,7 +1448,7 @@ function App() {
                                     <table style="width:100%; border-collapse:collapse;">
                                         <tr>
                                             <td style="color:gray; padding-right:12px; width:80px;">Signed On:</td>
-                                            <td style="color:black;">${f.timestamp || "--"}</td>
+                                            <td style="color:black;">${formatTimestamp(f.timestamp || "--")}</td>
                                         </tr>
                                         <tr>
                                             <td style="color:gray; padding-right:12px; width:80px;">Device:</td>
