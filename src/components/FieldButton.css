@@ -110,6 +110,14 @@
     background-color: transparent;
 }
 
+.field-container.filled[data-field="checkbox"] {
+    padding: 0;
+    min-height: auto;
+}
+.field-container.filled[data-field="checkbox"] .field-value {
+    height: 100%;
+}
+
 .field-container.filled:hover {
     border: 2px dotted #00aeff50;
 }
@@ -118,7 +126,6 @@
     width: 100%;
     height: 100%;
     display: flex;
-    /* align-items: center; */
     cursor: pointer;
     color: #333;
     font-size: 14px;
@@ -126,10 +133,7 @@
 
 .field-value-text {
     width: 100%;
-    /* overflow: hidden; */
     text-overflow: ellipsis;
-    /* white-space: nowrap; */
-    /* text-align: center; */
     word-break: break-word;
     line-height: 1.25;
     font-size: 16px;

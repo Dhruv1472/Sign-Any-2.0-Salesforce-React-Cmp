@@ -140,12 +140,10 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
     const hasValue = value !== null && value !== undefined && (fieldType === "checkbox" ? true : value !== "");
     if (filled && hasValue && !isEditing) {
         return (
-            <div className={`field-container ${filled ? "filled" : ""}`}>
+            <div className={`field-container ${filled ? "filled" : ""}`} data-field={fieldType}>
                 <div className="field-value" onClick={handleFieldClick}>
                     {fieldType === "checkbox" ? (
-                        <div className="checkbox-display" style={{
-                            gap: `${4 * canvasScale}px`
-                        }}>
+                        <div className="checkbox-display">
                             <span 
                                 className={`checkbox-icon ${value ? "checked" : ""}`}
                                 style={{
@@ -170,7 +168,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
                         </div>
                     )}
                 </div>
-                {canDelete && (
+                {canDelete && fieldType !== "checkbox" && (
                     <button 
                         className="field-delete-btn" 
                         onClick={handleDeleteClick} 
