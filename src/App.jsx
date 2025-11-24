@@ -810,28 +810,47 @@ function App() {
                             // Draw text field
                             // Calculate font size based on field height (leave some padding)
                             const fontSize = 12;
+                            const padding = 4;
+                            const maxWidth = pdfWidth;
+                            const lineHeight = fontSize * 1.4;
 
-                            // Draw background rectangle for better visibility
-                            // page.drawRectangle({
-                            //     x: pdfX,
-                            //     y: pdfY,
-                            //     width: pdfWidth,
-                            //     height: pdfHeight,
-                            //     color: rgb(0.95, 0.95, 0.95),
-                            //     borderColor: rgb(0.7, 0.7, 0.7),
-                            //     borderWidth: 1,
-                            // });
+                            // Split text into words and build lines that fit within maxWidth
+                            const words = displayValue.split(' ');
+                            const lines = [];
+                            let currentLine = words[0] || '';
 
-                            // Draw the text
-                            page.drawText(displayValue, {
-                                x: pdfX + 4,
-                                y: pdfY + pdfHeight / 2 + 10,
-                                size: fontSize,
-                                lineHeight: fontSize * 1.25,
-                                font: font,
-                                color: rgb(0, 0, 0),
-                                maxWidth: pdfWidth - 8,
-                            });
+                            for (let i = 1; i < words.length; i++) {
+                                const word = words[i];
+                                const testLine = currentLine + ' ' + word;
+                                const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+                                
+                                if (testWidth <= maxWidth) {
+                                    currentLine = testLine;
+                                } else {
+                                    lines.push(currentLine);
+                                    currentLine = word;
+                                }
+                            }
+                            lines.push(currentLine);
+
+                            // Calculate starting Y position from top of field
+                            const textY = pdfY + pdfHeight - padding - fontSize;
+
+                            // Draw each line
+                            for (let i = 0; i < lines.length; i++) {
+                                const currentY = textY - (i * lineHeight);
+                                console.log("Drawing line on PDF:", lines[i], "at Y:", currentY);
+                                // Only draw if within field bounds
+                                if (currentY >= pdfY) {
+                                    page.drawText(lines[i], {
+                                        x: pdfX + padding,
+                                        y: currentY,
+                                        size: fontSize - 2,
+                                        font: font,
+                                        color: rgb(0, 0, 0),
+                                    });
+                                }
+                            }
                         }
                     } catch (error) {
                         console.error("Error adding form field to PDF:", field.index, error);
