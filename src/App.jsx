@@ -46,8 +46,11 @@ function App() {
     const [userLocation, setUserLocation] = useState(null);
     const [userMacAddress, setUserMacAddress] = useState(null);
     const [adminProperties, setAdminProperties] = useState(null);
+    const [showSpinner, setShowSpinner] = useState(false);
+    const [canvasScale, setCanvasScale] = useState(1);
     const canvasRefsArray = useRef([]);
     const pdfDocRef = useRef(null);
+    const resizeTimeoutRef = useRef(null);
 
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
@@ -102,6 +105,35 @@ function App() {
 
         fetchUserInfo();
     }, []);
+
+    // Debounced resize handler to re-render PDF pages when window resizes
+    useEffect(() => {
+        const handleResize = () => {
+            // Clear existing timeout
+            if (resizeTimeoutRef.current) {
+                clearTimeout(resizeTimeoutRef.current);
+            }
+
+            // Set new timeout (300ms debounce)
+            resizeTimeoutRef.current = setTimeout(() => {
+                if (pdfDocRef.current && totalPages > 0) {
+                    console.log('Window resized - re-rendering PDF pages');
+                    renderAllPages(pdfDocRef.current);
+                }
+            }, 300);
+        };
+
+        window.addEventListener('resize', handleResize);
+
+        // Cleanup
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            if (resizeTimeoutRef.current) {
+                clearTimeout(resizeTimeoutRef.current);
+            }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pdfDocRef.current, totalPages]);
 
     // Main function to fetch Document and then PDF
     const fetchDocumentAndPdf = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
@@ -464,6 +496,9 @@ function App() {
             return;
         }
 
+        // Show spinner during signature conversion
+        setShowSpinner(true);
+
         // Use pre-fetched IP, location, and MAC address data
         const ipAddress = userIpAddress || "Unknown IP";
         const locationInfo = userLocation || "Location Unavailable";
@@ -518,6 +553,9 @@ function App() {
 
         setSignatureData(updatedSignatures);
         setSessionSignedKeys((prev) => new Set(prev).add(signature.index));
+        
+        // Hide spinner after signature is saved
+        setShowSpinner(false);
     };
 
     // Handle field modal close
@@ -640,6 +678,9 @@ function App() {
             });
         } else {
             try {
+                // Show spinner during document saving
+                setShowSpinner(true);
+
                 // All signatures are completed
                 if (!originalPdfBytes) {
                     throw new Error("Original PDF data not available");
@@ -651,8 +692,6 @@ function App() {
 
                 // Get all filled signature fields across all signatures
                 const filledFieldsNew = signatureData.flatMap((sig) => sig.fields || []).filter((field) => field.filled && field.imageUrl);
-
-                // Process each signature field
                 for (const field of filledFieldsNew) {
                     try {
                         const pageIndex = field.pageNumber - 1; // Convert to 0-indexed
@@ -679,7 +718,7 @@ function App() {
                         }
 
                         // Use percentage-based coordinates from the field data
-                        const pdfX = (field.xPercent / 100) * pageWidth;
+                        const pdfX = (field.xPercent / 100) * pageWidth ;
                         const pdfY = pageHeight - (field.yPercent / 100) * pageHeight - (field.heightPercent / 100) * pageHeight;
                         const pdfWidth = (field.widthPercent / 100) * pageWidth;
                         const pdfHeight = (field.heightPercent / 100) * pageHeight;
@@ -983,6 +1022,9 @@ function App() {
                     message: `Error creating signed PDF: ${error.message}`,
                     type: "error",
                 });
+            } finally {
+                // Hide spinner after save process completes
+                setShowSpinner(false);
             }
         }
     };
@@ -1800,14 +1842,37 @@ function App() {
         const numPages = pdf.numPages;
         const dimensions = [];
 
-        // Get container width for responsive sizing
-        const containerWidth = 800; // Fixed width for consistency
+        // Calculate target width based on available space
+        // Try to get actual canvas wrapper width from DOM
+        const canvasWrapper = document.querySelector('.canvas-wrapper');
+        let targetWidth = 800;
+        
+        if (canvasWrapper) {
+            // Get the actual rendered width of the canvas wrapper after CSS is applied
+            const wrapperWidth = canvasWrapper.getBoundingClientRect().width;
+            // Subtract padding if needed (canvas-wrapper has no padding, but be safe)
+            targetWidth = Math.min(Math.max(wrapperWidth - 10, 300), 800);
+        } else {
+            // Fallback: calculate based on window width
+            const windowWidth = window.innerWidth;
+            if (windowWidth < 900) {
+                // Account for container padding and margins (roughly 80px total)
+                targetWidth = Math.max(Math.min(windowWidth - 80, 800), 300);
+            }
+        }
+
+        console.log('Rendering PDF with target width:', targetWidth);
 
         for (let pageNum = 1; pageNum <= numPages; pageNum++) {
             const canvas = canvasRefsArray.current[pageNum - 1];
             if (canvas) {
-                const dims = await renderPage(pdf, pageNum, canvas, containerWidth);
+                const dims = await renderPage(pdf, pageNum, canvas, targetWidth);
                 dimensions.push(dims);
+                // Update scale state with the first page's scale (all pages use same scale)
+                if (pageNum === 1 && dims) {
+                    setCanvasScale(dims.scale);
+                    console.log('Updated canvas scale to:', dims.scale);
+                }
             }
         }
     };
@@ -2065,8 +2130,8 @@ function App() {
                                             {/* <div className="page-number">Page {pageNumber}</div> */}
                                             <div className="canvas-wrapper">
                                                 <canvas ref={(el) => (canvasRefsArray.current[index] = el)}></canvas>
-                                                {signatureData.length > 0 && <SignatureOverlay pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} />}
-                                                {fieldData.length > 0 && <FieldOverlay pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} />}
+                                                {signatureData.length > 0 && <SignatureOverlay key={`sig-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} />}
+                                                {fieldData.length > 0 && <FieldOverlay key={`field-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} />}
                                             </div>
                                         </div>
                                     );
@@ -2148,6 +2213,13 @@ function App() {
             <FieldModal isOpen={isFieldModalOpen} onClose={handleFieldModalClose} onSave={handleFieldSave} field={currentField} />
             <Toast isVisible={toast.isVisible} message={toast.message} type={toast.type} onClose={handleCloseToast} />
             <div id="audit-html" style={{ position:'absolute', top:'-9999px', left:'-9999px' }}></div>
+            
+            {/* Spinner Overlay */}
+            {showSpinner && (
+                <div className="spinner-overlay">
+                    <div className="spinner"></div>
+                </div>
+            )}
         </div>
     );
 }

@@ -12,10 +12,6 @@
     height: 100%;
 }
 
-/* .signature-button:hover:not(:disabled) {
-    background-color: #0088cc;
-} */
-
 .signature-button:disabled {
     background-color: #ccc;
     cursor: not-allowed;
@@ -81,7 +77,10 @@
 
 /* Signature footer showing signer name and timestamp */
 .signature-footer {
-    width: 100%;
+    display: flex;
+    bottom: -24px;
+    position: absolute;
+    width: max-content;
     margin-top: 2px;
     padding: 2px 0;
     text-align: center;
@@ -91,12 +90,7 @@
 .signature-footer-text {
     display: inline-block;
     font-size: 8px;
-    line-height: 1.2;
     color: #666;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
 }
 
 .signature-footer-name {
