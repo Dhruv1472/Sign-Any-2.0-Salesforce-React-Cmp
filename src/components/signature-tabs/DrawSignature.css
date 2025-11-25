@@ -119,7 +119,7 @@ input[type=number]::-webkit-outer-spin-button {
     aspect-ratio: 1.65;
     position: relative;
     flex: 1;
-    height: 280px;
+    height: 277px;
     border: 2px solid var(--primary-color);
     border-radius: 8px;
     background: white;

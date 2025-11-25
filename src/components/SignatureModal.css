@@ -71,12 +71,13 @@
     border-radius: 8px;
     padding: 4px;
     gap: 4px;
+    top: 4px;
 }
 
 .signature-tab {
     position: relative;
     z-index: 1;
-    padding: 8px 24px;
+    padding: 8px 19px;
     background: transparent;
     border: none;
     font-size: 14px;
@@ -89,6 +90,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 6px;
+}
+
+.signature-tab svg {
+    width: 16px;
+    height: 16px;
 }
 
 .signature-tab.active {
@@ -132,7 +139,7 @@
     justify-content: flex-end;
     flex-wrap: wrap;
     gap: 8px;
-    padding: 8px;
+    padding: 0 11px 8px 11px;
     height: 48px;
 }
 
@@ -149,6 +156,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 6px;
+}
+
+.signature-btn-cancel svg,
+.signature-btn-clear svg,
+.signature-btn-save svg {
+    width: 16px;
+    height: 16px;
 }
 
 .signature-btn-cancel {
