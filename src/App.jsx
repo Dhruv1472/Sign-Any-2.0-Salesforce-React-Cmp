@@ -685,17 +685,17 @@ function App() {
 
     // Handle Save & Submit
     const handleSaveAndSubmit = async () => {
-        // Validate if all signature fields are filled for current priority
-        const unfilledFields = signatureData
+        // Validate if all REQUIRED fields are filled for current priority
+        const unfilledRequiredFields = signatureData
             .filter((sig) => sig.priority == urlPriority)
             .flatMap((sig) => sig.fields || [])
-            .filter((field) => !field.filled);
+            .filter((field) => field.required === true && !field.filled);
 
-        if (unfilledFields.length > 0) {
+        if (unfilledRequiredFields.length > 0) {
             // Show error toast
             setToast({
                 isVisible: true,
-                message: `Please complete all signatures. ${unfilledFields.length} signature(s) remaining.`,
+                message: `Please complete all required fields. ${unfilledRequiredFields.length} required field(s) remaining.`,
                 type: "error",
             });
         } else {
@@ -987,16 +987,17 @@ function App() {
                     // Determine FirstPublishLocationId
                     const firstPublishLocationId = documentRecord?.Record_Id__c || salesforceConfig.recordId;
 
-                    // Check if all fields are filled before uploading
-                    const allFieldsFilled = signatureData.every((sig) => (sig.fields || []).every((field) => field.filled));
+                    // Check if all REQUIRED fields are filled before uploading
+                    const allRequiredFieldsFilled = signatureData.every((sig) => (sig.fields || []).every((field) => field.required !== true || field.filled));
 
                     // Upload signed PDF as ContentVersion
-                    if (allFieldsFilled) {
-                        await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
+                    let newContentVersionId = null;
+                    if (allRequiredFieldsFilled) {
+                        newContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
                     }
 
-                    // Update Document record with signature, field data, and PDF hash
-                    await updateDocumentRecord(salesforceConfig.recordId, signatureData, fieldData, pdfHash, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
+                    // Update Document record with signature, field data, PDF hash, and new ContentVersion ID
+                    await updateDocumentRecord(salesforceConfig.recordId, signatureData, fieldData, pdfHash, newContentVersionId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
 
                     // Mark as submitted
                     setIsSubmitted(true);
@@ -1112,7 +1113,7 @@ function App() {
     };
 
     // Update Document__c record with signature and field data
-    const updateDocumentRecord = async (documentId, signatureData, fieldData, pdfHash, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+    const updateDocumentRecord = async (documentId, signatureData, fieldData, pdfHash, newContentVersionId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
 
@@ -1143,16 +1144,24 @@ function App() {
             // Convert combined data to JSON string
             const signatureDataJson = JSON.stringify(combinedData);
 
+            // Prepare update data
+            const updateData = {
+                Signing_Details__c: signatureDataJson,
+                Document_Hash_Key__c: pdfHash,
+            };
+
+            // Add ContentVersion ID if provided
+            if (newContentVersionId) {
+                updateData.Uploaded_Document_Id__c = newContentVersionId;
+            }
+
             let response = await fetch(apiUrl, {
                 method: "PATCH",
                 headers: {
                     Authorization: `Bearer ${currentToken}`,
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({
-                    Signing_Details__c: signatureDataJson,
-                    Document_Hash_Key__c: pdfHash,
-                }),
+                body: JSON.stringify(updateData),
             });
 
             // If token expired (401), try to refresh it
@@ -1167,10 +1176,7 @@ function App() {
                         Authorization: `Bearer ${currentToken}`,
                         "Content-Type": "application/json",
                     },
-                    body: JSON.stringify({
-                        Signing_Details__c: signatureDataJson,
-                        Document_Hash_Key__c: pdfHash,
-                    }),
+                    body: JSON.stringify(updateData),
                 });
             }
 
@@ -1566,7 +1572,7 @@ function App() {
                     border:1px solid #E2E8F0; 
                     border-radius:8px; 
                     background:#ffffff;
-                    padding:16px 0;
+                    padding:16px 0 0 0 ;
                     margin-bottom:12px;
                 ">
                     <h3 style="margin:0 0 10px 0;color:#111;font-weight:600;font-size:15px;margin-left:18px">Signature Events</h3>
@@ -1581,7 +1587,7 @@ function App() {
                         </thead>
                         <tbody>
                             ${allFields.map(f => `
-                            <tr style="border-bottom:1px solid #E2E8F0;">
+                            <tr style="border-top:1px solid #E2E8F0;">
                                 <td style="padding:8px 0 8px 18px; text-align:center;">
                                     ${f.imageUrl 
                                         ? `<img src="${f.imageUrl}" 
