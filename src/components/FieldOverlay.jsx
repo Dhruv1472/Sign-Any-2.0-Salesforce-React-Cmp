@@ -14,14 +14,16 @@ import "./FieldOverlay.css";
  * @param {Function} onDelete - Callback when delete is clicked
  * @param {boolean} isSubmitted - Whether document has been submitted
  * @param {Set} sessionFilledKeys - Set of field keys filled in current session
+ * @param {number} canvasScale - Scale factor for responsive sizing
  */
-const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave, onDelete, isSubmitted, sessionFilledKeys }) => {
+const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave, onDelete, isSubmitted, sessionFilledKeys, canvasScale = 1 }) => {
     // Filter fields for this page and exclude hidden ones
     // IMPORTANT: Only show items that are actually fields (have fieldType property)
-    const pageFields = fields.filter((field) => 
-        field.fieldType && // Ensure it's a field, not a signature
-        field.pageNumber === pageNumber && 
-        (field.signerPriority == priority || field.priority == priority || field.filled)
+    const pageFields = fields.filter(
+        (field) =>
+            field.fieldType && // Ensure it's a field, not a signature
+            field.pageNumber === pageNumber &&
+            (field.signerPriority == priority || field.priority == priority || field.filled)
     );
 
     if (pageFields.length === 0) {
@@ -37,24 +39,8 @@ const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave,
                 const canDelete = !isSubmitted && sessionFilledKeys.has(field.index);
 
                 return (
-                    <div
-                        key={field.index}
-                        className="field-position"
-                        style={{
-                            position: "absolute",
-                            left: `${field.xPercent}%`,
-                            top: `${field.yPercent}%`,
-                            width: `${field.widthPercent}%`,
-                            height: `${field.heightPercent}%`,
-                        }}>
-                        <FieldButton 
-                            field={field} 
-                            onFieldClick={onFieldClick} 
-                            onSave={onFieldSave}
-                            onDelete={onDelete} 
-                            canDelete={canDelete} 
-                            disabled={isSubmitted} 
-                        />
+                    <div key={field.index} className="field-position" style={{ position: "absolute", left: `${field.xPercent}%`, top: `${field.yPercent}%`, width: `${field.widthPercent}%`, height: `${field.heightPercent}%` }}>
+                        <FieldButton field={field} onFieldClick={onFieldClick} onSave={onFieldSave} onDelete={onDelete} canDelete={canDelete} disabled={isSubmitted} canvasScale={canvasScale} />
                     </div>
                 );
             })}
@@ -63,4 +49,3 @@ const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave,
 };
 
 export default FieldOverlay;
-

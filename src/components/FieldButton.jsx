@@ -10,8 +10,9 @@ import "./FieldButton.css";
  * @param {Function} onDelete - Callback when delete button is clicked
  * @param {Function} onSave - Callback when inline edit is saved
  * @param {boolean} canDelete - Whether the delete button should be shown
+ * @param {number} canvasScale - Scale factor for responsive sizing
  */
-const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false, disabled = false }) => {
+const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false, disabled = false, canvasScale = 1 }) => {
     const { key, fieldName, fieldType, value, filled, disabled: fieldDisabled, required } = field;
     const isDisabled = Boolean(disabled || fieldDisabled);
     const [isEditing, setIsEditing] = useState(false);
@@ -139,23 +140,47 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
     const hasValue = value !== null && value !== undefined && (fieldType === "checkbox" ? true : value !== "");
     if (filled && hasValue && !isEditing) {
         return (
-            <div className={`field-container ${filled ? "filled" : ""}`}>
+            <div className={`field-container ${filled ? "filled" : ""}`} data-field={fieldType}>
                 <div className="field-value" onClick={handleFieldClick}>
                     {fieldType === "checkbox" ? (
                         <div className="checkbox-display">
-                            <span className={`checkbox-icon ${value ? "checked" : ""}`}>
+                            <span 
+                                className={`checkbox-icon ${value ? "checked" : ""}`}
+                                style={{
+                                    width: `${16 * canvasScale}px`,
+                                    height: `${16 * canvasScale}px`,
+                                    fontSize: `${12 * canvasScale}px`,
+                                    borderWidth: `${1 * canvasScale}px`
+                                }}
+                            >
                                 {value ? "✓" : ""}
                             </span>
-                            <span className="checkbox-label">{fieldName || "Checkbox"}</span>
+                            <span className="checkbox-label" style={{
+                                fontSize: `${12 * canvasScale}px`
+                            }}>{fieldName || "Checkbox"}</span>
                         </div>
                     ) : (
-                        <div className="field-value-text">
+                        <div className="field-value-text" style={{
+                            fontSize: `${12 * canvasScale}px`,
+                            padding: `${4 * canvasScale}px`
+                        }}>
                             {fieldType === "date" && value ? new Date(value).toLocaleDateString() : value}
                         </div>
                     )}
                 </div>
-                {canDelete && (
-                    <button className="field-delete-btn" onClick={handleDeleteClick} title="Clear field">
+                {canDelete && fieldType !== "checkbox" && (
+                    <button 
+                        className="field-delete-btn" 
+                        onClick={handleDeleteClick} 
+                        title="Clear field"
+                        style={{
+                            top: `${2 * canvasScale}px`,
+                            right: `${2 * canvasScale}px`,
+                            width: `${20 * canvasScale}px`,
+                            height: `${20 * canvasScale}px`,
+                            fontSize: `${14 * canvasScale}px`
+                        }}
+                    >
                         ×
                     </button>
                 )}
@@ -243,9 +268,25 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
     };
 
     return (
-        <button className={getButtonClass()} onClick={handleFieldClick} disabled={isDisabled} data-key={key}>
+        <button 
+            className={getButtonClass()} 
+            onClick={handleFieldClick} 
+            disabled={isDisabled} 
+            data-key={key}
+            style={{
+                padding: `${8 * canvasScale}px ${12 * canvasScale}px`,
+                borderWidth: `${2 * canvasScale}px`,
+                fontSize: `${12 * canvasScale}px`,
+                borderRadius: `${4 * canvasScale}px`
+            }}
+        >
             {getButtonText()}
-            {required && <span className="required-indicator"></span>}
+            {required && <span className="required-indicator" style={{
+                width: `${6 * canvasScale}px`,
+                height: `${6 * canvasScale}px`,
+                top: `${-2 * canvasScale}px`,
+                right: `${-2 * canvasScale}px`
+            }}></span>}
         </button>
     );
 };

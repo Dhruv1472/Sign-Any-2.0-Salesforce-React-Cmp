@@ -10,7 +10,7 @@ import "./SignatureButton.css";
  * @param {Function} onDelete - Callback when delete button is clicked
  * @param {boolean} canDelete - Whether the delete button should be shown
  */
-const SignatureButton = ({ signature, onSign, onDelete, canDelete = false }) => {
+const SignatureButton = ({ signature, onSign, onDelete, canDelete = false, canvasScale = 1 }) => {
     const { key, buttonName, width, signed, filled, imageUrl, disabled, timeStamp, timestamp, _parentSigner } = signature;
 
     const handleSignClick = () => {
@@ -28,11 +28,11 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false }) => 
 
     // Check both 'signed' (old structure) and 'filled' (new nested structure)
     const isCompleted = signed || filled;
-    
+
     // Get signer info and timestamp
     const signerName = _parentSigner?.name || signature.name || "";
     const signatureTimestamp = timeStamp || timestamp || "";
-    
+
     // If signature is already signed/filled, show the image
     if (isCompleted && imageUrl) {
         return (
@@ -40,18 +40,18 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false }) => 
                 <div className={`signature-image-container ${isCompleted ? "signed" : ""}`}>
                     <img src={imageUrl} alt={`Signature-${key}`} className="signature-image" style={{ width: `${width}px` }} />
                     {canDelete && (
-                        <button className="signature-delete-btn" onClick={handleDeleteClick} title="Delete signature">
+                        <button className="signature-delete-btn" onClick={handleDeleteClick} title="Delete signature" style={{ top: `${4 * canvasScale}px`, right: `${4 * canvasScale}px`, width: `${24 * canvasScale}px`, height: `${24 * canvasScale}px`, fontSize: `${16 * canvasScale}px` }}>
                             ×
                         </button>
                     )}
                 </div>
                 {(signerName || signatureTimestamp) && (
-                    <div className="signature-footer">
-                        <span className="signature-footer-text">
+                    <div className="signature-footer" style={{ marginTop: `${2 * canvasScale}px`, paddingTop: `${2 * canvasScale}px`, paddingBottom: `${2 * canvasScale}px` }}>
+                        <div className="signature-footer-text" style={{ fontSize: `${8 * canvasScale}px`, bottom: `${-24 * canvasScale}px`}}>
                             {signerName && <span className="signature-footer-name">{signerName}</span>}
                             {signerName && signatureTimestamp && <span className="signature-footer-separator"> | </span>}
                             {signatureTimestamp && <span className="signature-footer-timestamp">{signatureTimestamp}</span>}
-                        </span>
+                        </div>
                     </div>
                 )}
             </>
@@ -60,7 +60,16 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false }) => 
 
     // Otherwise show the sign button
     return (
-        <button className="signature-button" onClick={handleSignClick} disabled={disabled} data-key={key}>
+        <button
+            className="signature-button"
+            onClick={handleSignClick}
+            disabled={disabled}
+            data-key={key}
+            style={{
+                padding: `${8 * canvasScale}px ${16 * canvasScale}px`,
+                borderWidth: `${2 * canvasScale}px`,
+                fontSize: `${14 * canvasScale}px`,
+            }}>
             {buttonName || "Sign Here"}
         </button>
     );

@@ -17,6 +17,7 @@
     --primary-color: #2863EB;
     --secondary-color: #F5F8FF;
     text-wrap: balance;
+    user-select: none;
 }
 
 :root::selection {
