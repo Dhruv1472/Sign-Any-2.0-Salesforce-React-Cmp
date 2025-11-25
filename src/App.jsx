@@ -872,7 +872,10 @@ function App() {
                 htmlPages.forEach(p => finalDoc.addPage(p));
 
                 const pdfBytes = await finalDoc.save();
-
+                console.log("Final PDF byte size:", pdfBytes);
+                // Generate SHA-256 hash of the final PDF
+                const pdfHash = await generatePdfHash(pdfBytes);
+                console.log('Generated PDF Hash:', pdfHash);
 
                 // Upload to Salesforce if config is available
                 if (salesforceConfig) {
@@ -887,8 +890,8 @@ function App() {
                         await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
                     }
 
-                    // Update Document record with signature and field data
-                    await updateDocumentRecord(salesforceConfig.recordId, signatureData, fieldData, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
+                    // Update Document record with signature, field data, and PDF hash
+                    await updateDocumentRecord(salesforceConfig.recordId, signatureData, fieldData, pdfHash, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
 
                     // Mark as submitted
                     setIsSubmitted(true);
@@ -1001,7 +1004,7 @@ function App() {
     };
 
     // Update Document__c record with signature and field data
-    const updateDocumentRecord = async (documentId, signatureData, fieldData, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+    const updateDocumentRecord = async (documentId, signatureData, fieldData, pdfHash, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
 
@@ -1040,6 +1043,7 @@ function App() {
                 },
                 body: JSON.stringify({
                     Signing_Details__c: signatureDataJson,
+                    Document_Hash_Key__c: pdfHash,
                 }),
             });
 
@@ -1057,6 +1061,7 @@ function App() {
                     },
                     body: JSON.stringify({
                         Signing_Details__c: signatureDataJson,
+                        Document_Hash_Key__c: pdfHash,
                     }),
                 });
             }
@@ -1902,6 +1907,26 @@ function App() {
         } catch (error) {
             console.warn("Could not generate device fingerprint:", error);
             return "Unavailable";
+        }
+    };
+
+    // Function to generate SHA-256 hash of PDF bytes
+    const generatePdfHash = async (pdfBytes) => {
+        try {
+            // Convert Uint8Array to ArrayBuffer if needed
+            const buffer = pdfBytes instanceof Uint8Array ? pdfBytes.buffer : pdfBytes;
+            
+            // Generate SHA-256 hash
+            const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+            
+            // Convert hash to hex string
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            
+            return hashHex;
+        } catch (error) {
+            console.error('Error generating PDF hash:', error);
+            throw error;
         }
     };
 
