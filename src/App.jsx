@@ -137,6 +137,22 @@ function App() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pdfDocRef.current, totalPages]);
 
+    // ESC key handler for all modals
+    useEffect(() => {
+        const handleEscKey = (event) => {
+            if (event.key === 'Escape') {
+                if (showRejectConfirm) handleCancelReject();
+                else if (isModalOpen) handleModalClose();
+                else if (isFieldModalOpen) handleFieldModalClose();
+            }
+        };
+
+        if (isModalOpen || isFieldModalOpen || showRejectConfirm) {
+            document.addEventListener('keydown', handleEscKey);
+            return () => document.removeEventListener('keydown', handleEscKey);
+        }
+    }, [isModalOpen, isFieldModalOpen, showRejectConfirm]);
+
     // Main function to fetch Document and then PDF
     const fetchDocumentAndPdf = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         setLoading(true);

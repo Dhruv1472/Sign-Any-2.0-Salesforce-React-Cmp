@@ -44,6 +44,10 @@ button {
     transition: all 0.2s;
 }
 
+button:focus-visible {
+    outline: none;
+}
+
 /* button:hover:not(:disabled) {
     background-color: #f0f0f0;
     border-color: #999;
