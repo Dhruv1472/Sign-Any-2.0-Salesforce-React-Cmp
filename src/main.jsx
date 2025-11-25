@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./index.css";
 import App from "./App.jsx";
 import ThankYou from "./pages/ThankYou.jsx";
+import Rejected from "./pages/Rejected.jsx";
 
 createRoot(document.getElementById("root")).render(
     <StrictMode>
@@ -11,6 +12,7 @@ createRoot(document.getElementById("root")).render(
             <Routes>
                 <Route path="/" element={<App />} />
                 <Route path="/thank-you" element={<ThankYou />} />
+                <Route path="/rejected" element={<Rejected />} />
             </Routes>
         </BrowserRouter>
     </StrictMode>

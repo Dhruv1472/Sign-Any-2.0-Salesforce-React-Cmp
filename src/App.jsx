@@ -48,6 +48,8 @@ function App() {
     const [adminProperties, setAdminProperties] = useState(null);
     const [showSpinner, setShowSpinner] = useState(false);
     const [canvasScale, setCanvasScale] = useState(1);
+    const [pdfPageFormat, setPdfPageFormat] = useState({ width: A4_WIDTH, height: A4_HEIGHT, orientation: 'portrait' });
+    const [showRejectConfirm, setShowRejectConfirm] = useState(false);
     const canvasRefsArray = useRef([]);
     const pdfDocRef = useRef(null);
     const resizeTimeoutRef = useRef(null);
@@ -395,6 +397,26 @@ function App() {
             setTotalPages(pdf.numPages);
             setPdfFile(fileName);
             setError(null);
+            
+            // Detect PDF page format from first page
+            if (pdf.numPages > 0) {
+                const firstPage = await pdf.getPage(1);
+                const viewport = firstPage.getViewport({ scale: 1 });
+                const pageWidth = viewport.width;
+                const pageHeight = viewport.height;
+                
+                // Determine orientation
+                const orientation = pageWidth > pageHeight ? 'landscape' : 'portrait';
+                
+                // Store the detected page format
+                setPdfPageFormat({
+                    width: pageWidth,
+                    height: pageHeight,
+                    orientation: orientation
+                });
+                
+                console.log(`Detected PDF format: ${pageWidth.toFixed(2)}pt x ${pageHeight.toFixed(2)}pt (${orientation})`);
+            }
         } catch (error) {
             console.error("Error loading PDF:", error);
             setError("Error loading PDF file");
@@ -941,7 +963,7 @@ function App() {
                 }
                 // Build audit report data from Salesforce record and signatures
                 try {
-                    await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages);
+                    await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat);
                 } catch (e) {
                     console.warn("Failed to append audit report page:", e);
                 }
@@ -1361,9 +1383,10 @@ function App() {
     };
 
     // Build HTML for audit report
-    const generateAuditHTML = async (doc, sigData, orgId, totalPages) => {
+    const generateAuditHTML = async (doc, sigData, orgId, totalPages, pageFormat) => {
         console.log("Generating audit report HTML with document and signatures:", doc);
         console.log("Signature data:", sigData);
+        console.log("Using page format:", pageFormat);
 
         // Helper function to format timestamp with smaller timezone
         const formatTimestamp = (timestamp) => {
@@ -1572,7 +1595,7 @@ function App() {
                                     <table style="width:100%; border-collapse:collapse;">
                                         <tr>
                                             <td style="color:gray; padding-right:12px; width:80px;">Signed On:</td>
-                                            <td style="color:black;">${formatTimestamp(f.timestamp || "--")}</td>
+                                            <td style="color:black;">${formatTimestamp(f.timestamp || f.timeStamp || f.signedTime || "--")}</td>
                                         </tr>
                                         <tr>
                                             <td style="color:gray; padding-right:12px; width:80px;">Device:</td>
@@ -1633,12 +1656,23 @@ function App() {
         element.style.zIndex = "9999";
 
         await new Promise(res => setTimeout(res, 400));
-        console.log("oage")
+        
+        // Use detected PDF page format for audit report
+        const pageWidth = pdfPageFormat.width || A4_WIDTH;
+        const pageHeight = pdfPageFormat.height || A4_HEIGHT;
+        const orientation = pdfPageFormat.orientation || 'portrait';
+        
+        console.log(`Generating audit report with format: ${pageWidth.toFixed(2)}pt x ${pageHeight.toFixed(2)}pt (${orientation})`);
+        
         const pdfBlob = await html2pdf().from(element).set({
             margin: 0,
             filename: "audit.pdf",
             html2canvas: { scale: 2, useCORS: true },
-            jsPDF: { unit: "pt", format: 'a4', orientation: "portrait" }
+            jsPDF: { 
+                unit: "pt", 
+                format: [pageWidth, pageHeight], 
+                orientation: orientation 
+            }
         }).output("blob");
 
         // Download
@@ -1656,7 +1690,15 @@ function App() {
         return await pdfBlob.arrayBuffer();
     };
 
-    const handleReject = async () => {
+    const handleReject = () => {
+        // Show confirmation modal instead of rejecting directly
+        setShowRejectConfirm(true);
+    };
+
+    const handleConfirmReject = async () => {
+        // Close the confirmation modal
+        setShowRejectConfirm(false);
+        
         if (!salesforceConfig) return;
 
         const { recordId, accessToken, instanceUrl, clientId, clientSecret } = salesforceConfig;
@@ -1698,13 +1740,8 @@ function App() {
                 throw new Error(`Failed to update Status__c: ${response.status}`);
             }
 
-            // Disable UI after rejection
-            setIsSubmitted(true);
-            setToast({
-                isVisible: true,
-                message: "Document has been rejected.",
-                type: "error",
-            });
+            // Navigate to rejected page and replace history so user can't go back
+            navigate('/rejected', { replace: true });
         } catch (error) {
             console.error("Reject error:", error);
             setToast({
@@ -1713,6 +1750,11 @@ function App() {
                 type: "error",
             });
         }
+    };
+
+    const handleCancelReject = () => {
+        // Close the confirmation modal without rejecting
+        setShowRejectConfirm(false);
     };
 
     // Refresh access token using client credentials
@@ -2109,7 +2151,7 @@ function App() {
                                         );
                                     })}
                                 </div>
-                                {shouldShowSaveButton() && !areAllSignaturesCompleted() && (
+                                {shouldShowSaveButton() && (
                                     <div className="bottom-bar">
                                         <div className="bottom-bar-left">
                                             <input type="checkbox" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px" }} />
@@ -2238,6 +2280,31 @@ function App() {
             <FieldModal isOpen={isFieldModalOpen} onClose={handleFieldModalClose} onSave={handleFieldSave} field={currentField} />
             <Toast isVisible={toast.isVisible} message={toast.message} type={toast.type} onClose={handleCloseToast} />
             <div id="audit-html" style={{ position:'absolute', top:'-9999px', left:'-9999px' }}></div>
+            
+            {/* Rejection Confirmation Modal */}
+            {showRejectConfirm && (
+                <div className="reject-confirm-overlay" onClick={handleCancelReject}>
+                    <div className="reject-confirm-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="reject-confirm-icon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 13C11.45 13 11 12.55 11 12V8C11 7.45 11.45 7 12 7C12.55 7 13 7.45 13 8V12C13 12.55 12.55 13 12 13ZM13 17H11V15H13V17Z" fill="#d32f2f"/>
+                            </svg>
+                        </div>
+                        <h3 className="reject-confirm-title">Reject Document?</h3>
+                        <p className="reject-confirm-message">
+                            Are you sure you want to reject this document? This action cannot be undone.
+                        </p>
+                        <div className="reject-confirm-actions">
+                            <button className="reject-cancel-btn" onClick={handleCancelReject}>
+                                Cancel
+                            </button>
+                            <button className="reject-confirm-btn" onClick={handleConfirmReject}>
+                                Yes, Reject
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             
             {/* Spinner Overlay */}
             {showSpinner && (
