@@ -46,8 +46,8 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false, canva
                     )}
                 </div>
                 {(signerName || signatureTimestamp) && (
-                    <div className="signature-footer" style={{ marginTop: `${2 * canvasScale}px`, paddingTop: `${2 * canvasScale}px`, paddingBottom: `${2 * canvasScale}px` }}>
-                        <div className="signature-footer-text" style={{ fontSize: `${8 * canvasScale}px`, bottom: `${-24 * canvasScale}px`}}>
+                    <div className="signature-footer" style={{ marginTop: `${2 * canvasScale}px`, paddingTop: `${2 * canvasScale}px`, paddingBottom: `${2 * canvasScale}px`, bottom: `-${19.51 * canvasScale - 1.755}px` }}>
+                        <div className="signature-footer-text" style={{ fontSize: `${8 * canvasScale}px`}}>
                             {signerName && <span className="signature-footer-name">{signerName}</span>}
                             {signerName && signatureTimestamp && <span className="signature-footer-separator"> | </span>}
                             {signatureTimestamp && <span className="signature-footer-timestamp">{signatureTimestamp}</span>}
