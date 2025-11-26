@@ -646,7 +646,37 @@
     font-size: 15px;
     color: #666;
     line-height: 1.6;
-    margin: 0 0 28px 0;
+    margin: 0 0 20px 0;
+}
+
+.reject-reason-field {
+    text-align: left;
+    margin-bottom: 24px;
+}
+
+.reject-reason-field label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+.reject-reason-field textarea {
+    width: 100%;
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 80px;
+    transition: border-color 0.2s ease;
+}
+
+.reject-reason-field textarea:focus {
+    outline: none;
+    border-color: #d32f2f;
 }
 
 .reject-confirm-actions {

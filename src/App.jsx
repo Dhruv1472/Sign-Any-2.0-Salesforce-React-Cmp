@@ -50,6 +50,7 @@ function App() {
     const [canvasScale, setCanvasScale] = useState(1);
     const [pdfPageFormat, setPdfPageFormat] = useState({ width: A4_WIDTH, height: A4_HEIGHT, orientation: 'portrait' });
     const [showRejectConfirm, setShowRejectConfirm] = useState(false);
+    const [rejectReason, setRejectReason] = useState("");
     const canvasRefsArray = useRef([]);
     const pdfDocRef = useRef(null);
     const resizeTimeoutRef = useRef(null);
@@ -1714,10 +1715,21 @@ function App() {
 
     const handleReject = () => {
         // Show confirmation modal instead of rejecting directly
+        setRejectReason(""); // Clear previous reason
         setShowRejectConfirm(true);
     };
 
     const handleConfirmReject = async () => {
+        // Validate that reason is provided
+        if (!rejectReason.trim()) {
+            setToast({
+                isVisible: true,
+                message: "Please provide a reason for rejection",
+                type: "error"
+            });
+            return;
+        }
+
         // Close the confirmation modal
         setShowRejectConfirm(false);
         
@@ -1737,6 +1749,7 @@ function App() {
                 },
                 body: JSON.stringify({
                     Status__c: "Rejected",
+                    Rejection_Reason__c: rejectReason.trim()
                 }),
             });
 
@@ -1754,6 +1767,7 @@ function App() {
                     },
                     body: JSON.stringify({
                         Status__c: "Rejected",
+                        Rejection_Reason__c: rejectReason.trim()
                     }),
                 });
             }
@@ -1776,6 +1790,7 @@ function App() {
 
     const handleCancelReject = () => {
         // Close the confirmation modal without rejecting
+        setRejectReason(""); // Clear reason
         setShowRejectConfirm(false);
     };
 
@@ -2045,10 +2060,10 @@ function App() {
         }
     };
 
+    // MAC address cannot be retrieved from browser for security reasons
+    // We'll create a browser fingerprint as a unique identifier instead
     const getMacAddress = async () => {
         try {
-            // Note: True MAC address cannot be retrieved from browser for security reasons
-            // We'll create a browser fingerprint as a unique identifier instead
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             ctx.textBaseline = 'top';
@@ -2316,11 +2331,39 @@ function App() {
                         <p className="reject-confirm-message">
                             Are you sure you want to reject this document? This action cannot be undone.
                         </p>
+                        <div className="reject-reason-field">
+                            <label htmlFor="reject-reason">Reason for Rejection <span style={{ color: "#d32f2f" }}>*</span></label>
+                            <textarea
+                                id="reject-reason"
+                                value={rejectReason}
+                                onChange={(e) => setRejectReason(e.target.value)}
+                                placeholder="Please provide a reason for rejecting this document..."
+                                rows="4"
+                                style={{
+                                    width: "100%",
+                                    padding: "10px",
+                                    borderRadius: "6px",
+                                    border: "1px solid #ddd",
+                                    fontSize: "14px",
+                                    fontFamily: "inherit",
+                                    resize: "vertical",
+                                    minHeight: "80px"
+                                }}
+                            />
+                        </div>
                         <div className="reject-confirm-actions">
                             <button className="reject-cancel-btn" onClick={handleCancelReject}>
                                 Cancel
                             </button>
-                            <button className="reject-confirm-btn" onClick={handleConfirmReject}>
+                            <button 
+                                className="reject-confirm-btn" 
+                                onClick={handleConfirmReject}
+                                disabled={!rejectReason.trim()}
+                                style={{
+                                    opacity: !rejectReason.trim() ? 0.5 : 1,
+                                    cursor: !rejectReason.trim() ? "not-allowed" : "pointer"
+                                }}
+                            >
                                 Yes, Reject
                             </button>
                         </div>
