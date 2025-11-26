@@ -1009,7 +1009,7 @@ function App() {
                     // Upload signed PDF as ContentVersion
                     let newContentVersionId = null;
                     if (allRequiredFieldsFilled) {
-                        newContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
+                        newContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c);
                     }
 
                     // Update Document record with signature, field data, PDF hash, and new ContentVersion ID
@@ -1072,7 +1072,7 @@ function App() {
     };
 
     // Upload signed PDF to Salesforce as ContentVersion
-    const uploadSignedPdfToSalesforce = async (pdfBytes, firstPublishLocationId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+    const uploadSignedPdfToSalesforce = async (pdfBytes, firstPublishLocationId, accessToken, instanceUrl, clientId = null, clientSecret = null, documentName) => {
         try {
             let currentToken = accessToken;
 
@@ -1083,8 +1083,8 @@ function App() {
             const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/ContentVersion`;
 
             const contentVersionData = {
-                Title: `Signed_Document_${Date.now()}`,
-                PathOnClient: `Signed_Document_${Date.now()}.pdf`,
+                Title: `${documentName} - Signed`,
+                PathOnClient: `${documentName} - Signed.pdf`,
                 VersionData: base64Pdf,
                 FirstPublishLocationId: firstPublishLocationId,
                 IsMajorVersion: true,
@@ -1168,7 +1168,7 @@ function App() {
 
             // Add ContentVersion ID if provided
             if (newContentVersionId) {
-                updateData.Uploaded_Document_Id__c = newContentVersionId;
+                updateData.Final_Document_Id__c = newContentVersionId;
             }
 
             let response = await fetch(apiUrl, {
@@ -1507,7 +1507,7 @@ function App() {
                             
                             <td style="color:gray; padding-right:18px;">Document Status:</td>
                             <td style="text-align:right; padding-left:18px;">
-                                <span style="color:#00BD42; font-weight:600;background:#E0FFEB;padding:0px 8px 4px 8px;border-radius:8px;font-size:11px;align-items:center;">${doc.Status__c || ""}</span>
+                                <span style="color:#00BD42; font-weight:600;background:#E0FFEB;padding:0px 8px 4px 8px;border-radius:8px;font-size:11px;align-items:center;">${allFields.length > 0 && signedFields.length === allFields.length ? "Completed" : (doc.Status__c || "")}</span>
                             </td>
                         </tr>
                         <tr>
