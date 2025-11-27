@@ -164,7 +164,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
                             fontSize: `${12 * canvasScale}px`,
                             padding: `${4 * canvasScale}px`
                         }}>
-                            {fieldType === "date" && value ? new Date(value).toLocaleDateString() : value}
+                            {value}
                         </div>
                     )}
                 </div>

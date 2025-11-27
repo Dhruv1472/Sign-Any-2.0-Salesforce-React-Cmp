@@ -543,10 +543,11 @@ function App() {
         const locationInfo = userLocation || "Location Unavailable";
         const macAddress = userMacAddress || "Unavailable";
 
-        // Format timestamp as "MM dd yyyy, hh:mm:ss AM/PM TimeZone"
+        // Format timestamp as "Nov 21 2025, hh:mm:ss AM/PM TimeZone"
         const now = new Date();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const month = monthNames[now.getMonth()];
+        const day = now.getDate();
         const year = now.getFullYear();
         const timeString = now.toLocaleTimeString('en-US', { 
             hour: '2-digit', 
@@ -556,7 +557,7 @@ function App() {
         });
         // Get timezone abbreviation
         const timeZone = now.toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop();
-        const timeStamp = `${month}/${day}/${year}, ${timeString} ${timeZone}`;
+        const timeStamp = `${month} ${day} ${year}, ${timeString} ${timeZone}`;
         
         const userAgent = navigator.userAgent || "Unknown Device";
 
@@ -880,8 +881,6 @@ function App() {
                         if (fieldType === "checkbox") {
                             isCheckbox = true;
                             checkboxChecked = field.value === true || field.value === "true" || field.value === "True";
-                        } else if (fieldType === "date" && field.value) {
-                            displayValue = new Date(field.value).toLocaleDateString();
                         } else {
                             displayValue = String(field.value || "");
                         }
@@ -1415,16 +1414,16 @@ function App() {
         const formatTimestamp = (timestamp) => {
             if (!timestamp || timestamp === "--") return "--";
             
-            // Check if timestamp contains AM or PM
+            // Check if timestamp contains AM or PM followed by timezone
             const ampmRegex = /(.*?\s+(?:AM|PM|am|pm))(\s+.+)?$/;
             const match = timestamp.match(ampmRegex);
             
             if (match) {
                 const mainPart = match[1]; // Date, time, AM/PM
-                const timezonePart = match[2] || ""; // Everything after AM/PM
+                const timezonePart = match[2] || ""; // Everything after AM/PM (timezone)
                 
                 if (timezonePart.trim()) {
-                    return `${mainPart}<span style="font-size:8px;"> (${timezonePart.trim()})</span>`;
+                    return `${mainPart} <span style="font-size:9px; color:#666;">${timezonePart.trim()}</span>`;
                 }
             }
             
@@ -2127,13 +2126,13 @@ function App() {
 
     return (
         <div className="app">
-            {loading && (
+            {/* {loading && (
                 <div className="placeholder">
                     <div className="placeholder-content">
                         <p>Loading PDF from Salesforce...</p>
                     </div>
                 </div>
-            )}
+            )} */}
             {error && !pdfFile && !isExpired && (
                 <div className="placeholder">
                     <div className="placeholder-content">
@@ -2372,7 +2371,7 @@ function App() {
             )}
             
             {/* Spinner Overlay */}
-            {showSpinner && (
+            {(showSpinner || loading) && (
                 <div className="spinner-overlay">
                     <div className="spinner"></div>
                 </div>

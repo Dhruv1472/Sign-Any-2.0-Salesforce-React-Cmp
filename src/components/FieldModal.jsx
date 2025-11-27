@@ -23,6 +23,21 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
                     ? field.defaultValue
                     : (field.fieldType === "checkbox" ? false : ""));
             
+            // Convert formatted date "Nov 21 2025" back to "YYYY-MM-DD" for date input
+            if (field.fieldType === "date" && initialValue && typeof initialValue === "string") {
+                const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                const parts = initialValue.split(" ");
+                if (parts.length === 3) {
+                    const monthIndex = monthNames.indexOf(parts[0]);
+                    if (monthIndex !== -1) {
+                        const day = String(parts[1]).padStart(2, '0');
+                        const year = parts[2];
+                        const month = String(monthIndex + 1).padStart(2, '0');
+                        initialValue = `${year}-${month}-${day}`;
+                    }
+                }
+            }
+            
             // Ensure it's a string if it should be a string
             if (field.fieldType !== "checkbox" && initialValue !== "") {
                 initialValue = String(initialValue);
@@ -71,6 +86,16 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
                 setError("This field is required");
                 return;
             }
+        }
+
+        // Format date as "Nov 21 2025"
+        if (fieldType === "date" && value) {
+            const dateObj = new Date(value);
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const month = monthNames[dateObj.getMonth()];
+            const day = dateObj.getDate();
+            const year = dateObj.getFullYear();
+            normalizedValue = `${month} ${day} ${year}`;
         }
 
         if (onSave) {
