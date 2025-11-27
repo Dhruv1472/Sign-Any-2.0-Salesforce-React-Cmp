@@ -1657,7 +1657,7 @@ function App() {
                                             <td style="color:black;">${f.ipAddress || "--"}</td>
                                         </tr>
                                         <tr>
-                                            <td style="color:gray; padding-right:12px; width:50px;">MAC:</td>
+                                            <td style="color:gray; padding-right:12px; width:50px;">Bro. Fin.:</td>
                                             <td style="color:black;">${f.macAddress || "--"}</td>
                                         </tr>
                                     </table>
@@ -2047,20 +2047,7 @@ function App() {
             return `${city}, ${state}, ${country}`;
         } catch (gpsError) {
             console.warn("GPS failed, fallback to IP-based location:", gpsError);
-            
-            // Fallback to IP-based geolocation
-            try {
-                const ipGeoRes = await fetch('https://ipapi.co/json/');
-                const ipGeoData = await ipGeoRes.json();
-                
-                if (ipGeoData.city && ipGeoData.region && ipGeoData.country_name) {
-                    return `${ipGeoData.city}, ${ipGeoData.region}, ${ipGeoData.country_name}`;
-                }
-                return "Location Unavailable";
-            } catch (ipError) {
-                console.warn("IP-based location also failed:", ipError);
-                return "Location Unavailable";
-            }
+            return "Location Unavailable";
         }
     };
 
