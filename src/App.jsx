@@ -183,6 +183,11 @@ function App() {
             setFieldData(fields);
             setInitialSignatureData(JSON.parse(JSON.stringify(signatures)));
 
+            // Check if document is already submitted (Completed or Rejected status)
+            if (documentData.Status__c === "Completed" || documentData.Status__c === "Rejected") {
+                setIsSubmitted(true);
+            }
+
             // Step 2: Fetch PDF from ContentVersion
             await fetchPdfFromContentVersion(contentVersionId, currentToken, instanceUrl);
         } catch (error) {
