@@ -44,7 +44,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
         if (isDisabled) return;
         
         // For text fields, enable inline editing
-        if (fieldType === "text") {
+        if (["text", "number", "email"].includes(fieldType)) {
             // Prefill with existing value, defaultValue, or empty string
             const initialValue = value || field.defaultValue || "";
             setEditValue(initialValue);
@@ -64,6 +64,15 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
             return;
         }
         
+        // Email validation
+        if (fieldType === "email" && editValue && editValue.trim() !== "") {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(editValue)) {
+                alert("Please enter a valid email address");
+                return;
+            }
+        }
+        
         if (onSave) {
             onSave(editValue, field);
         }
@@ -80,6 +89,8 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
     };
 
     const handleInputChange = (e) => {
+        console.log(1);
+        
         const newValue = e.target.value;
         
         // Check if trying to exceed max length
@@ -206,7 +217,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
     }
 
     // If editing inline (text field)
-    if (isEditing && fieldType === "text") {
+    if (isEditing && ["text", "number", "email"].includes(fieldType)) {
         const remainingChars = maxLength - editValue.length;
         const isNearLimit = remainingChars <= 10;
         const isAtLimit = remainingChars === 0;
@@ -215,7 +226,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
             <div className="field-inline-edit">
                 <input
                     ref={inputRef}
-                    type="text"
+                    type={fieldType}
                     className="field-inline-input"
                     value={editValue}
                     onChange={handleInputChange}

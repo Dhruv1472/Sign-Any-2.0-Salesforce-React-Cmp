@@ -1452,11 +1452,12 @@ function App() {
         const html = `
             <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
             <style>
-                * {
+                /* Scope audit styles to the audit container only to avoid leaking globally */
+                #audit-html, #audit-html * {
                     font-family: 'Manrope', sans-serif !important;
                 }
 
-                * {
+                #audit-html * {
                     -webkit-print-color-adjust: exact;
                     print-color-adjust: exact;
                 }
@@ -1713,11 +1714,15 @@ function App() {
         // a.click();
         // URL.revokeObjectURL(url);
 
+        const arrayBuffer = await pdfBlob.arrayBuffer();
+
         element.style.visibility = "hidden";
         element.style.position = "absolute";
         element.style.top = "-9999px";
+        // Clean up injected HTML to prevent any lingering scoped styles
+        element.innerHTML = "";
 
-        return await pdfBlob.arrayBuffer();
+        return arrayBuffer;
     };
 
     const handleReject = () => {

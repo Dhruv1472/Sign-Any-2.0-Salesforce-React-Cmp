@@ -178,6 +178,7 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
                         onChange={(e) => setValue(e.target.value)}
                         placeholder="Enter number here"
                         autoFocus
+                        maxLength={field.maxLength ? parseInt(field.maxLength, 10) : undefined}
                     />
                 );
 

@@ -362,7 +362,6 @@
     border-radius: 20px;
     border: 1px solid #fed7aa;
     box-shadow: 0 12px 30px rgba(251, 146, 60, 0.12);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     text-align: center;
     max-width: 500px;
     margin: auto;
@@ -668,7 +667,6 @@
     border-radius: 6px;
     border: 1px solid #ddd;
     font-size: 14px;
-    font-family: inherit;
     resize: vertical;
     min-height: 80px;
     transition: border-color 0.2s ease;
