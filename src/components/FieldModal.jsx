@@ -79,6 +79,27 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
             }
         }
 
+        // Date validation with minDate and maxDate
+        if (fieldType === "date" && value) {
+            const selectedDate = new Date(value);
+            
+            if (field.minDate) {
+                const minDate = new Date(field.minDate);
+                if (selectedDate < minDate) {
+                    setError(`Date must be on or after ${field.minDate}`);
+                    return;
+                }
+            }
+            
+            if (field.maxDate) {
+                const maxDate = new Date(field.maxDate);
+                if (selectedDate > maxDate) {
+                    setError(`Date must be on or before ${field.maxDate}`);
+                    return;
+                }
+            }
+        }
+
         let normalizedValue = value;
         if (fieldType === "initials" && typeof value === "string") {
             normalizedValue = value.trim().toUpperCase();
@@ -166,6 +187,8 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
                         value={value}
                         onChange={(e) => setValue(e.target.value)}
                         autoFocus
+                        min={field.minDate || undefined}
+                        max={field.maxDate || undefined}
                     />
                 );
 
