@@ -48,7 +48,7 @@ function App() {
     const [adminProperties, setAdminProperties] = useState(null);
     const [showSpinner, setShowSpinner] = useState(false);
     const [canvasScale, setCanvasScale] = useState(1);
-    const [pdfPageFormat, setPdfPageFormat] = useState({ width: A4_WIDTH, height: A4_HEIGHT, orientation: 'portrait' });
+    const [pdfPageFormat, setPdfPageFormat] = useState({ width: A4_WIDTH, height: A4_HEIGHT, orientation: "portrait" });
     const [showRejectConfirm, setShowRejectConfirm] = useState(false);
     const [rejectReason, setRejectReason] = useState("");
     const canvasRefsArray = useRef([]);
@@ -74,7 +74,7 @@ function App() {
             fetchOrganizationId(accessToken, instanceUrl, clientId, clientSecret)
                 .then((id) => setOrgIdState(id))
                 .catch(() => setOrgIdState(null));
-            
+
             fetchAdminProperties(accessToken, instanceUrl, clientId, clientSecret)
                 .then((properties) => setAdminProperties(properties))
                 .catch(() => setAdminProperties(null));
@@ -120,17 +120,17 @@ function App() {
             // Set new timeout (300ms debounce)
             resizeTimeoutRef.current = setTimeout(() => {
                 if (pdfDocRef.current && totalPages > 0) {
-                    console.log('Window resized - re-rendering PDF pages');
+                    console.log("Window resized - re-rendering PDF pages");
                     renderAllPages(pdfDocRef.current);
                 }
             }, 300);
         };
 
-        window.addEventListener('resize', handleResize);
+        window.addEventListener("resize", handleResize);
 
         // Cleanup
         return () => {
-            window.removeEventListener('resize', handleResize);
+            window.removeEventListener("resize", handleResize);
             if (resizeTimeoutRef.current) {
                 clearTimeout(resizeTimeoutRef.current);
             }
@@ -141,7 +141,7 @@ function App() {
     // ESC key handler for all modals
     useEffect(() => {
         const handleEscKey = (event) => {
-            if (event.key === 'Escape') {
+            if (event.key === "Escape") {
                 if (showRejectConfirm) handleCancelReject();
                 else if (isModalOpen) handleModalClose();
                 else if (isFieldModalOpen) handleFieldModalClose();
@@ -149,8 +149,8 @@ function App() {
         };
 
         if (isModalOpen || isFieldModalOpen || showRejectConfirm) {
-            document.addEventListener('keydown', handleEscKey);
-            return () => document.removeEventListener('keydown', handleEscKey);
+            document.addEventListener("keydown", handleEscKey);
+            return () => document.removeEventListener("keydown", handleEscKey);
         }
     }, [isModalOpen, isFieldModalOpen, showRejectConfirm]);
 
@@ -284,7 +284,7 @@ function App() {
                                         signed: Boolean(entry.signed),
                                     });
                                 }
-                                
+
                                 // DO NOT extract text fields from nested structure to fieldData
                                 // They will be rendered by SignatureOverlay along with signature fields
                             } else {
@@ -328,7 +328,7 @@ function App() {
 
             const consumedLegacyKeys = new Set();
             const sortedSignatureData = [...parsedSignatureData].sort((a, b) => a.priority - b.priority);
-            
+
             parsedSignatureData = sortedSignatureData.map((sig) => {
                 if (sig.fields && Array.isArray(sig.fields)) {
                     return {
@@ -337,19 +337,19 @@ function App() {
                             const compositeKey = `${String(sig.priority)}_${String(field.index)}`;
                             const legacyKey = String(field.index);
                             let sigData = signatureMap.get(compositeKey);
-                            
+
                             if (!sigData && field.filled && !consumedLegacyKeys.has(legacyKey)) {
                                 sigData = signatureMap.get(legacyKey);
                                 if (sigData) {
                                     consumedLegacyKeys.add(legacyKey);
                                 }
                             }
-                            
+
                             if (sigData) {
                                 // For checkboxes, value can be false which is valid
                                 const fieldType = (field.fieldType || field.type || "").toLowerCase();
                                 const hasValue = sigData.value !== undefined && sigData.value !== null && (sigData.value !== "" || fieldType === "checkbox");
-                                
+
                                 return {
                                     ...field,
                                     imageUrl: sigData.imageUrl || null,
@@ -419,24 +419,24 @@ function App() {
             setTotalPages(pdf.numPages);
             setPdfFile(fileName);
             setError(null);
-            
+
             // Detect PDF page format from first page
             if (pdf.numPages > 0) {
                 const firstPage = await pdf.getPage(1);
                 const viewport = firstPage.getViewport({ scale: 1 });
                 const pageWidth = viewport.width;
                 const pageHeight = viewport.height;
-                
+
                 // Determine orientation
-                const orientation = pageWidth > pageHeight ? 'landscape' : 'portrait';
-                
+                const orientation = pageWidth > pageHeight ? "landscape" : "portrait";
+
                 // Store the detected page format
                 setPdfPageFormat({
                     width: pageWidth,
                     height: pageHeight,
-                    orientation: orientation
+                    orientation: orientation,
                 });
-                
+
                 console.log(`Detected PDF format: ${pageWidth.toFixed(2)}pt x ${pageHeight.toFixed(2)}pt (${orientation})`);
             }
         } catch (error) {
@@ -554,16 +554,16 @@ function App() {
         const month = monthNames[now.getMonth()];
         const day = now.getDate();
         const year = now.getFullYear();
-        const timeString = now.toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
-            minute: '2-digit', 
-            second: '2-digit', 
-            hour12: true 
+        const timeString = now.toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true,
         });
         // Get timezone abbreviation
-        const timeZone = now.toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop();
+        const timeZone = now.toLocaleTimeString("en-US", { timeZoneName: "short" }).split(" ").pop();
         const timeStamp = `${month} ${day} ${year}, ${timeString} ${timeZone}`;
-        
+
         const userAgent = navigator.userAgent || "Unknown Device";
 
         const osMatch = userAgent.match(/\(([^;]+);/);
@@ -583,22 +583,15 @@ function App() {
             locationInfo,
             macAddress,
             timeStamp,
-            signatureType
+            signatureType,
         };
 
         // Pass metadata to updateSignatureWithImage function
-        const updatedSignatures = updateSignatureWithImage(
-            signatureData, 
-            signature.index, 
-            imageData, 
-            signature.type, 
-            signerObject,
-            metadata
-        );
+        const updatedSignatures = updateSignatureWithImage(signatureData, signature.index, imageData, signature.type, signerObject, metadata);
 
         setSignatureData(updatedSignatures);
         setSessionSignedKeys((prev) => new Set(prev).add(signature.index));
-        
+
         // Hide spinner after signature is saved
         setShowSpinner(false);
     };
@@ -614,7 +607,7 @@ function App() {
             console.error("Attempted to save field value to a signature:", field);
             return;
         }
-        
+
         // Check if this field belongs to nested structure (has _parentSigner)
         if (field._parentSigner) {
             // Update nested field within signatureData
@@ -736,7 +729,12 @@ function App() {
                 const pages = pdfDoc.getPages();
 
                 // Get all filled signature fields across all signatures
-                const filledFieldsNew = signatureData.flatMap((sig) => sig.fields || []).filter((field) => field.filled && field.imageUrl);
+                const filledFieldsNew = signatureData.flatMap((s) =>
+                    (s.fields || [])
+                        .filter((f) => (f.type || f.fieldType || "").toLowerCase() == "signature") // Only include fields with type="signature"
+                        .map((f) => ({ ...f, signerName: s.name || "--", signerEmail: s.email || "--" }))
+                );
+                console.log("filledFieldsNew==> ", filledFieldsNew);
                 for (const field of filledFieldsNew) {
                     try {
                         const pageIndex = field.pageNumber - 1; // Convert to 0-indexed
@@ -763,7 +761,7 @@ function App() {
                         }
 
                         // Use percentage-based coordinates from the field data
-                        const pdfX = (field.xPercent / 100) * pageWidth ;
+                        const pdfX = (field.xPercent / 100) * pageWidth;
                         const pdfY = pageHeight - (field.yPercent / 100) * pageHeight - (field.heightPercent / 100) * pageHeight;
                         const pdfWidth = (field.widthPercent / 100) * pageWidth;
                         const pdfHeight = (field.heightPercent / 100) * pageHeight;
@@ -777,13 +775,13 @@ function App() {
                         });
 
                         // Add timestamp and signer name below the signature
-                        const signerName = field._parentSigner?.name || field.name || "";
+                        const signerName = field._parentSigner?.name || field.signerName || "";
                         const timestamp = field.timeStamp || field.timestamp || "";
-                        
+
                         if (signerName || timestamp) {
                             // Embed font for text
                             const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-                            
+
                             // Create the metadata text on one line
                             let metadataText = "";
                             if (signerName && timestamp) {
@@ -793,15 +791,15 @@ function App() {
                             } else {
                                 metadataText = timestamp;
                             }
-                            
+
                             // Calculate font size relative to signature width (small text)
                             const fontSize = 8;
                             const textWidth = font.widthOfTextAtSize(metadataText, fontSize);
-                            
+
                             // Center the text below the signature
                             const textX = pdfX + (pdfWidth - textWidth) / 2;
                             const textY = pdfY - fontSize - 2; // Position below signature with small gap
-                            
+
                             // Draw a subtle line above the text
                             page.drawLine({
                                 start: { x: pdfX, y: pdfY - 1 },
@@ -809,7 +807,7 @@ function App() {
                                 thickness: 0.5,
                                 color: rgb(0.88, 0.88, 0.88),
                             });
-                            
+
                             // Draw the metadata text
                             page.drawText(metadataText, {
                                 x: textX,
@@ -835,14 +833,14 @@ function App() {
                 });
 
                 // Get filled fields from nested structure (inside signatureData)
-                const nestedFilledFields = signatureData.flatMap((sig) => 
+                const nestedFilledFields = signatureData.flatMap((sig) =>
                     (sig.fields || []).filter((field) => {
                         // Check if it's a field type (not signature)
                         const fieldType = (field.fieldType || field.type || "").toLowerCase();
                         const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(fieldType);
-                        
+
                         if (!isFieldType) return false;
-                        
+
                         const hasValue = field.value !== null && field.value !== undefined && field.value !== "";
                         // For checkbox, false is a valid value
                         if (fieldType === "checkbox") {
@@ -941,15 +939,15 @@ function App() {
                             const lineHeight = fontSize * 1.4;
 
                             // Split text into words and build lines that fit within maxWidth
-                            const words = displayValue.split(' ');
+                            const words = displayValue.split(" ");
                             const lines = [];
-                            let currentLine = words[0] || '';
+                            let currentLine = words[0] || "";
 
                             for (let i = 1; i < words.length; i++) {
                                 const word = words[i];
-                                const testLine = currentLine + ' ' + word;
+                                const testLine = currentLine + " " + word;
                                 const testWidth = font.widthOfTextAtSize(testLine, fontSize);
-                                
+
                                 if (testWidth <= maxWidth) {
                                     currentLine = testLine;
                                 } else {
@@ -964,7 +962,7 @@ function App() {
 
                             // Draw each line
                             for (let i = 0; i < lines.length; i++) {
-                                const currentY = textY - (i * lineHeight);
+                                const currentY = textY - i * lineHeight;
                                 console.log("Drawing line on PDF:", lines[i], "at Y:", currentY);
                                 // Only draw if within field bounds
                                 if (currentY >= pdfY) {
@@ -989,19 +987,18 @@ function App() {
                     console.warn("Failed to append audit report page:", e);
                 }
 
-
-				// Merge audit report HTML as extra pages
+                // Merge audit report HTML as extra pages
                 const htmlPdfBytes = await convertAuditHTMLToPDF();
                 const finalDoc = await PDFDocument.load(await pdfDoc.save());
                 const extraDoc = await PDFDocument.load(htmlPdfBytes);
                 const htmlPages = await finalDoc.copyPages(extraDoc, extraDoc.getPageIndices());
-                htmlPages.forEach(p => finalDoc.addPage(p));
+                htmlPages.forEach((p) => finalDoc.addPage(p));
 
                 const pdfBytes = await finalDoc.save();
                 console.log("Final PDF byte size:", pdfBytes);
                 // Generate SHA-256 hash of the final PDF
                 const pdfHash = await generatePdfHash(pdfBytes);
-                console.log('Generated PDF Hash:', pdfHash);
+                console.log("Generated PDF Hash:", pdfHash);
 
                 // Upload to Salesforce if config is available
                 if (salesforceConfig) {
@@ -1032,9 +1029,8 @@ function App() {
 
                     // Navigate to thank you page and replace history so user can't go back
                     // setTimeout(() => {
-                        navigate('/thank-you', { replace: true });
+                    navigate("/thank-you", { replace: true });
                     // }, 1500);
-
                 } else {
                     // Fallback: Download the PDF if no Salesforce config
                     const blob = new Blob([pdfBytes], { type: "application/pdf" });
@@ -1059,7 +1055,7 @@ function App() {
 
                     // Navigate to thank you page and replace history so user can't go back
                     // setTimeout(() => {
-                        navigate('/thank-you', { replace: true });
+                    navigate("/thank-you", { replace: true });
                     // }, 1500);
                 }
             } catch (error) {
@@ -1223,7 +1219,7 @@ function App() {
                 if (sig.fields && Array.isArray(sig.fields)) {
                     sig.fields.forEach((field) => {
                         const compositeKey = `${String(sig.priority)}_${String(field.index)}`;
-                        
+
                         // Store signature fields with images
                         if (field.filled && field.imageUrl) {
                             fieldsWithImages.push({
@@ -1239,12 +1235,12 @@ function App() {
                                 value: null,
                             });
                         }
-                        
+
                         // Also store nested text/date/number/email/checkbox fields with values
                         const fieldType = (field.fieldType || field.type || "").toLowerCase();
                         const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(fieldType);
                         const hasValue = field.value !== null && field.value !== undefined && (field.value !== "" || field.value === false);
-                        
+
                         if (isFieldType && hasValue && !field.imageUrl) {
                             fieldsWithImages.push({
                                 fieldIndex: compositeKey,
@@ -1418,31 +1414,31 @@ function App() {
         // Helper function to format timestamp with smaller timezone
         const formatTimestamp = (timestamp) => {
             if (!timestamp || timestamp === "--") return "--";
-            
+
             // Check if timestamp contains AM or PM followed by timezone
             const ampmRegex = /(.*?\s+(?:AM|PM|am|pm))(\s+.+)?$/;
             const match = timestamp.match(ampmRegex);
-            
+
             if (match) {
                 const mainPart = match[1]; // Date, time, AM/PM
                 const timezonePart = match[2] || ""; // Everything after AM/PM (timezone)
-                
+
                 if (timezonePart.trim()) {
                     return `${mainPart} <span style="font-size:9px; color:#666;">${timezonePart.trim()}</span>`;
                 }
             }
-            
+
             return timestamp;
         };
 
         // Only include signature fields (those with type="signature"), exclude other field types
-        const allFields = sigData.flatMap(s =>
+        const allFields = sigData.flatMap((s) =>
             (s.fields || [])
-                .filter(f => (f.type || f.fieldType || "").toLowerCase() == "signature") // Only include fields with type="signature"
-                .map(f => ({...f, signerName: s.name || "--", signerEmail: s.email || "--"}))
+                .filter((f) => (f.type || f.fieldType || "").toLowerCase() == "signature") // Only include fields with type="signature"
+                .map((f) => ({ ...f, signerName: s.name || "--", signerEmail: s.email || "--" }))
         );
-        const signedFields = allFields.filter(f => f.filled);
-        const pendingFields = allFields.filter(f => !f.filled);
+        const signedFields = allFields.filter((f) => f.filled);
+        const pendingFields = allFields.filter((f) => !f.filled);
 
         console.log("All signature fields:", allFields);
         console.log("Signed fields:", signedFields);
@@ -1512,7 +1508,7 @@ function App() {
                             
                             <td style="color:gray; padding-right:18px;">Document Status:</td>
                             <td style="text-align:right; padding-left:18px;">
-                                <span style="color:#00BD42; font-weight:600;background:#E0FFEB;padding:0px 8px 4px 8px;border-radius:8px;font-size:11px;align-items:center;">${allFields.length > 0 && signedFields.length === allFields.length ? "Completed" : (doc.Status__c || "")}</span>
+                                <span style="color:#00BD42; font-weight:600;background:#E0FFEB;padding:0px 8px 4px 8px;border-radius:8px;font-size:11px;align-items:center;">${allFields.length > 0 && signedFields.length === allFields.length ? "Completed" : doc.Status__c || ""}</span>
                             </td>
                         </tr>
                         <tr>
@@ -1520,7 +1516,7 @@ function App() {
                             <td style="text-align:right;color:black; padding-right:18px;">${doc.CreatedBy?.Email || ""}</td>
                             
                             <td style="color:gray; padding-right:18px;">Email Subject:</td>
-                            <td style="text-align:right;color:black;">${(doc.Email_Subject__c && doc.Email_Subject__c.length > 25) ? doc.Email_Subject__c.slice(0, 25) + "..." : (doc.Email_Subject__c || "")}</td>
+                            <td style="text-align:right;color:black;">${doc.Email_Subject__c && doc.Email_Subject__c.length > 25 ? doc.Email_Subject__c.slice(0, 25) + "..." : doc.Email_Subject__c || ""}</td>
                         </tr>
                         <tr>
                             <td style="color:gray; padding-right:18px;">Document Pages:</td>
@@ -1607,13 +1603,16 @@ function App() {
                             </tr>
                         </thead>
                         <tbody>
-                            ${allFields.map(f => `
+                            ${allFields
+                                .map(
+                                    (f) => `
                             <tr style="border-top:1px solid #E2E8F0;">
                                 <td style="padding:8px 0 8px 18px; text-align:center;">
-                                    ${f.imageUrl 
-                                        ? `<img src="${f.imageUrl}" 
+                                    ${
+                                        f.imageUrl
+                                            ? `<img src="${f.imageUrl}" 
                                             style="height:55px;width:110px;object-fit:contain;background:#fff;" />`
-                                        : `<div style="border:1px solid #CBD5E0;height:35px;width:60px;border-radius:4px;background:#fff;display:flex;align-items:center;justify-content:center;margin:auto;">
+                                            : `<div style="border:1px solid #CBD5E0;height:35px;width:60px;border-radius:4px;background:#fff;display:flex;align-items:center;justify-content:center;margin:auto;">
                                                 <span style="font-size:11px;color:#555;">#${f.index}</span>
                                         </div>`
                                     }
@@ -1636,7 +1635,7 @@ function App() {
                                             <td style="color:gray; padding-right:12px; width:80px;">Sign Type:</td>
                                             <td style="color:black;">
                                                 <span style="color:#0066FF; font-weight:600;background:#E0F0FF;padding:0px 8px 4px 8px;border-radius:8px;font-size:9px;">
-                                                    ${(f.signatureType || '--').toUpperCase()}
+                                                    ${(f.signatureType || "--").toUpperCase()}
                                                 </span>
                                             </td>
                                         </tr>
@@ -1662,16 +1661,17 @@ function App() {
                                         </tr>
                                     </table>
                                 </td>
-                            </tr>`).join("")}
+                            </tr>`
+                                )
+                                .join("")}
                         </tbody>
                     </table>
                 </div>
             </div>
         `;
 
-
         document.getElementById("audit-html").innerHTML = html;
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise((resolve) => setTimeout(resolve, 300));
     };
 
     // Convert to PDF via html2pdf
@@ -1679,28 +1679,31 @@ function App() {
         const element = document.getElementById("audit-html");
 
         element.style.visibility = "visible";
-        element.style.position = "static";    
+        element.style.position = "static";
         element.style.zIndex = "9999";
 
-        await new Promise(res => setTimeout(res, 400));
-        
+        await new Promise((res) => setTimeout(res, 400));
+
         // Use detected PDF page format for audit report
         const pageWidth = pdfPageFormat.width || A4_WIDTH;
         const pageHeight = pdfPageFormat.height || A4_HEIGHT;
-        const orientation = pdfPageFormat.orientation || 'portrait';
-        
+        const orientation = pdfPageFormat.orientation || "portrait";
+
         console.log(`Generating audit report with format: ${pageWidth.toFixed(2)}pt x ${pageHeight.toFixed(2)}pt (${orientation})`);
-        
-        const pdfBlob = await html2pdf().from(element).set({
-            margin: 0,
-            filename: "audit.pdf",
-            html2canvas: { scale: 2, useCORS: true },
-            jsPDF: { 
-                unit: "pt", 
-                format: [pageWidth, pageHeight], 
-                orientation: orientation 
-            }
-        }).output("blob");
+
+        const pdfBlob = await html2pdf()
+            .from(element)
+            .set({
+                margin: 0,
+                filename: "audit.pdf",
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: {
+                    unit: "pt",
+                    format: [pageWidth, pageHeight],
+                    orientation: orientation,
+                },
+            })
+            .output("blob");
 
         // Download
         // const url = URL.createObjectURL(pdfBlob);
@@ -1711,8 +1714,8 @@ function App() {
         // URL.revokeObjectURL(url);
 
         element.style.visibility = "hidden";
-        element.style.position = "absolute";  
-        element.style.top = "-9999px";        
+        element.style.position = "absolute";
+        element.style.top = "-9999px";
 
         return await pdfBlob.arrayBuffer();
     };
@@ -1729,14 +1732,14 @@ function App() {
             setToast({
                 isVisible: true,
                 message: "Please provide a reason for rejection",
-                type: "error"
+                type: "error",
             });
             return;
         }
 
         // Close the confirmation modal
         setShowRejectConfirm(false);
-        
+
         if (!salesforceConfig) return;
 
         const { recordId, accessToken, instanceUrl, clientId, clientSecret } = salesforceConfig;
@@ -1753,7 +1756,7 @@ function App() {
                 },
                 body: JSON.stringify({
                     Status__c: "Rejected",
-                    Rejection_Reason__c: rejectReason.trim()
+                    Rejection_Reason__c: rejectReason.trim(),
                 }),
             });
 
@@ -1771,7 +1774,7 @@ function App() {
                     },
                     body: JSON.stringify({
                         Status__c: "Rejected",
-                        Rejection_Reason__c: rejectReason.trim()
+                        Rejection_Reason__c: rejectReason.trim(),
                     }),
                 });
             }
@@ -1781,7 +1784,7 @@ function App() {
             }
 
             // Navigate to rejected page and replace history so user can't go back
-            navigate('/rejected', { replace: true });
+            navigate("/rejected", { replace: true });
         } catch (error) {
             console.error("Reject error:", error);
             setToast({
@@ -1851,7 +1854,6 @@ function App() {
         }
     };
 
-
     // Close toast
     const handleCloseToast = () => {
         setToast({ isVisible: false, message: "", type: "success" });
@@ -1864,9 +1866,7 @@ function App() {
         }
 
         // Get all fields for current priority
-        const currentPriorityFields = signatureData
-            .filter((sig) => sig.priority == urlPriority)
-            .flatMap((sig) => sig.fields || []);
+        const currentPriorityFields = signatureData.filter((sig) => sig.priority == urlPriority).flatMap((sig) => sig.fields || []);
 
         // If no fields, return false
         if (currentPriorityFields.length === 0) {
@@ -1875,7 +1875,7 @@ function App() {
 
         // Check if all fields are filled
         const allFilled = currentPriorityFields.every((field) => field.filled);
-        
+
         return allFilled;
     };
 
@@ -1932,9 +1932,9 @@ function App() {
 
         // Calculate target width based on available space
         // Try to get actual canvas wrapper width from DOM
-        const canvasWrapper = document.querySelector('.canvas-wrapper');
+        const canvasWrapper = document.querySelector(".canvas-wrapper");
         let targetWidth = 800;
-        
+
         if (canvasWrapper) {
             // Get the actual rendered width of the canvas wrapper after CSS is applied
             const wrapperWidth = canvasWrapper.getBoundingClientRect().width;
@@ -1949,7 +1949,7 @@ function App() {
             }
         }
 
-        console.log('Rendering PDF with target width:', targetWidth);
+        console.log("Rendering PDF with target width:", targetWidth);
 
         for (let pageNum = 1; pageNum <= numPages; pageNum++) {
             const canvas = canvasRefsArray.current[pageNum - 1];
@@ -1959,7 +1959,7 @@ function App() {
                 // Update scale state with the first page's scale (all pages use same scale)
                 if (pageNum === 1 && dims) {
                     setCanvasScale(dims.scale);
-                    console.log('Updated canvas scale to:', dims.scale);
+                    console.log("Updated canvas scale to:", dims.scale);
                 }
             }
         }
@@ -2030,7 +2030,7 @@ function App() {
                 navigator.geolocation.getCurrentPosition(resolve, reject, {
                     enableHighAccuracy: false, // Changed to false for faster response
                     timeout: 8000, // Increased timeout
-                    maximumAge: 60000 // Accept cached position up to 1 minute old
+                    maximumAge: 60000, // Accept cached position up to 1 minute old
                 });
             });
 
@@ -2055,33 +2055,29 @@ function App() {
     // We'll create a browser fingerprint as a unique identifier instead
     const getMacAddress = async () => {
         try {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            ctx.textBaseline = 'top';
-            ctx.font = '14px Arial';
-            ctx.fillText('Browser Fingerprint', 2, 2);
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            ctx.textBaseline = "top";
+            ctx.font = "14px Arial";
+            ctx.fillText("Browser Fingerprint", 2, 2);
             const canvasData = canvas.toDataURL();
-            
+
             // Create a hash-like identifier from canvas fingerprint + user agent + screen info
-            const fingerprint = [
-                canvasData.slice(-50),
-                navigator.userAgent,
-                navigator.language,
-                screen.colorDepth,
-                screen.width + 'x' + screen.height,
-                new Date().getTimezoneOffset()
-            ].join('|');
-            
+            const fingerprint = [canvasData.slice(-50), navigator.userAgent, navigator.language, screen.colorDepth, screen.width + "x" + screen.height, new Date().getTimezoneOffset()].join("|");
+
             // Generate a MAC-like format from the fingerprint
             let hash = 0;
             for (let i = 0; i < fingerprint.length; i++) {
-                hash = ((hash << 5) - hash) + fingerprint.charCodeAt(i);
+                hash = (hash << 5) - hash + fingerprint.charCodeAt(i);
                 hash = hash & hash;
             }
-            
-            const macLike = Math.abs(hash).toString(16).padStart(12, '0').slice(0, 12);
-            const formatted = macLike.match(/.{1,2}/g).join(':').toUpperCase();
-            
+
+            const macLike = Math.abs(hash).toString(16).padStart(12, "0").slice(0, 12);
+            const formatted = macLike
+                .match(/.{1,2}/g)
+                .join(":")
+                .toUpperCase();
+
             return formatted;
         } catch (error) {
             console.warn("Could not generate device fingerprint:", error);
@@ -2094,17 +2090,17 @@ function App() {
         try {
             // Convert Uint8Array to ArrayBuffer if needed
             const buffer = pdfBytes instanceof Uint8Array ? pdfBytes.buffer : pdfBytes;
-            
+
             // Generate SHA-256 hash
-            const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-            
+            const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+
             // Convert hash to hex string
             const hashArray = Array.from(new Uint8Array(hashBuffer));
-            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            
+            const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+
             return hashHex;
         } catch (error) {
-            console.error('Error generating PDF hash:', error);
+            console.error("Error generating PDF hash:", error);
             throw error;
         }
     };
@@ -2149,14 +2145,12 @@ function App() {
                         Please contact the document sender:
                     </p>
                     <p className="expired-hint" style={{ marginTop: "4px", fontSize: "14px" }}>
-                        <strong>{documentRecord?.CreatedBy?.Name || "Unknown User"}</strong>  
-                        <br/>
+                        <strong>{documentRecord?.CreatedBy?.Name || "Unknown User"}</strong>
+                        <br />
                         <span style={{ color: "#555" }}>{documentRecord?.CreatedBy?.Email || "No Email Available"}</span>
                     </p>
                 </div>
-                )
-            }
-
+            )}
 
             {pdfFile && !isExpired && (
                 <>
@@ -2234,12 +2228,12 @@ function App() {
                             </div>
                         </div>
                         {shouldShowSaveButton() && areAllSignaturesCompleted() && (
-                            <div className={`completion-footer ${areAllSignaturesCompleted() ? 'show' : ''}`}>
+                            <div className={`completion-footer ${areAllSignaturesCompleted() ? "show" : ""}`}>
                                 <div className="completion-content">
                                     <div className="completion-icon">
                                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <circle cx="12" cy="12" r="10" fill="#626262"/>
-                                            <path d="M8 12L11 15L16 9" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                            <circle cx="12" cy="12" r="10" fill="#626262" />
+                                            <path d="M8 12L11 15L16 9" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                         </svg>
                                     </div>
                                     <div className="completion-text">
@@ -2307,23 +2301,23 @@ function App() {
             <SignatureModal isOpen={isModalOpen} onClose={handleModalClose} onSave={handleSignatureSave} signature={currentSignature} title={currentSignature?.type === "text" ? "Enter Text" : currentSignature?.type === "initials" ? "Enter Initials" : "Create Signature"} adminProperties={adminProperties} />
             <FieldModal isOpen={isFieldModalOpen} onClose={handleFieldModalClose} onSave={handleFieldSave} field={currentField} />
             <Toast isVisible={toast.isVisible} message={toast.message} type={toast.type} onClose={handleCloseToast} />
-            <div id="audit-html" style={{ position:'absolute', top:'-9999px', left:'-9999px' }}></div>
-            
+            <div id="audit-html" style={{ position: "absolute", top: "-9999px", left: "-9999px" }}></div>
+
             {/* Rejection Confirmation Modal */}
             {showRejectConfirm && (
                 <div className="reject-confirm-overlay" onClick={handleCancelReject}>
                     <div className="reject-confirm-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="reject-confirm-icon">
                             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 13C11.45 13 11 12.55 11 12V8C11 7.45 11.45 7 12 7C12.55 7 13 7.45 13 8V12C13 12.55 12.55 13 12 13ZM13 17H11V15H13V17Z" fill="#d32f2f"/>
+                                <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 13C11.45 13 11 12.55 11 12V8C11 7.45 11.45 7 12 7C12.55 7 13 7.45 13 8V12C13 12.55 12.55 13 12 13ZM13 17H11V15H13V17Z" fill="#d32f2f" />
                             </svg>
                         </div>
                         <h3 className="reject-confirm-title">Reject Document?</h3>
-                        <p className="reject-confirm-message">
-                            Are you sure you want to reject this document? This action cannot be undone.
-                        </p>
+                        <p className="reject-confirm-message">Are you sure you want to reject this document? This action cannot be undone.</p>
                         <div className="reject-reason-field">
-                            <label htmlFor="reject-reason">Reason for Rejection <span style={{ color: "#d32f2f" }}>*</span></label>
+                            <label htmlFor="reject-reason">
+                                Reason for Rejection <span style={{ color: "#d32f2f" }}>*</span>
+                            </label>
                             <textarea
                                 id="reject-reason"
                                 value={rejectReason}
@@ -2338,7 +2332,7 @@ function App() {
                                     fontSize: "14px",
                                     fontFamily: "inherit",
                                     resize: "vertical",
-                                    minHeight: "80px"
+                                    minHeight: "80px",
                                 }}
                             />
                         </div>
@@ -2346,22 +2340,21 @@ function App() {
                             <button className="reject-cancel-btn" onClick={handleCancelReject}>
                                 Cancel
                             </button>
-                            <button 
-                                className="reject-confirm-btn" 
+                            <button
+                                className="reject-confirm-btn"
                                 onClick={handleConfirmReject}
                                 disabled={!rejectReason.trim()}
                                 style={{
                                     opacity: !rejectReason.trim() ? 0.5 : 1,
-                                    cursor: !rejectReason.trim() ? "not-allowed" : "pointer"
-                                }}
-                            >
+                                    cursor: !rejectReason.trim() ? "not-allowed" : "pointer",
+                                }}>
                                 Yes, Reject
                             </button>
                         </div>
                     </div>
                 </div>
             )}
-            
+
             {/* Spinner Overlay */}
             {(showSpinner || loading) && (
                 <div className="spinner-overlay">
