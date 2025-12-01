@@ -41,8 +41,8 @@ export const updateSignatureWithImage = (signatures, index, imageUrl, expectedTy
                 // by matching priority or email
                 let isCorrectSigner = true;
                 if (signerObject) {
-                    // Match by priority (strict equality) or by email
-                    isCorrectSigner = (sig.priority === signerObject.priority) || (sig.email === signerObject.email);
+                    // Strict priority matching only - each priority represents a unique signer
+                    isCorrectSigner = (sig.priority === signerObject.priority);
                 }
                 
                 if (isCorrectSigner) {
@@ -85,8 +85,8 @@ export const deleteSignatureImage = (signatures, index, expectedType, signerObje
                 // by matching priority or email
                 let isCorrectSigner = true;
                 if (signerObject) {
-                    // Match by priority (strict equality) or by email
-                    isCorrectSigner = (sig.priority === signerObject.priority) || (sig.email === signerObject.email);
+                    // Strict priority matching only - each priority represents a unique signer
+                    isCorrectSigner = (sig.priority === signerObject.priority);
                 }
                 
                 if (isCorrectSigner) {
@@ -152,7 +152,7 @@ export const updateNestedFieldValue = (signatures, index, value, expectedFieldTy
                 // If signerObject is provided, verify this is the correct signer
                 let isCorrectSigner = true;
                 if (signerObject) {
-                    isCorrectSigner = (sig.priority === signerObject.priority) || (sig.email === signerObject.email);
+                    isCorrectSigner = (sig.priority === signerObject.priority);
                 }
                 
                 if (isCorrectSigner) {
@@ -188,7 +188,7 @@ export const deleteNestedFieldValue = (signatures, index, expectedFieldType, sig
                 // If signerObject is provided, verify this is the correct signer
                 let isCorrectSigner = true;
                 if (signerObject) {
-                    isCorrectSigner = (sig.priority === signerObject.priority) || (sig.email === signerObject.email);
+                    isCorrectSigner = (sig.priority === signerObject.priority);
                 }
                 
                 if (isCorrectSigner) {
