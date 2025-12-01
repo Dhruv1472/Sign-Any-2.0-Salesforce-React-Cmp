@@ -12,7 +12,7 @@ import FieldModal from "./components/FieldModal";
 import Toast from "./components/Toast";
 import html2pdf from "html2pdf.js";
 import { updateSignatureWithImage, deleteSignatureImage, updateFieldWithValue, deleteFieldValue, updateNestedFieldValue, deleteNestedFieldValue } from "./utils/signatureUtils";
-import { decryptUrlParams, parseQueryString } from "./utils/encryption";
+import { decryptUrlParams, parseQueryString, encryptUrlParams, buildQueryString } from "./utils/encryption";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "./pdfjs/pdf.worker.min.mjs";
 
@@ -1878,12 +1878,41 @@ function App() {
 
     // Refresh access token using client credentials
     // Helper to update access token in the url and component state so refresh persists across reloads
-    const updateUrlAccessToken = (token) => {
+    const updateUrlAccessToken = async (token) => {
         try {
             const url = new URL(window.location.href);
-            url.searchParams.set("act", token);
-            // Replace the current history entry without reloading
-            window.history.replaceState({}, document.title, url.toString());
+            const encryptedQuery = url.searchParams.get("q");
+            
+            if (encryptedQuery) {
+                // URL is encrypted - decrypt, update token, re-encrypt
+                try {
+                    // Decrypt the current URL
+                    const decryptedString = await decryptUrlParams(encryptedQuery);
+                    const params = parseQueryString(decryptedString);
+                    
+                    // Update the access token
+                    params.act = token;
+                    
+                    // Rebuild query string
+                    const updatedQueryString = buildQueryString(params);
+                    
+                    // Re-encrypt
+                    const newEncryptedQuery = await encryptUrlParams(updatedQueryString);
+                    
+                    // Update URL with new encrypted parameter
+                    url.searchParams.set("q", newEncryptedQuery);
+                    window.history.replaceState({}, document.title, url.toString());
+                    
+                    console.log("Encrypted URL updated with new access token");
+                } catch (error) {
+                    console.error("Failed to update encrypted URL:", error);
+                    // Fall back to updating state only
+                }
+            } else {
+                // URL is not encrypted - update plaintext parameter
+                url.searchParams.set("act", token);
+                window.history.replaceState({}, document.title, url.toString());
+            }
 
             // Keep salesforceConfig state in sync if present
             setSalesforceConfig((prev) => (prev ? { ...prev, accessToken: token } : prev));
