@@ -12,6 +12,7 @@ import FieldModal from "./components/FieldModal";
 import Toast from "./components/Toast";
 import html2pdf from "html2pdf.js";
 import { updateSignatureWithImage, deleteSignatureImage, updateFieldWithValue, deleteFieldValue, updateNestedFieldValue, deleteNestedFieldValue } from "./utils/signatureUtils";
+import { decryptUrlParams, parseQueryString } from "./utils/encryption";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "./pdfjs/pdf.worker.min.mjs";
 
@@ -56,29 +57,61 @@ function App() {
     const resizeTimeoutRef = useRef(null);
 
     useEffect(() => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const accessToken = urlParams.get("act");
-        const recordId = urlParams.get("recordId");
-        const instanceUrl = urlParams.get("instanceUrl");
-        const clientId = urlParams.get("clientId");
-        const clientSecret = urlParams.get("clientSecret");
-        const priority = urlParams.get("priority");
+        const parseUrlParams = async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            let accessToken, recordId, instanceUrl, clientId, clientSecret, priority;
 
-        const parsedPriority = priority ? parseInt(priority, 10) : 1;
-        setUrlPriority(parsedPriority);
+            // Check if URL is encrypted (has 'q' parameter)
+            const encryptedQuery = urlParams.get("q");
+            
+            if (encryptedQuery) {
+                try {
+                    // Decrypt the query string
+                    const decryptedString = await decryptUrlParams(encryptedQuery);
+                    const decryptedParams = parseQueryString(decryptedString);
+                    
+                    // Extract parameters from decrypted string
+                    accessToken = decryptedParams.act || decryptedParams.accessToken;
+                    recordId = decryptedParams.recordId;
+                    instanceUrl = decryptedParams.instanceUrl;
+                    clientId = decryptedParams.clientId;
+                    clientSecret = decryptedParams.clientSecret;
+                    priority = decryptedParams.priority;
+                    
+                } catch (error) {
+                    console.error("Failed to decrypt URL:", error);
+                    setError("Invalid or tampered URL. Please contact the sender for a new link.");
+                    return;
+                }
+            } else {
+                // Handle unencrypted URL (backward compatibility)
+                accessToken = urlParams.get("act");
+                recordId = urlParams.get("recordId");
+                instanceUrl = urlParams.get("instanceUrl");
+                clientId = urlParams.get("clientId");
+                clientSecret = urlParams.get("clientSecret");
+                priority = urlParams.get("priority");
+            }
 
-        if (recordId && instanceUrl) {
-            setSalesforceConfig({ accessToken, recordId, instanceUrl, clientId, clientSecret });
-            fetchDocumentAndPdf(recordId, accessToken, instanceUrl, clientId, clientSecret);
+            const parsedPriority = priority ? parseInt(priority, 10) : 1;
+            setUrlPriority(parsedPriority);
 
-            fetchOrganizationId(accessToken, instanceUrl, clientId, clientSecret)
-                .then((id) => setOrgIdState(id))
-                .catch(() => setOrgIdState(null));
+            if (recordId && instanceUrl) {
+                setSalesforceConfig({ accessToken, recordId, instanceUrl, clientId, clientSecret });
+                fetchDocumentAndPdf(recordId, accessToken, instanceUrl, clientId, clientSecret);
 
-            fetchAdminProperties(accessToken, instanceUrl, clientId, clientSecret)
-                .then((properties) => setAdminProperties(properties))
-                .catch(() => setAdminProperties(null));
-        }
+                fetchOrganizationId(accessToken, instanceUrl, clientId, clientSecret)
+                    .then((id) => setOrgIdState(id))
+                    .catch(() => setOrgIdState(null));
+
+                fetchAdminProperties(accessToken, instanceUrl, clientId, clientSecret)
+                    .then((properties) => setAdminProperties(properties))
+                    .catch(() => setAdminProperties(null));
+            }
+        };
+
+        parseUrlParams();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -2119,13 +2152,6 @@ function App() {
 
     return (
         <div className="app">
-            {/* {loading && (
-                <div className="placeholder">
-                    <div className="placeholder-content">
-                        <p>Loading PDF from Salesforce...</p>
-                    </div>
-                </div>
-            )} */}
             {error && !pdfFile && !isExpired && (
                 <div className="placeholder">
                     <div className="placeholder-content">
