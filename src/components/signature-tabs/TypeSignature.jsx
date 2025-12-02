@@ -20,7 +20,7 @@ import "./TypeSignature.css";
  * @param {number} fontSizeStep - Step increment for font sizes
  * @param {number} maxTextLength - Maximum number of characters allowed
  */
-const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", signatureType = "signature", hideBold = false, hideItalic = false, hideFontStyle = false, hideFontSize = false, availableFonts = ["Brush Script MT", "Lucida Handwriting", "Courier New", "Dancing Script", "Great Vibes"], defaultFontStyle = "Brush Script MT", defaultFontSize = 48, minFontSize = 2, maxFontSize = 100, fontSizeStep = 2, maxTextLength = 50 }) => {
+const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = false, hideItalic = false, hideFontStyle = false, hideFontSize = false, availableFonts = ["Artecallya", "Maytra", "Mr Dafoe", "Mr DeHaviland", "The signature", "Monsieur La Doulaise", "Mrs Saint Delafield", "Barokah", "Bettina", "High Summit"], defaultFontStyle = "Artecallya", defaultFontSize = 48, minFontSize = 2, maxFontSize = 100, fontSizeStep = 2, maxTextLength = 50 }) => {
     const [text, setText] = useState(defaultValue || "");
     const [selectedFont, setSelectedFont] = useState(defaultFontStyle);
     const [isBold, setIsBold] = useState(false);
@@ -58,12 +58,12 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", signatureTyp
         // Set text styles first to measure accurately
         const fontStyle = isItalic ? "italic" : "normal";
         const fontWeight = isBold ? "bold" : "normal";
-        ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px "${selectedFont}", cursive`;
+        ctx.font = `${fontStyle} ${fontWeight} ${adjustedFontSize(selectedFont, fontSize)}px "${selectedFont}", cursive`;
 
         // Measure text to get actual dimensions
         const textMetrics = ctx.measureText(text);
         const textWidth = textMetrics.width;
-        const textHeight = fontSize * 1.5; // Approximate height with some padding
+        const textHeight = adjustedFontSize(selectedFont, fontSize) * 1.5; // Approximate height with some padding
 
         // Add padding to ensure nothing gets cut off
         const padding = 20;
@@ -76,7 +76,7 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", signatureTyp
 
         // Re-apply text styles after canvas resize (resize clears the context)
         ctx.fillStyle = "#000000";
-        ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px "${selectedFont}", cursive`;
+        ctx.font = `${fontStyle} ${fontWeight} ${adjustedFontSize(selectedFont, fontSize)}px "${selectedFont}", cursive`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
 
@@ -88,6 +88,17 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", signatureTyp
             onChange(canvas.toDataURL("image/png"));
         }
     }, [text, selectedFont, isBold, isItalic, fontSize, onChange]);
+
+    const adjustedFontSize = (selectedFont, fontSize) => {
+        switch (selectedFont) {
+            case "Barokah":
+                return fontSize / 2.4;
+            case "Bettina":
+                return fontSize / 1.7;
+            default:
+                return fontSize;
+        }
+    };
 
     const handleTextChange = (e) => {
         const newText = e.target.value;
@@ -174,7 +185,7 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", signatureTyp
                                 fontFamily: `"${selectedFont}", ${hideFontStyle ? "sans-serif" : "cursive"}`,
                                 fontWeight: isBold ? "bold" : "normal",
                                 fontStyle: isItalic ? "italic" : "normal",
-                                fontSize: `${fontSize}px`,
+                                fontSize: `${adjustedFontSize(selectedFont, fontSize)}px`,
                             }}>
                             {text}
                         </span>
