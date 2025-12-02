@@ -187,6 +187,19 @@ function App() {
         }
     }, [isModalOpen, isFieldModalOpen, showRejectConfirm]);
 
+    useEffect(() => {
+        const handleBeforeUnload = (event) => {
+        event.preventDefault();
+        event.returnValue = "";  // Required for Chrome
+        };
+
+        window.addEventListener("beforeunload", handleBeforeUnload);
+
+        return () => {
+        window.removeEventListener("beforeunload", handleBeforeUnload);
+        };
+    }, []);
+
     // Main function to fetch Document and then PDF
     const fetchDocumentAndPdf = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         setLoading(true);
