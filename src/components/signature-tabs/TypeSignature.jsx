@@ -127,21 +127,20 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
                 </div>
 
                 <div className="right-section">
-                    {/* Font Style, Bold, and Italic in one row */}
-                    <div className="type-signature-style-row">
-                        {/* Font Family Select */}
-                        {!hideFontStyle && (
-                            <div className="type-signature-font-section" style={{ flex: 1 }}>
-                                <select id="signature-font" className="type-signature-font-select" value={selectedFont} onChange={handleFontChange}>
-                                    {fonts.map((font) => (
-                                        <option key={font} value={font}>
-                                            {font}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
+                    {/* Font Family Select */}
+                    {!hideFontStyle && (
+                        <div className="type-signature-font-section" style={{ flex: 1 }}>
+                            <select id="signature-font" className="type-signature-font-select" value={selectedFont} onChange={handleFontChange}>
+                                {fonts.map((font) => (
+                                    <option key={font} value={font}>
+                                        {font}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
 
+                    <div className="type-signature-style-row">
                         {/* Bold Button */}
                         {!hideBold && (
                             <button className={`type-signature-style-btn ${isBold ? "active" : ""}`} onClick={() => setIsBold(!isBold)} title="Bold">
@@ -159,20 +158,20 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
                                 </svg>
                             </button>
                         )}
-                    </div>
 
-                    {/* Font Size Select below */}
-                    {!hideFontSize && (
-                        <div className="type-signature-size-section">
-                            <select id="signature-size" className="type-signature-size-select" value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))}>
-                                {fontSizes.map((size) => (
-                                    <option key={size} value={size}>
-                                        {size}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
+                        {/* Font Size Select below */}
+                        {!hideFontSize && (
+                            <div className="type-signature-size-section">
+                                <select id="signature-size" className="type-signature-size-select" value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))}>
+                                    {fontSizes.map((size) => (
+                                        <option key={size} value={size}>
+                                            {size}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 

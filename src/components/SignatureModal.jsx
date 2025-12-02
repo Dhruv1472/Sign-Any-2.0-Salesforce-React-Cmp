@@ -37,7 +37,7 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
     const hideFontSizeOption = adminProperties?.Hide_Font_Size_Option__c || false;
     const defaultFontSize = hideFontSizeOption && adminProperties?.Default_Font_Size__c ? adminProperties?.Default_Font_Size__c : 48;
     const defaultFontStyle = adminProperties?.Default_Font_Style__c || "Artecallya";
-    const availableFonts = hideAvailableFonts && adminProperties?.Available_Fonts__c 
+    const availableFonts = adminProperties?.Available_Fonts__c 
         ? adminProperties.Available_Fonts__c.split(',').map(f => f.trim()).filter(f => f.length > 0)
         : ["Artecallya","Maytra","Mr Dafoe","Mr DeHaviland","The signature","Monsieur La Doulaise","Mrs Saint Delafield","Barokah","Bettina","High Summit"];
 

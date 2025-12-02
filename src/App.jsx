@@ -553,7 +553,7 @@ function App() {
                         "Content-Type": "application/json",
                     },
                 });
-            }
+        }
 
             if (!response.ok) {
                 throw new Error(`Failed to fetch Admin Properties: ${response.status} ${response.statusText}`);
@@ -561,6 +561,7 @@ function App() {
 
             const data = await response.json();
             const properties = data?.records?.[0] || null;
+            console.log("properties==> ", properties);
             return properties;
         } catch (e) {
             console.warn("Unable to fetch Admin Properties:", e);
