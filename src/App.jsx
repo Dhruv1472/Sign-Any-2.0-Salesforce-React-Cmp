@@ -533,7 +533,7 @@ function App() {
     const fetchAdminProperties = async (accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
-            const query = `SELECT Email_Object_Field__c, Email_Address__c, Audit_Report_Behaviour__c, Available_Fonts__c, Default_Brush_Size__c, Default_Font_Size__c, Default_Font_Style__c, Hide_Available_Fonts__c, Hide_Bold_Option__c, Hide_Brush_Size__c, Hide_Font_Size_Option__c, Hide_Italic_Option__c, Hide_Pen_And_Erase__c, Hide_Undo_Redo__c FROM Admin_Properties__c LIMIT 1`;
+            const query = "SELECT Id, Email_Object_Field__c, Email_Address__c, Audit_Report_Behaviour__c, Available_Fonts__c, Default_Brush_Size__c, Default_Font_Size__c, Default_Font_Style__c, Hide_Available_Fonts__c, Hide_Bold_Option__c, Hide_Brush_Size__c, Hide_Font_Size_Option__c, Hide_Italic_Option__c, Hide_Pen_And_Erase__c, Hide_Undo_Redo__c, Send_Sign_Email__c, Store_Sign__c FROM Admin_Properties__c LIMIT 1";
             const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
 
             let response = await fetch(apiUrl, {
@@ -780,7 +780,6 @@ function App() {
                         .filter((f) => (f.type || f.fieldType || "").toLowerCase() == "signature") // Only include fields with type="signature"
                         .map((f) => ({ ...f, signerName: s.name || "--", signerEmail: s.email || "--" }))
                 );
-                console.log("filledFieldsNew==> ", filledFieldsNew);
                 for (const field of filledFieldsNew) {
                     try {
                         const pageIndex = field.pageNumber - 1; // Convert to 0-indexed
@@ -1255,9 +1254,80 @@ function App() {
     };
 
     // Create or update Signature__c records
+    // Helper function to upload image as ContentVersion linked to Signature__c
+    const uploadSignatureImage = async (signatureRecordId, imageUrl, fieldIndex, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+        try {
+            let currentToken = accessToken;
+
+            // Extract base64 data from data URL
+            const base64Data = imageUrl.split(',')[1];
+            if (!base64Data) {
+                console.warn('No base64 data found in imageUrl');
+                return null;
+            }
+
+            // Determine file extension from data URL
+            const mimeType = imageUrl.split(';')[0].split(':')[1];
+            const extension = mimeType.includes('png') ? 'png' : 'jpg';
+
+            // Create ContentVersion record
+            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/ContentVersion`;
+
+            const contentVersionData = {
+                Title: `Signature_${fieldIndex}`,
+                PathOnClient: `Signature_${fieldIndex}.${extension}`,
+                VersionData: base64Data,
+                FirstPublishLocationId: signatureRecordId,
+                IsMajorVersion: true,
+            };
+
+            let response = await fetch(apiUrl, {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${currentToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(contentVersionData),
+            });
+
+            // If token expired (401), try to refresh it
+            if (response.status === 401 && clientId && clientSecret) {
+                console.log("Access token expired, attempting to refresh...");
+                currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
+
+                // Retry the request with new token
+                response = await fetch(apiUrl, {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(contentVersionData),
+                });
+            }
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`Failed to upload signature image: ${response.status} ${response.statusText} - ${errorText}`);
+                return null;
+            }
+
+            const result = await response.json();
+            console.log(`Successfully uploaded signature image for ${fieldIndex}, ContentVersion ID: ${result.id}`);
+            return result.id;
+        } catch (error) {
+            console.error("Error uploading signature image:", error);
+            return null;
+        }
+    };
+
     const upsertSignatureRecords = async (documentId, signatureData, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
+
+            // Check if Store_Sign__c is enabled in admin properties
+            const storeSignatures = adminProperties?.Store_Sign__c === true;
+            console.log('Store_Sign__c setting:', storeSignatures);
 
             // Extract all fields with imageUrl and nested field values from signatureData
             const fieldsWithImages = [];
@@ -1348,7 +1418,7 @@ function App() {
             }
 
             // Use Promise.all to create/update records individually
-            const upsertPromises = recordsToUpsert.map(async (record) => {
+            const upsertPromises = recordsToUpsert.map(async (record, index) => {
                 const isUpdate = !!record.Id;
                 const method = isUpdate ? "PATCH" : "POST";
                 console.log("isUpdate==> ", isUpdate);
@@ -1390,12 +1460,26 @@ function App() {
                     throw new Error(`Failed to ${isUpdate ? "update" : "create"} Signature record (Field Index: ${record.Field_Index__c}): ${response.status} ${response.statusText} - ${errorText}`);
                 }
 
-                if (response.status === 201 || response.status === 204) {
-                    return { success: true };
+                let signatureRecordId = record.Id;
+                if (response.status === 201) {
+                    const result = await response.json();
+                    signatureRecordId = result.id;
                 }
 
-                const result = await response.json();
-                return result;
+                // If Store_Sign__c is enabled and this field has an imageUrl, upload it as ContentVersion
+                if (storeSignatures && fieldsWithImages[index]?.imageUrl) {
+                    await uploadSignatureImage(
+                        signatureRecordId, 
+                        fieldsWithImages[index].imageUrl, 
+                        record.Field_Index__c, 
+                        currentToken, 
+                        instanceUrl, 
+                        clientId, 
+                        clientSecret
+                    );
+                }
+
+                return { success: true, id: signatureRecordId };
             });
 
             // Execute all upsert operations in parallel

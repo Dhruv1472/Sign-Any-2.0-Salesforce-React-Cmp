@@ -38,7 +38,7 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false, canva
         return (
             <>
                 <div className={`signature-image-container ${isCompleted ? "signed" : ""}`}>
-                    <img src={imageUrl} alt={`Signature-${key}`} className="signature-image" style={{ width: `${width}px` }} />
+                    <img src={imageUrl} alt={`Signature-${key}`} className="signature-image" style={{ width: `${width}px` }} draggable="false" />
                     {canDelete && (
                         <button className="signature-delete-btn" onClick={handleDeleteClick} title="Delete signature" style={{ top: `${4 * canvasScale}px`, right: `${4 * canvasScale}px`, width: `${24 * canvasScale}px`, height: `${24 * canvasScale}px`, fontSize: `${16 * canvasScale}px` }}>
                             ×
