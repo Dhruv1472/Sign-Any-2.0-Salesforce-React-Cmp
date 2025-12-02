@@ -1026,21 +1026,51 @@ function App() {
                         console.error("Error adding form field to PDF:", field.index, error);
                     }
                 }
-                // Build audit report data from Salesforce record and signatures
-                try {
-                    await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat);
-                } catch (e) {
-                    console.warn("Failed to append audit report page:", e);
+                
+                // Check if this is the final priority (highest priority number)
+                const allPriorities = signatureData.map(sig => sig.priority).filter(p => p !== undefined && p !== null);
+                const maxPriority = allPriorities.length > 0 ? Math.max(...allPriorities) : null;
+                const isFinalPriority = maxPriority !== null && urlPriority == maxPriority;
+                
+                // Check audit report behavior setting
+                const auditBehavior = adminProperties?.Audit_Report_Behaviour__c || "attached";
+                let pdfBytes;
+                let auditPdfBytes = null;
+
+                if (auditBehavior === "separate") {
+                    // For separate audit behavior, only generate audit report on final priority
+                    if (isFinalPriority) {
+                        console.log("Generating separate audit report (final priority)");
+                        try {
+                            await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat);
+                            auditPdfBytes = await convertAuditHTMLToPDF();
+                        } catch (e) {
+                            console.warn("Failed to generate separate audit report:", e);
+                        }
+                    } else {
+                        console.log(`Priority ${urlPriority} completed (audit report will be generated at final priority ${maxPriority})`);
+                    }
+                    
+                    // Save signed PDF without audit report
+                    pdfBytes = await pdfDoc.save();
+                } else {
+                    // Default: Attach audit report to signed PDF (always generate for attached mode)
+                    console.log("Attaching audit report to signed PDF");
+                    try {
+                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat);
+                    } catch (e) {
+                        console.warn("Failed to append audit report page:", e);
+                    }
+
+                    // Merge audit report HTML as extra pages
+                    const htmlPdfBytes = await convertAuditHTMLToPDF();
+                    const finalDoc = await PDFDocument.load(await pdfDoc.save());
+                    const extraDoc = await PDFDocument.load(htmlPdfBytes);
+                    const htmlPages = await finalDoc.copyPages(extraDoc, extraDoc.getPageIndices());
+                    htmlPages.forEach((p) => finalDoc.addPage(p));
+
+                    pdfBytes = await finalDoc.save();
                 }
-
-                // Merge audit report HTML as extra pages
-                const htmlPdfBytes = await convertAuditHTMLToPDF();
-                const finalDoc = await PDFDocument.load(await pdfDoc.save());
-                const extraDoc = await PDFDocument.load(htmlPdfBytes);
-                const htmlPages = await finalDoc.copyPages(extraDoc, extraDoc.getPageIndices());
-                htmlPages.forEach((p) => finalDoc.addPage(p));
-
-                const pdfBytes = await finalDoc.save();
                 console.log("Final PDF byte size:", pdfBytes);
                 // Generate SHA-256 hash of the final PDF
                 const pdfHash = await generatePdfHash(pdfBytes);
@@ -1058,6 +1088,16 @@ function App() {
                     let newContentVersionId = null;
                     if (allRequiredFieldsFilled) {
                         newContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c);
+                    }
+
+                    // Upload separate audit report if configured
+                    if (auditPdfBytes && auditBehavior === "separate") {
+                        try {
+                            await uploadSignedPdfToSalesforce(auditPdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, "Audit Report");
+                            console.log("Separate audit report uploaded successfully");
+                        } catch (error) {
+                            console.error("Failed to upload separate audit report:", error);
+                        }
                     }
 
                     // Update Document record with signature, field data, PDF hash, and new ContentVersion ID
@@ -1119,7 +1159,7 @@ function App() {
     };
 
     // Upload signed PDF to Salesforce as ContentVersion
-    const uploadSignedPdfToSalesforce = async (pdfBytes, firstPublishLocationId, accessToken, instanceUrl, clientId = null, clientSecret = null, documentName) => {
+    const uploadSignedPdfToSalesforce = async (pdfBytes, firstPublishLocationId, accessToken, instanceUrl, clientId = null, clientSecret = null, documentName, documentType = "Signed") => {
         try {
             let currentToken = accessToken;
 
@@ -1130,8 +1170,8 @@ function App() {
             const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/ContentVersion`;
 
             const contentVersionData = {
-                Title: `${documentName} - Signed`,
-                PathOnClient: `${documentName} - Signed.pdf`,
+                Title: `${documentName} - ${documentType}`,
+                PathOnClient: `${documentName} - ${documentType}.pdf`,
                 VersionData: base64Pdf,
                 FirstPublishLocationId: firstPublishLocationId,
                 IsMajorVersion: true,
@@ -1544,7 +1584,7 @@ function App() {
                         </tr>
                         <tr>
                             <td style="color:gray; padding-right:18px;">Document Name:</td>
-                            <td style="text-align:right;color:black; padding-right:18px;">${doc.Document_Name__c || ""}</td>
+                            <td style="text-align:right;color:black; padding-right:18px;">${doc.Document_Name__c && doc.Document_Name__c.length > 25 ? doc.Document_Name__c.slice(0, 25) + "..." : doc.Document_Name__c || ""}</td>
                             
                             <td style="color:gray; padding-right:18px;">Org ID:</td>
                             <td style="text-align:right;color:black; padding-left:18px;">${orgId || ""}</td>
@@ -2115,10 +2155,12 @@ function App() {
             });
 
             const { latitude, longitude } = coords.coords;
+            console.log(`Obtained GPS coordinates: ${latitude}, ${longitude}`);
 
             // Reverse geocode to city/state/country
             const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
             const data = await res.json();
+            console.log("Reverse geocoding data:", data);
             const address = data.address;
 
             const city = address.city || address.state_district || address.town || address.village || "Unknown City";
