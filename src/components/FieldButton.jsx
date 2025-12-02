@@ -73,6 +73,65 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
             }
         }
         
+        // Number validations and normalization
+        if (fieldType === "number" && editValue && editValue.trim() !== "") {
+            const raw = editValue.trim();
+            // Disallow exponential notation if specified
+            if (field.exponentialNotation === false && /e|E/.test(raw)) {
+                alert("Exponential notation is not allowed");
+                return;
+            }
+
+            let num = Number(raw.replace(/,/g, ""));
+            if (Number.isNaN(num)) {
+                alert("Please enter a valid number");
+                return;
+            }
+
+            // allowNegative check
+            if (field.allowNegative === false && num < 0) {
+                alert("Negative numbers are not allowed");
+                return;
+            }
+
+            // min/max
+            if (field.min !== null && field.min !== undefined && num < Number(field.min)) {
+                alert(`Value must be ≥ ${field.min}`);
+                return;
+            }
+            if (field.max !== null && field.max !== undefined && num > Number(field.max)) {
+                alert(`Value must be ≤ ${field.max}`);
+                return;
+            }
+
+            // decimals limit
+            if (field.decimals !== null && field.decimals !== undefined) {
+                const decimals = parseInt(field.decimals, 10);
+                const parts = String(raw).split(".");
+                if (parts[1] && parts[1].length > decimals) {
+                    alert(`Only ${decimals} decimal places allowed`);
+                    return;
+                }
+                // Normalize decimals length when formatting
+                if (field.currencyFormatting) {
+                    const formatted = Number(num).toLocaleString(undefined, {
+                        minimumFractionDigits: decimals,
+                        maximumFractionDigits: decimals,
+                    });
+                    if (onSave) onSave(formatted, field);
+                    setIsEditing(false);
+                    return;
+                }
+            } else if (field.currencyFormatting) {
+                const formatted = Number(num).toLocaleString(undefined, {
+                    maximumFractionDigits: 20,
+                });
+                if (onSave) onSave(formatted, field);
+                setIsEditing(false);
+                return;
+            }
+        }
+        
         if (onSave) {
             onSave(editValue, field);
         }
@@ -89,9 +148,38 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
     };
 
     const handleInputChange = (e) => {
-        console.log(1);
-        
-        const newValue = e.target.value;
+        let newValue = e.target.value;
+
+        // Email transforms
+        if (fieldType === "email") {
+            if (field.forceLowercase) {
+                newValue = newValue.toLowerCase();
+            }
+            if (field.allowedCharacters) {
+                // allowedCharacters is treated as a character class (e.g., A-Za-z0-9@._-)
+                const re = new RegExp(`[^${field.allowedCharacters}]`, "g");
+                newValue = newValue.replace(re, "");
+            }
+        }
+
+        // Text multiline: enforce maxLines
+        if (fieldType === "text" && field.multiline) {
+            const lines = newValue.split(/\r?\n/);
+            if (field.maxLines && lines.length > parseInt(field.maxLines, 10)) {
+                newValue = lines.slice(0, parseInt(field.maxLines, 10)).join("\n");
+            }
+        }
+
+        // Number input constraints
+        if (fieldType === "number") {
+            // Prevent illegal characters
+            // Allow digits, dot, minus (if allowed), and commas (which we strip on save)
+            const allowNeg = field.allowNegative !== false ? true : false;
+            const cleaned = newValue
+                .replace(/,/g, "")
+                .replace(allowNeg ? /[^0-9.\-eE]/g : /[^0-9.]/g, "");
+            newValue = cleaned;
+        }
         
         // Check if trying to exceed max length
         if (newValue.length > maxLength) {
@@ -124,7 +212,19 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
     };
 
     const handleKeyDown = (e) => {
-        if (e.key === "Enter") {
+        // Block unwanted keys for numbers
+        if (fieldType === "number") {
+            if (field.exponentialNotation === false && (e.key === "e" || e.key === "E")) {
+                e.preventDefault();
+                return;
+            }
+            if (field.allowNegative === false && (e.key === "-")) {
+                e.preventDefault();
+                return;
+            }
+        }
+
+        if (e.key === "Enter" && !(fieldType === "text" && field.multiline)) {
             handleSaveInline();
         } else if (e.key === "Escape") {
             handleCancelInline();
@@ -224,18 +324,37 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
         
         return (
             <div className="field-inline-edit">
-                <input
-                    ref={inputRef}
-                    type={fieldType}
-                    className="field-inline-input"
-                    value={editValue}
-                    onChange={handleInputChange}
-                    onKeyDown={handleKeyDown}
-                    onBlur={handleBlur}
-                    placeholder="Enter text..."
-                    disabled={isDisabled}
-                    maxLength={maxLength}
-                />
+                {fieldType === "text" && field.multiline ? (
+                    <textarea
+                        ref={inputRef}
+                        className="field-inline-input"
+                        value={editValue}
+                        onChange={handleInputChange}
+                        onKeyDown={handleKeyDown}
+                        onBlur={handleBlur}
+                        placeholder="Enter text..."
+                        disabled={isDisabled}
+                        maxLength={maxLength}
+                        rows={field.maxLines ? parseInt(field.maxLines, 10) : 3}
+                        style={{ resize: "vertical" }}
+                    />
+                ) : (
+                    <input
+                        ref={inputRef}
+                        type={fieldType}
+                        className="field-inline-input"
+                        value={editValue}
+                        onChange={handleInputChange}
+                        onKeyDown={handleKeyDown}
+                        onBlur={handleBlur}
+                        placeholder={fieldType === "number" ? "Enter number..." : "Enter text..."}
+                        disabled={isDisabled}
+                        maxLength={maxLength}
+                        step={fieldType === "number" && field.decimals !== undefined && field.decimals !== null ? (1 / Math.pow(10, parseInt(field.decimals, 10))).toFixed(parseInt(field.decimals, 10)) : undefined}
+                        min={fieldType === "number" ? (field.allowNegative === false ? Math.max(0, field.min || 0) : (field.min ?? undefined)) : undefined}
+                        max={fieldType === "number" ? (field.max ?? undefined) : undefined}
+                    />
+                )}
                 {showLimitWarning && (
                     <div className="field-limit-warning">
                         Max character limit reached ({maxLength})
