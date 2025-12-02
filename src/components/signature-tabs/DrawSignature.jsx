@@ -54,7 +54,7 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
         setHistory([imageData]);
         setHistoryStep(0);
         setIsEmpty(true);
-        
+
         // Notify parent that canvas was cleared
         if (onChange) {
             onChange(null);
@@ -150,7 +150,7 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
             ctx.lineWidth = penSize;
         } else {
             ctx.strokeStyle = "#ffffff";
-            ctx.lineWidth = eraseSize * 5; 
+            ctx.lineWidth = eraseSize * 5;
         }
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
@@ -196,13 +196,13 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
         if (isDrawing) {
             const canvas = canvasRef.current;
             const ctx = canvas.getContext("2d");
-            
+
             // Draw final point to complete the stroke
             if (lastPoint) {
                 ctx.lineTo(lastPoint.x, lastPoint.y);
                 ctx.stroke();
             }
-            
+
             ctx.closePath();
             setIsDrawing(false);
             setLastPoint(null);
@@ -302,13 +302,13 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
         setCursorPosition(null);
         if (isDrawing && canvasRef.current) {
             const ctx = canvasRef.current.getContext("2d");
-            
+
             // Draw final point to complete the stroke
             if (lastPoint) {
                 ctx.lineTo(lastPoint.x, lastPoint.y);
                 ctx.stroke();
             }
-            
+
             ctx.closePath();
             setIsDrawing(false);
             setLastPoint(null);
@@ -367,21 +367,12 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
                         </div>
                     </div>
                 )}
+
+                {hidePen && hideEraser && hideUndo && hideRedo && hideBrushSize && <div className="empty-state-text">No customization options available for now!</div>}
             </div>
 
             <div className="draw-signature-canvas-wrapper">
-                <canvas 
-                    ref={canvasRef} 
-                    className="draw-signature-canvas" 
-                    style={{ cursor: tool === "erase" ? "none" : "crosshair" }}
-                    onMouseDown={startDrawing} 
-                    onMouseMove={draw} 
-                    onMouseUp={stopDrawing} 
-                    onMouseLeave={handleMouseLeave} 
-                    onTouchStart={handleTouchStart} 
-                    onTouchMove={handleTouchMove} 
-                    onTouchEnd={handleTouchEnd} 
-                />
+                <canvas ref={canvasRef} className="draw-signature-canvas" style={{ cursor: tool === "erase" ? "none" : "crosshair" }} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={handleMouseLeave} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} />
                 {isEmpty && <div className="draw-signature-placeholder">Draw your signature here</div>}
                 {tool === "erase" && cursorPosition && (
                     <div
