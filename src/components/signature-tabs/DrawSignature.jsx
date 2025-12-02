@@ -26,6 +26,8 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
     const [eraseSize, setEraseSize] = useState(defaultEraseSize);
     const [history, setHistory] = useState([]);
     const [historyStep, setHistoryStep] = useState(-1);
+    const [lastPoint, setLastPoint] = useState(null);
+    const [cursorPosition, setCursorPosition] = useState(null);
 
     const initializeCanvas = () => {
         const canvas = canvasRef.current;
@@ -140,25 +142,26 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
+        setCursorPosition({ x, y });
+
         // Set style based on tool
         if (tool === "pen") {
             ctx.strokeStyle = "#000000";
             ctx.lineWidth = penSize;
         } else {
             ctx.strokeStyle = "#ffffff";
-            ctx.lineWidth = eraseSize * 2.5; 
+            ctx.lineWidth = eraseSize * 5; 
         }
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
 
         ctx.beginPath();
         ctx.moveTo(x, y);
+        setLastPoint({ x, y });
         setIsDrawing(true);
     };
 
     const draw = (e) => {
-        if (!isDrawing) return;
-
         const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d");
         const rect = canvas.getBoundingClientRect();
@@ -166,9 +169,21 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        ctx.lineTo(x, y);
-        ctx.stroke();
+        setCursorPosition({ x, y });
 
+        if (!isDrawing) return;
+
+        // Use quadratic curves for smooth lines
+        if (lastPoint) {
+            const midX = (lastPoint.x + x) / 2;
+            const midY = (lastPoint.y + y) / 2;
+            ctx.quadraticCurveTo(lastPoint.x, lastPoint.y, midX, midY);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(midX, midY);
+        }
+
+        setLastPoint({ x, y });
         setIsEmpty(false);
 
         // Notify parent with canvas data
@@ -181,10 +196,23 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
         if (isDrawing) {
             const canvas = canvasRef.current;
             const ctx = canvas.getContext("2d");
+            
+            // Draw final point to complete the stroke
+            if (lastPoint) {
+                ctx.lineTo(lastPoint.x, lastPoint.y);
+                ctx.stroke();
+            }
+            
             ctx.closePath();
             setIsDrawing(false);
+            setLastPoint(null);
             saveToHistory();
         }
+    };
+
+    const handleMouseLeave = () => {
+        setCursorPosition(null);
+        stopDrawing();
     };
 
     // Clear canvas when clearTrigger changes
@@ -217,24 +245,27 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
         const x = touch.clientX - rect.left;
         const y = touch.clientY - rect.top;
 
+        setCursorPosition({ x, y });
+
         // Set style based on tool
         if (tool === "pen") {
             ctx.strokeStyle = "#000000";
             ctx.lineWidth = penSize;
         } else {
             ctx.strokeStyle = "#ffffff";
-            ctx.lineWidth = eraseSize * 2.5; // Multiply eraser size by 2x for better erasing
+            ctx.lineWidth = eraseSize * 5; // Multiply eraser size by 2x for better erasing
         }
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
 
         ctx.beginPath();
         ctx.moveTo(x, y);
+        setLastPoint({ x, y });
         setIsDrawing(true);
     };
 
     const handleTouchMove = (e) => {
-        if (!isDrawing || !canvasRef.current) return;
+        if (!canvasRef.current) return;
 
         const touch = e.touches[0];
         const canvas = canvasRef.current;
@@ -244,9 +275,21 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
         const x = touch.clientX - rect.left;
         const y = touch.clientY - rect.top;
 
-        ctx.lineTo(x, y);
-        ctx.stroke();
+        setCursorPosition({ x, y });
 
+        if (!isDrawing) return;
+
+        // Use quadratic curves for smooth lines on touch devices
+        if (lastPoint) {
+            const midX = (lastPoint.x + x) / 2;
+            const midY = (lastPoint.y + y) / 2;
+            ctx.quadraticCurveTo(lastPoint.x, lastPoint.y, midX, midY);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(midX, midY);
+        }
+
+        setLastPoint({ x, y });
         setIsEmpty(false);
 
         // Notify parent with canvas data
@@ -256,10 +299,19 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
     };
 
     const handleTouchEnd = () => {
+        setCursorPosition(null);
         if (isDrawing && canvasRef.current) {
             const ctx = canvasRef.current.getContext("2d");
+            
+            // Draw final point to complete the stroke
+            if (lastPoint) {
+                ctx.lineTo(lastPoint.x, lastPoint.y);
+                ctx.stroke();
+            }
+            
             ctx.closePath();
             setIsDrawing(false);
+            setLastPoint(null);
             saveToHistory();
         }
     };
@@ -318,8 +370,30 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
             </div>
 
             <div className="draw-signature-canvas-wrapper">
-                <canvas ref={canvasRef} className="draw-signature-canvas" onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} />
+                <canvas 
+                    ref={canvasRef} 
+                    className="draw-signature-canvas" 
+                    style={{ cursor: tool === "erase" ? "none" : "crosshair" }}
+                    onMouseDown={startDrawing} 
+                    onMouseMove={draw} 
+                    onMouseUp={stopDrawing} 
+                    onMouseLeave={handleMouseLeave} 
+                    onTouchStart={handleTouchStart} 
+                    onTouchMove={handleTouchMove} 
+                    onTouchEnd={handleTouchEnd} 
+                />
                 {isEmpty && <div className="draw-signature-placeholder">Draw your signature here</div>}
+                {tool === "erase" && cursorPosition && (
+                    <div
+                        className="eraser-cursor"
+                        style={{
+                            left: `${cursorPosition.x}px`,
+                            top: `${cursorPosition.y}px`,
+                            width: `${eraseSize * 5}px`,
+                            height: `${eraseSize * 5}px`,
+                        }}
+                    />
+                )}
             </div>
         </div>
     );

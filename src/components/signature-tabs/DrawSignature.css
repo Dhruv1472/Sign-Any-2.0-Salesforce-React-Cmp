@@ -148,6 +148,16 @@ input[type=number]::-webkit-outer-spin-button {
     text-align: center;
 }
 
+.eraser-cursor {
+    position: absolute;
+    border: 2px solid var(--primary-color);
+    border-radius: 50%;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.05);
+}
+
 /* Mobile responsiveness */
 @media (max-width: 768px) {
     .draw-signature-container {
