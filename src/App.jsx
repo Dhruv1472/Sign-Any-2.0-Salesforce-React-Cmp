@@ -1032,6 +1032,8 @@ function App() {
                 const maxPriority = allPriorities.length > 0 ? Math.max(...allPriorities) : null;
                 const isFinalPriority = maxPriority !== null && urlPriority == maxPriority;
                 
+                console.log(`Current priority: ${urlPriority}, Max priority: ${maxPriority}, Is final: ${isFinalPriority}`);
+                
                 // Check audit report behavior setting
                 const auditBehavior = adminProperties?.Audit_Report_Behaviour__c || "attached";
                 let pdfBytes;
@@ -1086,8 +1088,18 @@ function App() {
 
                     // Upload signed PDF as ContentVersion
                     let newContentVersionId = null;
-                    if (allRequiredFieldsFilled) {
-                        newContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c);
+                    let temporaryContentVersionId = null;
+                    
+                    if (isFinalPriority) {
+                        // Final priority - upload as final document
+                        if (allRequiredFieldsFilled) {
+                            newContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c);
+                        }
+                    } else {
+                        // Not final priority - upload as temporary document
+                        console.log("Uploading temporary ContentVersion for intermediate signature");
+                        temporaryContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, `Temporary - ${urlPriority}`);
+                        console.log("Temporary ContentVersion ID:", temporaryContentVersionId);
                     }
 
                     // Upload separate audit report if configured
@@ -1100,8 +1112,8 @@ function App() {
                         }
                     }
 
-                    // Update Document record with signature, field data, PDF hash, and new ContentVersion ID
-                    await updateDocumentRecord(salesforceConfig.recordId, signatureData, fieldData, pdfHash, newContentVersionId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
+                    // Update Document record with signature, field data, PDF hash, and ContentVersion ID(s)
+                    await updateDocumentRecord(salesforceConfig.recordId, signatureData, fieldData, pdfHash, newContentVersionId, temporaryContentVersionId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
 
                     // Mark as submitted
                     setIsSubmitted(true);
@@ -1216,7 +1228,7 @@ function App() {
     };
 
     // Update Document__c record with signature and field data
-    const updateDocumentRecord = async (documentId, signatureData, fieldData, pdfHash, newContentVersionId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+    const updateDocumentRecord = async (documentId, signatureData, fieldData, pdfHash, newContentVersionId, temporaryContentVersionId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
 
@@ -1256,6 +1268,11 @@ function App() {
             // Add ContentVersion ID if provided
             if (newContentVersionId) {
                 updateData.Final_Document_Id__c = newContentVersionId;
+            }
+
+            // Add Temporary ContentVersion ID if provided (intermediate priority)
+            if (temporaryContentVersionId) {
+                updateData.Temporary_Content_Version_Id__c = temporaryContentVersionId;
             }
 
             let response = await fetch(apiUrl, {
