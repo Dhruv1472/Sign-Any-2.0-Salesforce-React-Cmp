@@ -45,7 +45,7 @@ function App() {
     const [orgIdState, setOrgIdState] = useState(null);
     const [userIpAddress, setUserIpAddress] = useState(null);
     const [userLocation, setUserLocation] = useState(null);
-    const [userMacAddress, setUserMacAddress] = useState(null);
+    const [userDeviceUniqueKey, setUserDeviceUniqueKey] = useState(null);
     const [adminProperties, setAdminProperties] = useState(null);
     const [showSpinner, setShowSpinner] = useState(false);
     const [canvasScale, setCanvasScale] = useState(1);
@@ -115,7 +115,7 @@ function App() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Fetch IP address, location, and MAC address when the component mounts
+    // Fetch IP address, location, and device unique key when the component mounts
     useEffect(() => {
         const fetchUserInfo = async () => {
             try {
@@ -128,14 +128,14 @@ function App() {
                 const location = await getLocationLive();
                 setUserLocation(location);
 
-                // Fetch MAC address (browser-based fingerprint as proxy)
-                const macAddress = await getMacAddress();
-                setUserMacAddress(macAddress);
+                // Fetch device unique key (browser-based fingerprint)
+                const deviceUniqueKey = await getDeviceUniqueKey();
+                setUserDeviceUniqueKey(deviceUniqueKey);
             } catch (error) {
                 console.warn("Could not fetch user info:", error);
                 setUserIpAddress("Unknown IP");
                 setUserLocation("Location Unavailable");
-                setUserMacAddress("Unavailable");
+                setUserDeviceUniqueKey("Unavailable");
             }
         };
 
@@ -289,6 +289,8 @@ function App() {
                 today.setHours(0, 0, 0, 0);
                 expirationDate.setHours(0, 0, 0, 0);
 
+                // console.log(`Document expiration date: ${expirationDate}, Today: ${today}`);
+                // console.log(`Is document expired? ${expirationDate < today}`);
                 if (expirationDate < today) {
                     setIsExpired(true);
                     setDocumentRecord(documentData);
@@ -403,7 +405,7 @@ function App() {
                                     timestamp: sigData.timestamp || field.timestamp || field.timeStamp || "",
                                     deviceInfo: sigData.deviceInfo || field.deviceInfo || "",
                                     locationInfo: sigData.locationInfo || field.locationInfo || "",
-                                    macAddress: sigData.macAddress || field.macAddress || "",
+                                    deviceUniqueKey: sigData.deviceUniqueKey || field.deviceUniqueKey || "",
                                     signatureType: sigData.signatureType || field.signatureType || "",
                                     value: sigData.value !== undefined && sigData.value !== null ? sigData.value : field.value,
                                     filled: Boolean(sigData.imageUrl || hasValue),
@@ -590,10 +592,10 @@ function App() {
         // Show spinner during signature conversion
         setShowSpinner(true);
 
-        // Use pre-fetched IP, location, and MAC address data
+        // Use pre-fetched IP, location, and device unique key data
         const ipAddress = userIpAddress || "Unknown IP";
         const locationInfo = userLocation || "Location Unavailable";
-        const macAddress = userMacAddress || "Unavailable";
+        const deviceUniqueKey = userDeviceUniqueKey || "Unavailable";
 
         // Format timestamp as "Nov 21 2025, hh:mm:ss AM/PM TimeZone"
         const now = new Date();
@@ -628,7 +630,7 @@ function App() {
             ipAddress,
             deviceInfo,
             locationInfo,
-            macAddress,
+            deviceUniqueKey,
             timeStamp,
             signatureType,
         };
@@ -1026,21 +1028,53 @@ function App() {
                         console.error("Error adding form field to PDF:", field.index, error);
                     }
                 }
-                // Build audit report data from Salesforce record and signatures
-                try {
-                    await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat);
-                } catch (e) {
-                    console.warn("Failed to append audit report page:", e);
+                
+                // Check if this is the final priority (highest priority number)
+                const allPriorities = signatureData.map(sig => sig.priority).filter(p => p !== undefined && p !== null);
+                const maxPriority = allPriorities.length > 0 ? Math.max(...allPriorities) : null;
+                const isFinalPriority = maxPriority !== null && urlPriority == maxPriority;
+                
+                console.log(`Current priority: ${urlPriority}, Max priority: ${maxPriority}, Is final: ${isFinalPriority}`);
+                
+                // Check audit report behavior setting
+                const auditBehavior = adminProperties?.Audit_Report_Behaviour__c || "attached";
+                let pdfBytes;
+                let auditPdfBytes = null;
+
+                if (auditBehavior === "separate") {
+                    // For separate audit behavior, only generate audit report on final priority
+                    if (isFinalPriority) {
+                        console.log("Generating separate audit report (final priority)");
+                        try {
+                            await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat);
+                            auditPdfBytes = await convertAuditHTMLToPDF();
+                        } catch (e) {
+                            console.warn("Failed to generate separate audit report:", e);
+                        }
+                    } else {
+                        console.log(`Priority ${urlPriority} completed (audit report will be generated at final priority ${maxPriority})`);
+                    }
+                    
+                    // Save signed PDF without audit report
+                    pdfBytes = await pdfDoc.save();
+                } else {
+                    // Default: Attach audit report to signed PDF (always generate for attached mode)
+                    console.log("Attaching audit report to signed PDF");
+                    try {
+                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat);
+                    } catch (e) {
+                        console.warn("Failed to append audit report page:", e);
+                    }
+
+                    // Merge audit report HTML as extra pages
+                    const htmlPdfBytes = await convertAuditHTMLToPDF();
+                    const finalDoc = await PDFDocument.load(await pdfDoc.save());
+                    const extraDoc = await PDFDocument.load(htmlPdfBytes);
+                    const htmlPages = await finalDoc.copyPages(extraDoc, extraDoc.getPageIndices());
+                    htmlPages.forEach((p) => finalDoc.addPage(p));
+
+                    pdfBytes = await finalDoc.save();
                 }
-
-                // Merge audit report HTML as extra pages
-                const htmlPdfBytes = await convertAuditHTMLToPDF();
-                const finalDoc = await PDFDocument.load(await pdfDoc.save());
-                const extraDoc = await PDFDocument.load(htmlPdfBytes);
-                const htmlPages = await finalDoc.copyPages(extraDoc, extraDoc.getPageIndices());
-                htmlPages.forEach((p) => finalDoc.addPage(p));
-
-                const pdfBytes = await finalDoc.save();
                 console.log("Final PDF byte size:", pdfBytes);
                 // Generate SHA-256 hash of the final PDF
                 const pdfHash = await generatePdfHash(pdfBytes);
@@ -1056,12 +1090,32 @@ function App() {
 
                     // Upload signed PDF as ContentVersion
                     let newContentVersionId = null;
-                    if (allRequiredFieldsFilled) {
-                        newContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c);
+                    let temporaryContentVersionId = null;
+                    
+                    if (isFinalPriority) {
+                        // Final priority - upload as final document
+                        if (allRequiredFieldsFilled) {
+                            newContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c);
+                        }
+                    } else {
+                        // Not final priority - upload as temporary document
+                        console.log("Uploading temporary ContentVersion for intermediate signature");
+                        temporaryContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, `Temporary - ${urlPriority}`);
+                        console.log("Temporary ContentVersion ID:", temporaryContentVersionId);
                     }
 
-                    // Update Document record with signature, field data, PDF hash, and new ContentVersion ID
-                    await updateDocumentRecord(salesforceConfig.recordId, signatureData, fieldData, pdfHash, newContentVersionId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
+                    // Upload separate audit report if configured
+                    if (auditPdfBytes && auditBehavior === "separate") {
+                        try {
+                            await uploadSignedPdfToSalesforce(auditPdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, "Audit Report");
+                            console.log("Separate audit report uploaded successfully");
+                        } catch (error) {
+                            console.error("Failed to upload separate audit report:", error);
+                        }
+                    }
+
+                    // Update Document record with signature, field data, PDF hash, and ContentVersion ID(s)
+                    await updateDocumentRecord(salesforceConfig.recordId, signatureData, fieldData, pdfHash, newContentVersionId, temporaryContentVersionId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
 
                     // Mark as submitted
                     setIsSubmitted(true);
@@ -1119,7 +1173,7 @@ function App() {
     };
 
     // Upload signed PDF to Salesforce as ContentVersion
-    const uploadSignedPdfToSalesforce = async (pdfBytes, firstPublishLocationId, accessToken, instanceUrl, clientId = null, clientSecret = null, documentName) => {
+    const uploadSignedPdfToSalesforce = async (pdfBytes, firstPublishLocationId, accessToken, instanceUrl, clientId = null, clientSecret = null, documentName, documentType = "Signed") => {
         try {
             let currentToken = accessToken;
 
@@ -1130,8 +1184,8 @@ function App() {
             const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/ContentVersion`;
 
             const contentVersionData = {
-                Title: `${documentName} - Signed`,
-                PathOnClient: `${documentName} - Signed.pdf`,
+                Title: `${documentName} - ${documentType}`,
+                PathOnClient: `${documentName} - ${documentType}.pdf`,
                 VersionData: base64Pdf,
                 FirstPublishLocationId: firstPublishLocationId,
                 IsMajorVersion: true,
@@ -1176,7 +1230,7 @@ function App() {
     };
 
     // Update Document__c record with signature and field data
-    const updateDocumentRecord = async (documentId, signatureData, fieldData, pdfHash, newContentVersionId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+    const updateDocumentRecord = async (documentId, signatureData, fieldData, pdfHash, newContentVersionId, temporaryContentVersionId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
 
@@ -1216,6 +1270,11 @@ function App() {
             // Add ContentVersion ID if provided
             if (newContentVersionId) {
                 updateData.Final_Document_Id__c = newContentVersionId;
+            }
+
+            // Add Temporary ContentVersion ID if provided (intermediate priority)
+            if (temporaryContentVersionId) {
+                updateData.Temporary_Content_Version_Id__c = temporaryContentVersionId;
             }
 
             let response = await fetch(apiUrl, {
@@ -1346,7 +1405,7 @@ function App() {
                                 timestamp: field.timestamp || field.timeStamp || field.signedTime || "",
                                 deviceInfo: field.deviceInfo || "",
                                 locationInfo: field.locationInfo || "",
-                                macAddress: field.macAddress || "",
+                                deviceUniqueKey: field.deviceUniqueKey || "",
                                 signatureType: field.signatureType || "",
                                 fieldType: "",
                                 value: null,
@@ -1366,7 +1425,7 @@ function App() {
                                 timestamp: "",
                                 deviceInfo: "",
                                 locationInfo: "",
-                                macAddress: "",
+                                deviceUniqueKey: "",
                                 signatureType: "",
                                 fieldType: fieldType,
                                 value: field.value,
@@ -1392,7 +1451,7 @@ function App() {
                     timestamp: field.timestamp,
                     deviceInfo: field.deviceInfo,
                     locationInfo: field.locationInfo,
-                    macAddress: field.macAddress,
+                    deviceUniqueKey: field.deviceUniqueKey,
                     signatureType: field.signatureType,
                     fieldType: field.fieldType || "",
                     value: field.value !== undefined ? field.value : null,
@@ -1629,7 +1688,7 @@ function App() {
                         </tr>
                         <tr>
                             <td style="color:gray; padding-right:18px;">Document Name:</td>
-                            <td style="text-align:right;color:black; padding-right:18px;">${doc.Document_Name__c || ""}</td>
+                            <td style="text-align:right;color:black; padding-right:18px;">${doc.Document_Name__c && doc.Document_Name__c.length > 25 ? doc.Document_Name__c.slice(0, 25) + "..." : doc.Document_Name__c || ""}</td>
                             
                             <td style="color:gray; padding-right:18px;">Org ID:</td>
                             <td style="text-align:right;color:black; padding-left:18px;">${orgId || ""}</td>
@@ -1788,8 +1847,8 @@ function App() {
                                             <td style="color:black;">${f.ipAddress || "--"}</td>
                                         </tr>
                                         <tr>
-                                            <td style="color:gray; padding-right:12px; width:50px;">Bro. Fin.:</td>
-                                            <td style="color:black;">${f.macAddress || "--"}</td>
+                                            <td style="color:gray; padding-right:12px; width:50px;">U Id:</td>
+                                            <td style="color:black;">${f.deviceUniqueKey || "--"}</td>
                                         </tr>
                                     </table>
                                 </td>
@@ -2200,10 +2259,12 @@ function App() {
             });
 
             const { latitude, longitude } = coords.coords;
+            console.log(`Obtained GPS coordinates: ${latitude}, ${longitude}`);
 
             // Reverse geocode to city/state/country
             const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
             const data = await res.json();
+            console.log("Reverse geocoding data:", data);
             const address = data.address;
 
             const city = address.city || address.state_district || address.town || address.village || "Unknown City";
@@ -2216,37 +2277,41 @@ function App() {
         }
     };
 
-    // MAC address cannot be retrieved from browser for security reasons
-    // We'll create a browser fingerprint as a unique identifier instead
-    const getMacAddress = async () => {
+    const getDeviceUniqueKey = async () => {
         try {
-            const canvas = document.createElement("canvas");
-            const ctx = canvas.getContext("2d");
-            ctx.textBaseline = "top";
-            ctx.font = "14px Arial";
-            ctx.fillText("Browser Fingerprint", 2, 2);
+            // Canvas fingerprint
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.textBaseline = 'top';
+            ctx.font = "14px 'Arial'";
+            ctx.fillText('Unique Device Test', 2, 2);
             const canvasData = canvas.toDataURL();
-
-            // Create a hash-like identifier from canvas fingerprint + user agent + screen info
-            const fingerprint = [canvasData.slice(-50), navigator.userAgent, navigator.language, screen.colorDepth, screen.width + "x" + screen.height, new Date().getTimezoneOffset()].join("|");
-
-            // Generate a MAC-like format from the fingerprint
-            let hash = 0;
-            for (let i = 0; i < fingerprint.length; i++) {
-                hash = (hash << 5) - hash + fingerprint.charCodeAt(i);
-                hash = hash & hash;
-            }
-
-            const macLike = Math.abs(hash).toString(16).padStart(12, "0").slice(0, 12);
-            const formatted = macLike
-                .match(/.{1,2}/g)
-                .join(":")
-                .toUpperCase();
-
-            return formatted;
+            
+            // Collect stable browser signals
+            const signals = {
+                userAgent: navigator.userAgent,
+                screen: `${screen.width}x${screen.height}`,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                cores: navigator.hardwareConcurrency || 'unknown',
+                platform: navigator.platform,
+                language: navigator.language,
+                canvas: canvasData.slice(0, 50) + '...'
+            };
+            
+            // console.table(signals);
+            // console.log(signals);
+            // Generate hash
+            const fingerprint = JSON.stringify(signals);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(fingerprint));
+            const uniqueKey = Array.from(new Uint8Array(hashBuffer))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('').slice(0, 32);
+            
+            localStorage.setItem('deviceUniqueKey', uniqueKey);
+            
+            return uniqueKey;
         } catch (error) {
-            console.warn("Could not generate device fingerprint:", error);
-            return "Unavailable";
+            console.error('Error generating device unique key:', error.message);
         }
     };
 
