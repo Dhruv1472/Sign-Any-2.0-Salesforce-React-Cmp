@@ -45,7 +45,7 @@ function App() {
     const [orgIdState, setOrgIdState] = useState(null);
     const [userIpAddress, setUserIpAddress] = useState(null);
     const [userLocation, setUserLocation] = useState(null);
-    const [userMacAddress, setUserMacAddress] = useState(null);
+    const [userDeviceUniqueKey, setUserDeviceUniqueKey] = useState(null);
     const [adminProperties, setAdminProperties] = useState(null);
     const [showSpinner, setShowSpinner] = useState(false);
     const [canvasScale, setCanvasScale] = useState(1);
@@ -115,7 +115,7 @@ function App() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Fetch IP address, location, and MAC address when the component mounts
+    // Fetch IP address, location, and device unique key when the component mounts
     useEffect(() => {
         const fetchUserInfo = async () => {
             try {
@@ -128,14 +128,14 @@ function App() {
                 const location = await getLocationLive();
                 setUserLocation(location);
 
-                // Fetch MAC address (browser-based fingerprint as proxy)
-                const macAddress = await getMacAddress();
-                setUserMacAddress(macAddress);
+                // Fetch device unique key (browser-based fingerprint)
+                const deviceUniqueKey = await getDeviceUniqueKey();
+                setUserDeviceUniqueKey(deviceUniqueKey);
             } catch (error) {
                 console.warn("Could not fetch user info:", error);
                 setUserIpAddress("Unknown IP");
                 setUserLocation("Location Unavailable");
-                setUserMacAddress("Unavailable");
+                setUserDeviceUniqueKey("Unavailable");
             }
         };
 
@@ -289,6 +289,8 @@ function App() {
                 today.setHours(0, 0, 0, 0);
                 expirationDate.setHours(0, 0, 0, 0);
 
+                // console.log(`Document expiration date: ${expirationDate}, Today: ${today}`);
+                // console.log(`Is document expired? ${expirationDate < today}`);
                 if (expirationDate < today) {
                     setIsExpired(true);
                     setDocumentRecord(documentData);
@@ -403,7 +405,7 @@ function App() {
                                     timestamp: sigData.timestamp || field.timestamp || field.timeStamp || "",
                                     deviceInfo: sigData.deviceInfo || field.deviceInfo || "",
                                     locationInfo: sigData.locationInfo || field.locationInfo || "",
-                                    macAddress: sigData.macAddress || field.macAddress || "",
+                                    deviceUniqueKey: sigData.deviceUniqueKey || field.deviceUniqueKey || "",
                                     signatureType: sigData.signatureType || field.signatureType || "",
                                     value: sigData.value !== undefined && sigData.value !== null ? sigData.value : field.value,
                                     filled: Boolean(sigData.imageUrl || hasValue),
@@ -589,10 +591,10 @@ function App() {
         // Show spinner during signature conversion
         setShowSpinner(true);
 
-        // Use pre-fetched IP, location, and MAC address data
+        // Use pre-fetched IP, location, and device unique key data
         const ipAddress = userIpAddress || "Unknown IP";
         const locationInfo = userLocation || "Location Unavailable";
-        const macAddress = userMacAddress || "Unavailable";
+        const deviceUniqueKey = userDeviceUniqueKey || "Unavailable";
 
         // Format timestamp as "Nov 21 2025, hh:mm:ss AM/PM TimeZone"
         const now = new Date();
@@ -627,7 +629,7 @@ function App() {
             ipAddress,
             deviceInfo,
             locationInfo,
-            macAddress,
+            deviceUniqueKey,
             timeStamp,
             signatureType,
         };
@@ -1332,7 +1334,7 @@ function App() {
                                 timestamp: field.timestamp || field.timeStamp || field.signedTime || "",
                                 deviceInfo: field.deviceInfo || "",
                                 locationInfo: field.locationInfo || "",
-                                macAddress: field.macAddress || "",
+                                deviceUniqueKey: field.deviceUniqueKey || "",
                                 signatureType: field.signatureType || "",
                                 fieldType: "",
                                 value: null,
@@ -1352,7 +1354,7 @@ function App() {
                                 timestamp: "",
                                 deviceInfo: "",
                                 locationInfo: "",
-                                macAddress: "",
+                                deviceUniqueKey: "",
                                 signatureType: "",
                                 fieldType: fieldType,
                                 value: field.value,
@@ -1378,7 +1380,7 @@ function App() {
                     timestamp: field.timestamp,
                     deviceInfo: field.deviceInfo,
                     locationInfo: field.locationInfo,
-                    macAddress: field.macAddress,
+                    deviceUniqueKey: field.deviceUniqueKey,
                     signatureType: field.signatureType,
                     fieldType: field.fieldType || "",
                     value: field.value !== undefined ? field.value : null,
@@ -1760,8 +1762,8 @@ function App() {
                                             <td style="color:black;">${f.ipAddress || "--"}</td>
                                         </tr>
                                         <tr>
-                                            <td style="color:gray; padding-right:12px; width:50px;">Bro. Fin.:</td>
-                                            <td style="color:black;">${f.macAddress || "--"}</td>
+                                            <td style="color:gray; padding-right:12px; width:50px;">U Id:</td>
+                                            <td style="color:black;">${f.deviceUniqueKey || "--"}</td>
                                         </tr>
                                     </table>
                                 </td>
@@ -2190,37 +2192,41 @@ function App() {
         }
     };
 
-    // MAC address cannot be retrieved from browser for security reasons
-    // We'll create a browser fingerprint as a unique identifier instead
-    const getMacAddress = async () => {
+    const getDeviceUniqueKey = async () => {
         try {
-            const canvas = document.createElement("canvas");
-            const ctx = canvas.getContext("2d");
-            ctx.textBaseline = "top";
-            ctx.font = "14px Arial";
-            ctx.fillText("Browser Fingerprint", 2, 2);
+            // Canvas fingerprint
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.textBaseline = 'top';
+            ctx.font = "14px 'Arial'";
+            ctx.fillText('Unique Device Test', 2, 2);
             const canvasData = canvas.toDataURL();
-
-            // Create a hash-like identifier from canvas fingerprint + user agent + screen info
-            const fingerprint = [canvasData.slice(-50), navigator.userAgent, navigator.language, screen.colorDepth, screen.width + "x" + screen.height, new Date().getTimezoneOffset()].join("|");
-
-            // Generate a MAC-like format from the fingerprint
-            let hash = 0;
-            for (let i = 0; i < fingerprint.length; i++) {
-                hash = (hash << 5) - hash + fingerprint.charCodeAt(i);
-                hash = hash & hash;
-            }
-
-            const macLike = Math.abs(hash).toString(16).padStart(12, "0").slice(0, 12);
-            const formatted = macLike
-                .match(/.{1,2}/g)
-                .join(":")
-                .toUpperCase();
-
-            return formatted;
+            
+            // Collect stable browser signals
+            const signals = {
+                userAgent: navigator.userAgent,
+                screen: `${screen.width}x${screen.height}`,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                cores: navigator.hardwareConcurrency || 'unknown',
+                platform: navigator.platform,
+                language: navigator.language,
+                canvas: canvasData.slice(0, 50) + '...'
+            };
+            
+            // console.table(signals);
+            // console.log(signals);
+            // Generate hash
+            const fingerprint = JSON.stringify(signals);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(fingerprint));
+            const uniqueKey = Array.from(new Uint8Array(hashBuffer))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('').slice(0, 32);
+            
+            localStorage.setItem('deviceUniqueKey', uniqueKey);
+            
+            return uniqueKey;
         } catch (error) {
-            console.warn("Could not generate device fingerprint:", error);
-            return "Unavailable";
+            console.error('Error generating device unique key:', error.message);
         }
     };
 
