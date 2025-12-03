@@ -245,7 +245,9 @@
     font-size: 48px;
     color: #000;
     user-select: none;
-    white-space: nowrap;
+    text-align: center;
+    text-wrap: wrap;
+    /* white-space: normal; */
 }
 
 .type-signature-preview-placeholder {

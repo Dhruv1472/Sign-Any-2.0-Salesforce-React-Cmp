@@ -55,33 +55,61 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
 
         const ctx = canvas.getContext("2d");
 
-        // Set text styles first to measure accurately
-        const fontStyle = isItalic ? "italic" : "normal";
-        const fontWeight = isBold ? "bold" : "normal";
-        ctx.font = `${fontStyle} ${fontWeight} ${adjustedFontSize(selectedFont, fontSize)}px "${selectedFont}", cursive`;
+        // Fixed canvas dimensions to match preview container (aspect ratio 1.65)
+        const canvasWidth = 457; // Matches preview width
+        const canvasHeight = 277; // Matches preview height
+        const padding = 24; // Padding from edges
 
-        // Measure text to get actual dimensions
-        const textMetrics = ctx.measureText(text);
-        const textWidth = textMetrics.width;
-        const textHeight = adjustedFontSize(selectedFont, fontSize) * 1.5; // Approximate height with some padding
-
-        // Add padding to ensure nothing gets cut off
-        const padding = 20;
-        canvas.width = Math.max(textWidth + padding * 2, 200);
-        canvas.height = Math.max(textHeight + padding * 2, 100);
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
 
         // Clear canvas
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Re-apply text styles after canvas resize (resize clears the context)
+        // Set text styles
+        const fontStyle = isItalic ? "italic" : "normal";
+        const fontWeight = isBold ? "bold" : "normal";
+        const actualFontSize = adjustedFontSize(selectedFont, fontSize);
+        ctx.font = `${fontStyle} ${fontWeight} ${actualFontSize}px "${selectedFont}", cursive`;
         ctx.fillStyle = "#000000";
-        ctx.font = `${fontStyle} ${fontWeight} ${adjustedFontSize(selectedFont, fontSize)}px "${selectedFont}", cursive`;
         ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
+        ctx.textBaseline = "top";
 
-        // Draw text at center
-        ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+        // Word wrapping logic
+        const maxWidth = canvasWidth - padding * 2;
+        const words = text.split(' ');
+        const lines = [];
+        let currentLine = '';
+
+        for (let i = 0; i < words.length; i++) {
+            const testLine = currentLine + (currentLine ? ' ' : '') + words[i];
+            const metrics = ctx.measureText(testLine);
+            const testWidth = metrics.width;
+
+            if (testWidth > maxWidth && currentLine) {
+                lines.push(currentLine);
+                currentLine = words[i];
+            } else {
+                currentLine = testLine;
+            }
+        }
+        if (currentLine) {
+            lines.push(currentLine);
+        }
+
+        // Calculate line height and total text height
+        const lineHeight = actualFontSize * 1.2;
+        const totalTextHeight = lines.length * lineHeight;
+
+        // Start drawing from vertical center
+        const startY = (canvasHeight - totalTextHeight) / 2;
+
+        // Draw each line
+        lines.forEach((line, index) => {
+            const y = startY + index * lineHeight;
+            ctx.fillText(line, canvasWidth / 2, y);
+        });
 
         // Get image data and notify parent
         if (onChange) {
