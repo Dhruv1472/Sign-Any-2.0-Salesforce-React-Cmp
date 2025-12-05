@@ -2196,12 +2196,12 @@ function App() {
         }
 
         const page = await pdf.getPage(pageNumber);
-        const originalViewport = page.getViewport({ scale: 1 });
+        const originalViewport = page.getViewport({ scale: 1.5 });
 
         const pageWidth = originalViewport.width || A4_WIDTH;
         const calculatedScale = targetWidth / pageWidth;
 
-        const viewport = page.getViewport({ scale: calculatedScale });
+        const viewport = page.getViewport({ scale: 1.5 });
         const context = canvas.getContext("2d");
 
         canvas.height = viewport.height;
