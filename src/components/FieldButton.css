@@ -133,10 +133,24 @@
 
 .field-value-text {
     width: 100%;
-    text-overflow: ellipsis;
-    word-break: break-word;
     line-height: 1.25;
     font-size: 16px;
+    box-sizing: border-box;
+}
+
+/* Single-line text fields: truncate with ellipsis */
+.field-value-text:not([data-multiline="true"]) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;;
+}
+
+/* Multi-line text fields: wrap text */
+.field-value-text[data-multiline="true"] {
+    word-break: break-word;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    text-wrap: wrap;
 }
 
 .checkbox-display {

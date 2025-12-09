@@ -1020,30 +1020,49 @@ function App() {
                             }
                         } else if (displayValue) {
                             // Draw text field
-                            // Calculate font size based on field height (leave some padding)
-                            const fontSize = 12;
+                            // Match preview font size (15.6px in preview = 10px in PDF due to scaling)
+                            const fontSize = 10;
                             const padding = 4;
-                            const maxWidth = pdfWidth;
-                            const lineHeight = fontSize * 1.4;
+                            const maxWidth = pdfWidth - padding * 2;
+                            const lineHeight = fontSize * 1.25;
 
-                            // Split text into words and build lines that fit within maxWidth
-                            const words = displayValue.split(" ");
-                            const lines = [];
-                            let currentLine = words[0] || "";
+                            // Check if this is a multiline text field
+                            const isMultiline = fieldType === "text" && field.multiline === true;
 
-                            for (let i = 1; i < words.length; i++) {
-                                const word = words[i];
-                                const testLine = currentLine + " " + word;
-                                const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+                            let lines = [];
+                            
+                            if (isMultiline) {
+                                // Split text into words and build lines that fit within maxWidth
+                                const words = displayValue.split(" ");
+                                let currentLine = words[0] || "";
 
-                                if (testWidth <= maxWidth) {
-                                    currentLine = testLine;
-                                } else {
-                                    lines.push(currentLine);
-                                    currentLine = word;
+                                for (let i = 1; i < words.length; i++) {
+                                    const word = words[i];
+                                    const testLine = currentLine + " " + word;
+                                    const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+
+                                    if (testWidth <= maxWidth) {
+                                        currentLine = testLine;
+                                    } else {
+                                        lines.push(currentLine);
+                                        currentLine = word;
+                                    }
                                 }
+                                lines.push(currentLine);
+                            } else {
+                                // Single line - truncate with ellipsis if needed
+                                let truncatedText = displayValue;
+                                const textWidth = font.widthOfTextAtSize(truncatedText, fontSize);
+                                
+                                if (textWidth > maxWidth) {
+                                    // Truncate and add ellipsis
+                                    while (font.widthOfTextAtSize(truncatedText + "...", fontSize) > maxWidth && truncatedText.length > 0) {
+                                        truncatedText = truncatedText.slice(0, -1);
+                                    }
+                                    truncatedText += "...";
+                                }
+                                lines = [truncatedText];
                             }
-                            lines.push(currentLine);
 
                             // Calculate starting Y position from top of field
                             const textY = pdfY + pdfHeight - padding - fontSize;
@@ -1057,7 +1076,7 @@ function App() {
                                     page.drawText(lines[i], {
                                         x: pdfX + padding,
                                         y: currentY,
-                                        size: fontSize - 2,
+                                        size: fontSize,
                                         font: font,
                                         color: rgb(0, 0, 0),
                                     });
