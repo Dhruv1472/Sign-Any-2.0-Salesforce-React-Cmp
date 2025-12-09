@@ -597,7 +597,7 @@ function App() {
         const locationInfo = userLocation || "Location Unavailable";
         const deviceUniqueKey = userDeviceUniqueKey || "Unavailable";
 
-        // Format timestamp as "Nov 21 2025, hh:mm:ss AM/PM TimeZone"
+        // Format timestamp as "Nov 21 2025, HH:mm TimeZone" (24-hour format, no seconds)
         const now = new Date();
         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
         const month = monthNames[now.getMonth()];
@@ -606,8 +606,7 @@ function App() {
         const timeString = now.toLocaleTimeString("en-US", {
             hour: "2-digit",
             minute: "2-digit",
-            second: "2-digit",
-            hour12: true,
+            hour12: false,
         });
         // Get timezone abbreviation
         const timeZone = now.toLocaleTimeString("en-US", { timeZoneName: "short" }).split(" ").pop();
@@ -830,7 +829,7 @@ function App() {
                             // Embed font for text
                             const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-                            // Create the metadata text on one line
+                            // Create the metadata text
                             let metadataText = "";
                             if (signerName && timestamp) {
                                 metadataText = `${signerName} | ${timestamp}`;
@@ -842,11 +841,46 @@ function App() {
 
                             // Calculate font size relative to signature width (small text)
                             const fontSize = 8;
+                            const maxWidth = pdfWidth; // Max width is the signature width
                             const textWidth = font.widthOfTextAtSize(metadataText, fontSize);
 
-                            // Center the text below the signature
-                            const textX = pdfX + (pdfWidth - textWidth) / 2;
-                            const textY = pdfY - fontSize - 2; // Position below signature with small gap
+                            // Word wrapping logic for max 2 lines
+                            let lines = [];
+                            if (textWidth <= maxWidth) {
+                                // Fits in one line
+                                lines = [metadataText];
+                            } else {
+                                // Need to wrap - split into max 2 lines
+                                const words = metadataText.split(' ');
+                                let line1 = '';
+                                let line2 = '';
+                                
+                                for (let i = 0; i < words.length; i++) {
+                                    const testLine1 = line1 + (line1 ? ' ' : '') + words[i];
+                                    const testWidth = font.widthOfTextAtSize(testLine1, fontSize);
+                                    
+                                    if (testWidth <= maxWidth) {
+                                        line1 = testLine1;
+                                    } else {
+                                        // Move to second line
+                                        line2 = words.slice(i).join(' ');
+                                        break;
+                                    }
+                                }
+                                
+                                lines = [line1, line2].filter(l => l);
+                                // If line2 still exceeds, truncate with ellipsis
+                                if (lines[1]) {
+                                    const line2Width = font.widthOfTextAtSize(lines[1], fontSize);
+                                    if (line2Width > maxWidth) {
+                                        let truncated = lines[1];
+                                        while (font.widthOfTextAtSize(truncated + '...', fontSize) > maxWidth && truncated.length > 0) {
+                                            truncated = truncated.slice(0, -1);
+                                        }
+                                        lines[1] = truncated + '...';
+                                    }
+                                }
+                            }
 
                             // Draw a subtle line above the text
                             page.drawLine({
@@ -856,13 +890,19 @@ function App() {
                                 color: rgb(0.88, 0.88, 0.88),
                             });
 
-                            // Draw the metadata text
-                            page.drawText(metadataText, {
-                                x: textX,
-                                y: textY,
-                                size: fontSize,
-                                font: font,
-                                color: rgb(0.4, 0.4, 0.4), // Gray color
+                            // Draw each line of metadata text
+                            lines.forEach((line, index) => {
+                                const lineWidth = font.widthOfTextAtSize(line, fontSize);
+                                const textX = pdfX + (pdfWidth - lineWidth) / 2;
+                                const textY = pdfY - fontSize - 2 - (index * (fontSize + 2));
+                                
+                                page.drawText(line, {
+                                    x: textX,
+                                    y: textY,
+                                    size: fontSize,
+                                    font: font,
+                                    color: rgb(0.4, 0.4, 0.4),
+                                });
                             });
                         }
                     } catch (error) {
@@ -1606,7 +1646,7 @@ function App() {
             if (!timestamp || timestamp === "--") return "--";
 
             // Check if timestamp contains AM or PM followed by timezone
-            const ampmRegex = /(.*?\s+(?:AM|PM|am|pm))(\s+.+)?$/;
+            const ampmRegex = /(.*?\d:\d\d)\s(.*?)$/;
             const match = timestamp.match(ampmRegex);
 
             if (match) {
