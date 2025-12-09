@@ -774,7 +774,7 @@ function App() {
                 }
 
                 // Load the original PDF using pdf-lib
-                const pdfDoc = await PDFDocument.load(originalPdfBytes);
+                const pdfDoc = await PDFDocument.load(originalPdfBytes, {ignoreEncryption: true});
                 const pages = pdfDoc.getPages();
 
                 // Get all filled signature fields across all signatures
