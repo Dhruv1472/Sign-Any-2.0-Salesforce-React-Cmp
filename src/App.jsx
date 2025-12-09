@@ -275,7 +275,8 @@ function App() {
             }
 
             if (!response.ok) {
-                throw new Error(`Failed to fetch Document record: ${response.status} ${response.statusText}`);
+                console.error(`Document fetch error: ${response.status} ${response.statusText}`);
+                throw new Error("Unable to load the document. Please check the link and try again.");
             }
 
             const data = await response.json();
@@ -303,7 +304,7 @@ function App() {
             const signatureDataJson = documentData.Signing_Details__c;
 
             if (!contentVersionId) {
-                throw new Error("Uploaded_Document_Id__c field is empty in Document__c record");
+                throw new Error("Document not found. Please contact the sender for a new link.");
             }
 
             // Parse signature and field data if available
@@ -440,7 +441,8 @@ function App() {
             });
 
             if (!response.ok) {
-                throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
+                console.error(`PDF fetch error: ${response.status} ${response.statusText}`);
+                throw new Error("Unable to load the PDF document. Please refresh and try again.");
             }
 
             const arrayBuffer = await response.arrayBuffer();
@@ -453,7 +455,7 @@ function App() {
             await loadPdfFromArrayBuffer(arrayBuffer, `Document_${contentVersionId}.pdf`);
         } catch (error) {
             console.error("Error fetching PDF from ContentVersion:", error);
-            throw error;
+            throw new Error("Failed to load the document. Please check your connection and try again.");
         }
     };
 
@@ -519,7 +521,8 @@ function App() {
             }
 
             if (!response.ok) {
-                throw new Error(`Failed to fetch Organization Id: ${response.status} ${response.statusText}`);
+                console.error(`Organization ID fetch error: ${response.status} ${response.statusText}`);
+                throw new Error("Unable to verify your organization. Please contact support.");
             }
 
             const data = await response.json();
@@ -558,7 +561,8 @@ function App() {
         }
 
             if (!response.ok) {
-                throw new Error(`Failed to fetch Admin Properties: ${response.status} ${response.statusText}`);
+                console.error(`Admin properties fetch error: ${response.status} ${response.statusToken}`);
+                throw new Error("Unable to load document settings. Please contact support.");
             }
 
             const data = await response.json();
@@ -769,7 +773,7 @@ function App() {
 
                 // All signatures are completed
                 if (!originalPdfBytes) {
-                    throw new Error("Original PDF data not available");
+                    throw new Error("Unable to process the document. Please refresh the page and try again.");
                 }
 
                 // Load the original PDF using pdf-lib
@@ -1221,7 +1225,7 @@ function App() {
                 console.error("Error in save and submit:", error);
                 setToast({
                     isVisible: true,
-                    message: `Error creating signed PDF: ${error.message}`,
+                    message: "Failed to save your signatures. Please check your connection and try again.",
                     type: "error",
                 });
             } finally {
@@ -1277,14 +1281,15 @@ function App() {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                throw new Error(`Failed to upload ContentVersion: ${response.status} ${response.statusText} - ${errorText}`);
+                console.error(`Upload error details: ${response.status} ${response.statusText} - ${errorText}`);
+                throw new Error("Failed to upload the signed document. Please try again.");
             }
 
             const result = await response.json();
             return result.id;
         } catch (error) {
             console.error("Error uploading signed PDF to Salesforce:", error);
-            throw error;
+            throw new Error("Failed to upload the signed document. Please check your connection and try again.");
         }
     };
 
@@ -1362,13 +1367,14 @@ function App() {
             }
 
             if (!response.ok) {
-                throw new Error(`Failed to update Document record: ${response.status} ${response.statusText}`);
+                console.error(`Update error: ${response.status} ${response.statusText}`);
+                throw new Error("Failed to save signature information. Please try again.");
             }
 
             return true;
         } catch (error) {
             console.error("Error updating Document record:", error);
-            throw error;
+            throw new Error("Failed to save your signatures. Please check your connection and try again.");
         }
     };
 
@@ -2034,7 +2040,8 @@ function App() {
             }
 
             if (!response.ok) {
-                throw new Error(`Failed to update Status__c: ${response.status}`);
+                console.error(`Reject status update error: ${response.status}`);
+                throw new Error("Unable to reject the document. Please try again.");
             }
 
             // Navigate to rejected page and replace history so user can't go back
@@ -2043,7 +2050,7 @@ function App() {
             console.error("Reject error:", error);
             setToast({
                 isVisible: true,
-                message: `Error rejecting document: ${error.message}`,
+                message: "Failed to reject the document. Please check your connection and try again.",
                 type: "error",
             });
         }
@@ -2074,7 +2081,8 @@ function App() {
             });
 
             if (!response.ok) {
-                throw new Error(`Failed to refresh token: ${response.status} ${response.statusText}`);
+                console.error(`Token refresh error: ${response.status} ${response.statusText}`);
+                throw new Error("Your session has expired. Please request a new link from the sender.");
             }
 
             const data = await response.json();
@@ -2088,7 +2096,7 @@ function App() {
             return newToken;
         } catch (error) {
             console.error("Error refreshing access token:", error);
-            throw error;
+            throw new Error("Your session has expired. Please request a new link from the sender.");
         }
     };
 
@@ -2165,34 +2173,34 @@ function App() {
     // Check if Save & Submit button should be shown
     const shouldShowSaveButton = () => {
         // If already submitted in this session, hide button
-        if (isSubmitted) {
-            return false;
-        }
+        // if (isSubmitted) {
+        //     return false;
+        // }
 
-        // Get all fields for current priority from all signatures
-        const currentPriorityFields = signatureData.filter((sig) => sig.priority == urlPriority).flatMap((sig) => sig.fields || []);
+        // // Get all fields for current priority from all signatures
+        // const currentPriorityFields = signatureData.filter((sig) => sig.priority == urlPriority).flatMap((sig) => sig.fields || []);
 
-        const initialPriorityFields = initialSignatureData.filter((sig) => sig.priority == urlPriority).flatMap((sig) => sig.fields || []);
+        // const initialPriorityFields = initialSignatureData.filter((sig) => sig.priority == urlPriority).flatMap((sig) => sig.fields || []);
 
-        // If no fields for current priority, hide button
-        if (currentPriorityFields.length === 0) {
-            return false;
-        }
+        // // If no fields for current priority, hide button
+        // if (currentPriorityFields.length === 0) {
+        //     return false;
+        // }
 
-        // Check if all fields for current priority were already filled initially
-        const allInitiallyFilled = initialPriorityFields.every((field) => field.filled);
+        // // Check if all fields for current priority were already filled initially
+        // const allInitiallyFilled = initialPriorityFields.every((field) => field.filled);
 
-        if (allInitiallyFilled) {
-            // Check if there are any changes from initial state
-            const hasChanges = currentPriorityFields.some((currentField) => {
-                const initialField = initialPriorityFields.find((f) => f.index === currentField.index);
-                // Check if imageUrl has changed
-                return !initialField || currentField.imageUrl !== initialField.imageUrl;
-            });
+        // if (allInitiallyFilled) {
+        //     // Check if there are any changes from initial state
+        //     const hasChanges = currentPriorityFields.some((currentField) => {
+        //         const initialField = initialPriorityFields.find((f) => f.index === currentField.index);
+        //         // Check if imageUrl has changed
+        //         return !initialField || currentField.imageUrl !== initialField.imageUrl;
+        //     });
 
-            // Only show button if there are changes
-            return hasChanges;
-        }
+        //     // Only show button if there are changes
+        //     return hasChanges;
+        // }
 
         // Show button if not all were initially filled (user needs to complete signing)
         return true;
