@@ -55,6 +55,55 @@ function App() {
     const canvasRefsArray = useRef([]);
     const pdfDocRef = useRef(null);
     const resizeTimeoutRef = useRef(null);
+    const broadcastChannelRef = useRef(null);
+
+    // Setup BroadcastChannel for cross-tab communication
+    useEffect(() => {
+        // Get the current URL (which uniquely identifies the document)
+        const currentUrl = window.location.href;
+        
+        // Create a unique channel name based on the document URL
+        // This ensures only tabs with the same document URL will communicate
+        const channelName = `document-sync-${btoa(currentUrl).replace(/=/g, '')}`;
+        
+        // Create the broadcast channel
+        if (typeof BroadcastChannel !== 'undefined') {
+            broadcastChannelRef.current = new BroadcastChannel(channelName);
+            
+            // Listen for messages from other tabs
+            broadcastChannelRef.current.onmessage = (event) => {
+                console.log('Received broadcast message:', event.data);
+                
+                if (event.data.type === 'DOCUMENT_SUBMITTED') {
+                    console.log('Another tab submitted the document. Reloading this tab...');
+                    
+                    // Show a toast before reloading
+                    setToast({
+                        isVisible: true,
+                        message: "Document was submitted in another tab. Refreshing...",
+                        type: "success",
+                    });
+                    
+                    // Reload the page after a short delay to show the toast
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                }
+            };
+            
+            console.log(`BroadcastChannel created: ${channelName}`);
+        } else {
+            console.warn('BroadcastChannel API is not supported in this browser');
+        }
+        
+        // Cleanup: close the channel when component unmounts
+        return () => {
+            if (broadcastChannelRef.current) {
+                broadcastChannelRef.current.close();
+                console.log('BroadcastChannel closed');
+            }
+        };
+    }, []);
 
     useEffect(() => {
         const parseUrlParams = async () => {
@@ -771,6 +820,94 @@ function App() {
                 // Show spinner during document saving
                 setShowSpinner(true);
 
+                // STEP 1: Check if document was already submitted by this user in another window/browser
+                if (salesforceConfig) {
+                    const { recordId, accessToken, instanceUrl, clientId, clientSecret } = salesforceConfig;
+                    
+                    try {
+                        // Fetch current document status and check if it's already been updated
+                        const query = `SELECT Id, Status__c, Document_Hash_Key__c, Signing_Details__c FROM Document__c WHERE Id = '${recordId}' LIMIT 1`;
+                        const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
+                        
+                        let response = await fetch(apiUrl, {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Bearer ${accessToken}`,
+                                'Content-Type': 'application/json',
+                            },
+                        });
+
+                        // Handle token refresh if needed
+                        if (response.status === 401 && clientId && clientSecret) {
+                            const newToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
+                            response = await fetch(apiUrl, {
+                                method: 'GET',
+                                headers: {
+                                    'Authorization': `Bearer ${newToken}`,
+                                    'Content-Type': 'application/json',
+                                },
+                            });
+                        }
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            const currentDoc = data?.records?.[0];
+                            
+                            if (currentDoc) {
+                                // Parse the current Signing_Details__c to check if this user's priority was already filled
+                                const currentSigningDetails = currentDoc.Signing_Details__c;
+                                
+                                if (currentSigningDetails) {
+                                    try {
+                                        const parsedDetails = JSON.parse(currentSigningDetails);
+                                        
+                                        // Find entries for current user's priority
+                                        const currentPriorityEntries = parsedDetails.filter(entry => entry.priority == urlPriority);
+                                        
+                                        if (currentPriorityEntries.length > 0) {
+                                            // Check if all fields for this priority are already filled
+                                            const allFieldsFilled = currentPriorityEntries.every(entry => {
+                                                if (entry.fields && Array.isArray(entry.fields)) {
+                                                    return entry.fields.every(field => field.filled === true);
+                                                }
+                                                return entry.filled === true;
+                                            });
+                                            
+                                            if (allFieldsFilled) {
+                                                console.log('Document already submitted by this user in another window. Refreshing...');
+                                                
+                                                // Hide spinner
+                                                setShowSpinner(false);
+                                                
+                                                // Show toast
+                                                setToast({
+                                                    isVisible: true,
+                                                    message: "This document was already submitted in another window. Refreshing...",
+                                                    type: "success",
+                                                });
+                                                
+                                                // Reload after short delay
+                                                setTimeout(() => {
+                                                    window.location.reload();
+                                                }, 1500);
+                                                
+                                                return; // Exit early, don't proceed with submission
+                                            }
+                                        }
+                                    } catch (parseError) {
+                                        console.warn('Could not parse Signing_Details__c:', parseError);
+                                        // Continue with submission if parsing fails
+                                    }
+                                }
+                            }
+                        }
+                    } catch (checkError) {
+                        console.warn('Error checking document status, proceeding with submission:', checkError);
+                        // Continue with submission if check fails
+                    }
+                }
+
+                // STEP 2: Proceed with normal submission flow
                 // All signatures are completed
                 if (!originalPdfBytes) {
                     throw new Error("Unable to process the document. Please refresh the page and try again.");
@@ -1183,6 +1320,16 @@ function App() {
                     // Mark as submitted
                     setIsSubmitted(true);
 
+                    // Broadcast to other tabs that this document was submitted
+                    if (broadcastChannelRef.current) {
+                        broadcastChannelRef.current.postMessage({
+                            type: 'DOCUMENT_SUBMITTED',
+                            recordId: salesforceConfig.recordId,
+                            timestamp: new Date().toISOString()
+                        });
+                        console.log('Broadcasted document submission to other tabs');
+                    }
+
                     // Show success toast
                     setToast({
                         isVisible: true,
@@ -1208,6 +1355,15 @@ function App() {
 
                     // Mark as submitted
                     setIsSubmitted(true);
+
+                    // Broadcast to other tabs that this document was submitted
+                    if (broadcastChannelRef.current) {
+                        broadcastChannelRef.current.postMessage({
+                            type: 'DOCUMENT_SUBMITTED',
+                            timestamp: new Date().toISOString()
+                        });
+                        console.log('Broadcasted document submission to other tabs');
+                    }
 
                     // Show success toast
                     setToast({
