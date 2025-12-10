@@ -2329,34 +2329,34 @@ function App() {
     // Check if Save & Submit button should be shown
     const shouldShowSaveButton = () => {
         // If already submitted in this session, hide button
-        // if (isSubmitted) {
-        //     return false;
-        // }
+        if (isSubmitted) {
+            return false;
+        }
 
-        // // Get all fields for current priority from all signatures
-        // const currentPriorityFields = signatureData.filter((sig) => sig.priority == urlPriority).flatMap((sig) => sig.fields || []);
+        // Get all fields for current priority from all signatures
+        const currentPriorityFields = signatureData.filter((sig) => sig.priority == urlPriority).flatMap((sig) => sig.fields || []);
 
-        // const initialPriorityFields = initialSignatureData.filter((sig) => sig.priority == urlPriority).flatMap((sig) => sig.fields || []);
+        const initialPriorityFields = initialSignatureData.filter((sig) => sig.priority == urlPriority).flatMap((sig) => sig.fields || []);
 
-        // // If no fields for current priority, hide button
-        // if (currentPriorityFields.length === 0) {
-        //     return false;
-        // }
+        // If no fields for current priority, hide button
+        if (currentPriorityFields.length === 0) {
+            return false;
+        }
 
-        // // Check if all fields for current priority were already filled initially
-        // const allInitiallyFilled = initialPriorityFields.every((field) => field.filled);
+        // Check if all fields for current priority were already filled initially
+        const allInitiallyFilled = initialPriorityFields.every((field) => field.filled);
 
-        // if (allInitiallyFilled) {
-        //     // Check if there are any changes from initial state
-        //     const hasChanges = currentPriorityFields.some((currentField) => {
-        //         const initialField = initialPriorityFields.find((f) => f.index === currentField.index);
-        //         // Check if imageUrl has changed
-        //         return !initialField || currentField.imageUrl !== initialField.imageUrl;
-        //     });
+        if (allInitiallyFilled) {
+            // Check if there are any changes from initial state
+            const hasChanges = currentPriorityFields.some((currentField) => {
+                const initialField = initialPriorityFields.find((f) => f.index === currentField.index);
+                // Check if imageUrl has changed
+                return !initialField || currentField.imageUrl !== initialField.imageUrl;
+            });
 
-        //     // Only show button if there are changes
-        //     return hasChanges;
-        // }
+            // Only show button if there are changes
+            return hasChanges;
+        }
 
         // Show button if not all were initially filled (user needs to complete signing)
         return true;
