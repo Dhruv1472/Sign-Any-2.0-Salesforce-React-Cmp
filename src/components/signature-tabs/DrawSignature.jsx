@@ -45,9 +45,8 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
 
-        // Clear canvas
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Clear canvas with transparent background
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         // Save initial state
         const imageData = canvas.toDataURL("image/png");

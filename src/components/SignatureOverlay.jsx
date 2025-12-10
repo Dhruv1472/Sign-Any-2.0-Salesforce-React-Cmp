@@ -79,8 +79,9 @@ const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onFieldCli
                 const parentPriority = field._parentSigner?.priority ?? priority;
                 const uniqueKey = `${parentPriority}-${field.index}-${fieldType}`;
 
-                // Show delete button only if field was signed/filled in current session
-                const canDelete = !isSubmitted && (isSignatureField ? sessionSignedKeys.has(field.index) : sessionFilledKeys?.has(field.index));
+                // Show delete button only if field belongs to current priority and was signed/filled in current session
+                const isCurrentPriorityField = parentPriority == priority;
+                const canDelete = !isSubmitted && isCurrentPriorityField && (isSignatureField ? sessionSignedKeys.has(field.index) : sessionFilledKeys?.has(field.index));
 
                 return (
                     <div key={uniqueKey} className={isSignatureField ? "signature-position" : "field-position"} style={{ position: "absolute", left: `${field.xPercent}%`, top: `${field.yPercent}%`, width: `${field.widthPercent}%`, height: `${field.heightPercent}%` }}>

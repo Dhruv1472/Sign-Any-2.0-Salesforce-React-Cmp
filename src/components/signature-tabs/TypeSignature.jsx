@@ -63,9 +63,8 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
         canvas.width = canvasWidth;
         canvas.height = canvasHeight;
 
-        // Clear canvas
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Clear canvas with transparent background
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         // Set text styles
         const fontStyle = isItalic ? "italic" : "normal";

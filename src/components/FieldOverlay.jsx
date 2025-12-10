@@ -17,14 +17,38 @@ import "./FieldOverlay.css";
  * @param {number} canvasScale - Scale factor for responsive sizing
  */
 const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave, onDelete, isSubmitted, sessionFilledKeys, canvasScale = 1 }) => {
-    // Filter fields for this page and exclude hidden ones
-    // IMPORTANT: Only show items that are actually fields (have fieldType property)
-    const pageFields = fields.filter(
-        (field) =>
-            field.fieldType && // Ensure it's a field, not a signature
-            field.pageNumber === pageNumber &&
-            (field.signerPriority == priority || field.priority == priority || field.filled)
-    );
+    // Filter fields for this page
+    // Show: 1. Current priority fields (editable), 2. Lower priority filled fields (read-only)
+    const pageFields = fields
+        .filter((field) => {
+            if (!field.fieldType) return false; // Ensure it's a field, not a signature
+            if (field.pageNumber !== pageNumber) return false;
+
+            const fieldPriority = field.signerPriority ?? field.priority;
+            const isCurrentPriority = fieldPriority == priority;
+            const isLowerPriority = fieldPriority < priority;
+
+            // Don't show higher priority fields
+            if (!isCurrentPriority && !isLowerPriority) {
+                return false;
+            }
+
+            // Show current priority fields (all)
+            if (isCurrentPriority) return true;
+
+            // Show lower priority fields only if filled (already completed)
+            return isLowerPriority && field.filled;
+        })
+        .map((field) => {
+            const fieldPriority = field.signerPriority ?? field.priority;
+            const isCurrentPriority = fieldPriority == priority;
+            
+            // Mark lower priority fields as disabled (read-only)
+            return {
+                ...field,
+                disabled: !isCurrentPriority || isSubmitted
+            };
+        });
 
     if (pageFields.length === 0) {
         return null;
@@ -33,14 +57,14 @@ const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave,
     return (
         <div className="field-overlay">
             {pageFields.map((field) => {
-                // Show delete button only if:
-                // 1. Document hasn't been submitted AND
-                // 2. Field was filled in current session (not pre-existing)
-                const canDelete = !isSubmitted && sessionFilledKeys.has(field.index);
+                // Show delete button only if field belongs to current priority and was filled in current session
+                const fieldPriority = field.signerPriority ?? field.priority;
+                const isCurrentPriorityField = fieldPriority == priority;
+                const canDelete = !isSubmitted && isCurrentPriorityField && sessionFilledKeys.has(field.index);
 
                 return (
                     <div key={field.index} className="field-position" style={{ position: "absolute", left: `${field.xPercent}%`, top: `${field.yPercent}%`, width: `${field.widthPercent}%`, height: `${field.heightPercent}%` }}>
-                        <FieldButton field={field} onFieldClick={onFieldClick} onSave={onFieldSave} onDelete={onDelete} canDelete={canDelete} disabled={isSubmitted} canvasScale={canvasScale} />
+                        <FieldButton field={field} onFieldClick={onFieldClick} onSave={onFieldSave} onDelete={onDelete} canDelete={canDelete} disabled={field.disabled} canvasScale={canvasScale} />
                     </div>
                 );
             })}

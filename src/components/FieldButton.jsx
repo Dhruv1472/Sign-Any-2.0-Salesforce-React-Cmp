@@ -13,8 +13,8 @@ import "./FieldButton.css";
  * @param {number} canvasScale - Scale factor for responsive sizing
  */
 const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false, disabled = false, canvasScale = 1 }) => {
-    const { key, fieldName, fieldType, value, filled, disabled: fieldDisabled, required } = field;
-    const isDisabled = Boolean(disabled || fieldDisabled);
+    const { key, fieldName, fieldType, value, filled, disabled: fieldDisabled, required, readonly } = field;
+    const isDisabled = Boolean(disabled || fieldDisabled || readonly);
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState("");
     const [showLimitWarning, setShowLimitWarning] = useState(false);
@@ -43,8 +43,9 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
     const handleFieldClick = () => {
         if (isDisabled) return;
         
-        // For text fields, enable inline editing
-        if (["text", "number", "email"].includes(fieldType)) {
+        // For text and number fields, enable inline editing
+        // Email, date, and initials use modal
+        if (["text", "number"].includes(fieldType)) {
             // Prefill with existing value, defaultValue, or empty string
             const initialValue = value || field.defaultValue || "";
             setEditValue(initialValue);
@@ -52,7 +53,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
             return;
         }
         
-        // For other fields, use the modal
+        // For other fields (email, date, initials, checkbox), use the modal
         if (onFieldClick) {
             onFieldClick(field);
         }
@@ -316,8 +317,8 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
         );
     }
 
-    // If editing inline (text field)
-    if (isEditing && ["text", "number", "email"].includes(fieldType)) {
+    // If editing inline (text or number only - email uses modal)
+    if (isEditing && ["text", "number"].includes(fieldType)) {
         const remainingChars = maxLength - editValue.length;
         const isNearLimit = remainingChars <= 10;
         const isAtLimit = remainingChars === 0;
