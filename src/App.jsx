@@ -26,6 +26,7 @@ function App() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [isExpired, setIsExpired] = useState(false);
+    const [isRejectedSimultaneous, setIsRejectedSimultaneous] = useState(false);
     const [initialAccepted, setInitialAccepted] = useState(false);
     const [signatureData, setSignatureData] = useState([]);
     const [fieldData, setFieldData] = useState([]);
@@ -205,10 +206,23 @@ function App() {
         setLoading(true);
         setError(null);
         setIsExpired(false);
+        setIsRejectedSimultaneous(false);
 
         try {
             // Step 1: Fetch Document__c record to get ContentVersion ID and signature/field data
-            const { contentVersionId, currentToken, documentData, signatureData: sigData, fieldData: fieldDataFromRecord, isExpired: documentExpired } = await fetchDocumentRecord(documentId, accessToken, instanceUrl, clientId, clientSecret);
+            const { contentVersionId, currentToken, documentData, signatureData: sigData, fieldData: fieldDataFromRecord, isExpired: documentExpired, isRejectedSimultaneous: docRejectedSimultaneous } = await fetchDocumentRecord(documentId, accessToken, instanceUrl, clientId, clientSecret);
+
+            // Check if document is rejected with simultaneous emails
+            if (docRejectedSimultaneous) {
+                setIsRejectedSimultaneous(true);
+                if (documentData) setDocumentRecord(documentData);
+                setPdfFile(null);
+                setTotalPages(0);
+                pdfDocRef.current = null;
+                canvasRefsArray.current = [];
+                setLoading(false);
+                return;
+            }
 
             // Check if document is expired
             if (documentExpired) {
@@ -249,7 +263,7 @@ function App() {
         try {
             let currentToken = accessToken;
             // Salesforce REST API endpoint to get Document__c record
-            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(`SELECT Id, Uploaded_Document_Id__c, Signing_Details__c, Status__c, CreatedDate, CreatedBy.Name, CreatedBy.Email, Email_Subject__c, Document_Name__c, Expiration_Date__c FROM Document__c WHERE Id='${documentId}' LIMIT 1`)}`;
+            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(`SELECT Id, Uploaded_Document_Id__c, Signing_Details__c, Status__c, CreatedDate, CreatedBy.Name, CreatedBy.Email, Email_Subject__c, Document_Name__c, Expiration_Date__c, Send_Emails_Simultaneously__c FROM Document__c WHERE Id='${documentId}' LIMIT 1`)}`;
 
             let response = await fetch(apiUrl, {
                 method: "GET",
@@ -280,6 +294,14 @@ function App() {
 
             const data = await response.json();
             const documentData = data.records[0];
+
+            // Check if document is rejected with simultaneous emails
+            if (documentData.Send_Emails_Simultaneously__c === true && documentData.Status__c === 'Rejected') {
+                setIsRejectedSimultaneous(true);
+                setDocumentRecord(documentData);
+                setError(null);
+                return { isRejectedSimultaneous: true };
+            }
 
             // Check if document is expired
             if (documentData.Expiration_Date__c) {
@@ -391,6 +413,16 @@ function App() {
                                 if (sigData) {
                                     consumedLegacyKeys.add(legacyKey);
                                 }
+                            }
+
+                            // Auto-fill readonly fields with default value if not already filled
+                            if (field.readonly === true && !field.filled && field.defaultValue) {
+                                const fieldType = (field.fieldType || field.type || "").toLowerCase();
+                                return {
+                                    ...field,
+                                    value: field.defaultValue,
+                                    filled: true,
+                                };
                             }
 
                             if (sigData) {
@@ -535,7 +567,7 @@ function App() {
     const fetchAdminProperties = async (accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
-            const query = "SELECT Id, Email_Object_Field__c, Email_Address__c, Audit_Report_Behaviour__c, Available_Fonts__c, Default_Brush_Size__c, Default_Font_Size__c, Default_Font_Style__c, Hide_Available_Fonts__c, Hide_Bold_Option__c, Hide_Brush_Size__c, Hide_Font_Size_Option__c, Hide_Italic_Option__c, Hide_Pen_And_Erase__c, Hide_Undo_Redo__c, Send_Sign_Email__c, Store_Sign__c FROM Admin_Properties__c LIMIT 1";
+            const query = "SELECT Id, Email_Object_Field__c, Email_Address__c, Audit_Report_Behaviour__c, Available_Fonts__c, Default_Brush_Size__c, Default_Font_Size__c, Default_Font_Style__c, Hide_Available_Fonts__c, Hide_Bold_Option__c, Hide_Brush_Size__c, Hide_Font_Size_Option__c, Hide_Italic_Option__c, Hide_Pen_And_Erase__c, Hide_Undo_Redo__c, Send_Sign_Email__c, Store_Sign__c, Audit_Report_On_Every_Signature__c FROM Admin_Properties__c LIMIT 1";
             const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
 
             let response = await fetch(apiUrl, {
@@ -573,6 +605,13 @@ function App() {
 
     const handleSignatureClick = (signature) => {
         if (isSubmitted) return;
+        
+        // Silent check: Only allow signing if signature belongs to current priority
+        const signaturePriority = signature._parentSigner?.priority ?? (signature.priority || null);
+        if (signaturePriority !== null && signaturePriority != urlPriority) {
+            return; // Silently ignore - signature belongs to different priority
+        }
+        
         setCurrentSignature(signature);
         setIsModalOpen(true);
     };
@@ -674,6 +713,14 @@ function App() {
     };
 
     const handleFieldDelete = (field) => {
+        if (isSubmitted) return;
+        
+        // Silent check: Only allow deletion if field belongs to current priority
+        const fieldPriority = field._parentSigner?.priority ?? (field.priority || null);
+        if (fieldPriority !== null && fieldPriority != urlPriority) {
+            return; // Silently ignore - field belongs to different priority
+        }
+        
         // Check if this field belongs to nested structure (has _parentSigner)
         if (field._parentSigner) {
             // Delete nested field within signatureData
@@ -695,6 +742,14 @@ function App() {
     };
 
     const handleSignatureDelete = (signature) => {
+        if (isSubmitted) return;
+        
+        // Silent check: Only allow deletion if signature belongs to current priority
+        const signaturePriority = signature._parentSigner?.priority ?? (signature.priority || null);
+        if (signaturePriority !== null && signaturePriority != urlPriority) {
+            return; // Silently ignore - signature belongs to different priority
+        }
+        
         const signerObject = signature._parentSigner;
 
         const updatedSignatures = deleteSignatureImage(signatureData, signature.index, signature.type, signerObject);
@@ -710,6 +765,13 @@ function App() {
 
     const handleFieldClick = (field) => {
         if (isSubmitted) return;
+        
+        // Silent check: Only allow editing if field belongs to current priority
+        const fieldPriority = field._parentSigner?.priority ?? (field.priority || null);
+        if (fieldPriority !== null && fieldPriority != urlPriority) {
+            return; // Silently ignore - field belongs to different priority
+        }
+        
         // For checkbox, toggle directly without opening modal
         const fType = (field.fieldType || field.type || "").toLowerCase();
         if (fType === "checkbox") {
@@ -1038,15 +1100,20 @@ function App() {
                 
                 // Check audit report behavior setting
                 const auditBehavior = adminProperties?.Audit_Report_Behaviour__c || "attached";
+                const auditOnEverySignature = adminProperties?.Audit_Report_On_Every_Signature__c || false;
                 let pdfBytes;
                 let auditPdfBytes = null;
 
+                console.log(`Audit behavior: ${auditBehavior}, Audit on every signature: ${auditOnEverySignature}`);
+
                 if (auditBehavior === "separate") {
-                    // For separate audit behavior, only generate audit report on final priority
-                    if (isFinalPriority) {
-                        console.log("Generating separate audit report (final priority)");
+                    // Separate mode: Generate audit as separate file
+                    if (auditOnEverySignature || isFinalPriority) {
+                        // Generate audit on every signature if checkbox is enabled, or only on final priority
+                        const showCompletedOnly = auditOnEverySignature && !isFinalPriority;
+                        console.log(`Generating separate audit report (Priority ${urlPriority}, Show completed only: ${showCompletedOnly})`);
                         try {
-                            await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat);
+                            await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat, showCompletedOnly);
                             auditPdfBytes = await convertAuditHTMLToPDF();
                         } catch (e) {
                             console.warn("Failed to generate separate audit report:", e);
@@ -1058,22 +1125,30 @@ function App() {
                     // Save signed PDF without audit report
                     pdfBytes = await pdfDoc.save();
                 } else {
-                    // Default: Attach audit report to signed PDF (always generate for attached mode)
-                    console.log("Attaching audit report to signed PDF");
-                    try {
-                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat);
-                    } catch (e) {
-                        console.warn("Failed to append audit report page:", e);
+                    // Attached mode: Merge audit into PDF
+                    if (auditOnEverySignature || isFinalPriority) {
+                        // Generate audit on every signature if checkbox is enabled, or only on final priority
+                        const showCompletedOnly = auditOnEverySignature && !isFinalPriority;
+                        console.log(`Attaching audit report to signed PDF (Priority ${urlPriority}, Show completed only: ${showCompletedOnly})`);
+                        try {
+                            await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat, showCompletedOnly);
+                        } catch (e) {
+                            console.warn("Failed to append audit report page:", e);
+                        }
+
+                        // Merge audit report HTML as extra pages
+                        const htmlPdfBytes = await convertAuditHTMLToPDF();
+                        const finalDoc = await PDFDocument.load(await pdfDoc.save());
+                        const extraDoc = await PDFDocument.load(htmlPdfBytes);
+                        const htmlPages = await finalDoc.copyPages(extraDoc, extraDoc.getPageIndices());
+                        htmlPages.forEach((p) => finalDoc.addPage(p));
+
+                        pdfBytes = await finalDoc.save();
+                    } else {
+                        // No audit generation for intermediate priorities when checkbox is disabled
+                        console.log(`Priority ${urlPriority} completed (audit report will be attached at final priority ${maxPriority})`);
+                        pdfBytes = await pdfDoc.save();
                     }
-
-                    // Merge audit report HTML as extra pages
-                    const htmlPdfBytes = await convertAuditHTMLToPDF();
-                    const finalDoc = await PDFDocument.load(await pdfDoc.save());
-                    const extraDoc = await PDFDocument.load(htmlPdfBytes);
-                    const htmlPages = await finalDoc.copyPages(extraDoc, extraDoc.getPageIndices());
-                    htmlPages.forEach((p) => finalDoc.addPage(p));
-
-                    pdfBytes = await finalDoc.save();
                 }
                 console.log("Final PDF byte size:", pdfBytes);
                 // Generate SHA-256 hash of the final PDF
@@ -1107,8 +1182,10 @@ function App() {
                     // Upload separate audit report if configured
                     if (auditPdfBytes && auditBehavior === "separate") {
                         try {
-                            await uploadSignedPdfToSalesforce(auditPdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, "Audit Report");
-                            console.log("Separate audit report uploaded successfully");
+                            // Determine audit report title based on priority
+                            const auditTitle = isFinalPriority ? "Audit Report" : `Temporary Audit Report - Priority ${urlPriority}`;
+                            await uploadSignedPdfToSalesforce(auditPdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, auditTitle);
+                            console.log(`${auditTitle} uploaded successfully`);
                         } catch (error) {
                             console.error("Failed to upload separate audit report:", error);
                         }
@@ -1596,10 +1673,11 @@ function App() {
     };
 
     // Build HTML for audit report
-    const generateAuditHTML = async (doc, sigData, orgId, totalPages, pageFormat) => {
+    const generateAuditHTML = async (doc, sigData, orgId, totalPages, pageFormat, showCompletedOnly = false) => {
         console.log("Generating audit report HTML with document and signatures:", doc);
         console.log("Signature data:", sigData);
         console.log("Using page format:", pageFormat);
+        console.log("Show completed only:", showCompletedOnly);
 
         // Helper function to format timestamp with smaller timezone
         const formatTimestamp = (timestamp) => {
@@ -1627,12 +1705,18 @@ function App() {
                 .filter((f) => (f.type || f.fieldType || "").toLowerCase() == "signature") // Only include fields with type="signature"
                 .map((f) => ({ ...f, signerName: s.name || "--", signerEmail: s.email || "--" }))
         );
+        
+        // Always calculate counts based on ALL signatures
         const signedFields = allFields.filter((f) => f.filled);
         const pendingFields = allFields.filter((f) => !f.filled);
+        
+        // Filter fields to display in table based on showCompletedOnly flag
+        const displayFields = showCompletedOnly ? signedFields : allFields;
 
         console.log("All signature fields:", allFields);
         console.log("Signed fields:", signedFields);
         console.log("Pending fields:", pendingFields);
+        console.log("Display fields (in table):", displayFields);
 
         // SVG ICONS
         const SVG_TOTAL = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="4" fill="#E0F5FF"/><path d="M4 6C4 4.89688 4.89688 4 6 4H10.6719C11.2031 4 11.7125 4.20938 12.0875 4.58438L15.4125 7.91563C15.7875 8.29063 15.9969 8.8 15.9969 9.33125V12.3781L11.8719 16.5031H10.5562L10.0531 14.8281C9.90625 14.3375 9.45625 14.0031 8.94375 14.0031C8.59063 14.0031 8.25937 14.1625 8.04062 14.4375L6.1625 16.7812C5.90313 17.1031 5.95625 17.5781 6.27813 17.8344C6.6 18.0906 7.075 18.0406 7.33125 17.7156L8.80313 15.8781L9.27812 17.4625C9.37187 17.7812 9.66562 17.9969 9.99687 17.9969H10.9812C10.9531 18.0938 10.9281 18.1937 10.9094 18.2937L10.5687 19.9969H6C4.89688 19.9969 4 19.1 4 17.9969V5.99688V6ZM10.5 5.82812V8.75C10.5 9.16563 10.8344 9.5 11.25 9.5H14.1719L10.5 5.82812ZM12.3812 18.5906C12.4594 18.2031 12.65 17.8469 12.9281 17.5688L16.6438 13.8531L19.1438 16.3531L15.4281 20.0688C15.15 20.3469 14.7937 20.5375 14.4062 20.6156L12.5437 20.9875C12.5156 20.9937 12.4844 20.9969 12.4531 20.9969C12.2031 20.9969 11.9969 20.7937 11.9969 20.5406C11.9969 20.5094 12 20.4813 12.0062 20.45L12.3781 18.5875L12.3812 18.5906ZM20.75 14.7469L19.85 15.6469L17.35 13.1469L18.25 12.2469C18.9406 11.5562 20.0594 11.5562 20.75 12.2469C21.4406 12.9375 21.4406 14.0562 20.75 14.7469Z" fill="#42C0FF"/></svg>`;
@@ -1794,7 +1878,7 @@ function App() {
                             </tr>
                         </thead>
                         <tbody>
-                            ${allFields
+                            ${displayFields
                                 .map(
                                     (f) => `
                             <tr style="border-top:1px solid #E2E8F0;">
@@ -1811,6 +1895,14 @@ function App() {
                                 <td style="padding:8px; vertical-align:middle;">
                                     <table style="width:100%; border-collapse:collapse;">
                                         <tr>
+                                            <td style="color:gray; padding-right:12px; width:80px;">Sign Type:</td>
+                                            <td style="color:black;">
+                                                <span style="color:#0066FF; font-weight:600;background:#E0F0FF;padding:0px 8px 0px 8px;border-radius:8px;font-size:9px;display:inline-flex;align-items:center;justify-content:center;">
+                                                    ${(f.signatureType || "--").toUpperCase()}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                        <tr>
                                             <td style="color:gray; padding-right:12px; width:80px;">Signed On:</td>
                                             <td style="color:black;">${formatTimestamp(f.timestamp || f.timeStamp || f.signedTime || "--")}</td>
                                         </tr>
@@ -1821,14 +1913,6 @@ function App() {
                                         <tr>
                                             <td style="color:gray; padding-right:12px; width:80px;">Location:</td>
                                             <td style="color:black;">${f.locationInfo || "--"}</td>
-                                        </tr>
-                                        <tr>
-                                            <td style="color:gray; padding-right:12px; width:80px;">Sign Type:</td>
-                                            <td style="color:black;">
-                                                <span style="color:#0066FF; font-weight:600;background:#E0F0FF;padding:0px 8px 4px 8px;border-radius:8px;font-size:9px;">
-                                                    ${(f.signatureType || "--").toUpperCase()}
-                                                </span>
-                                            </td>
                                         </tr>
                                     </table>
                                 </td>
@@ -2375,7 +2459,30 @@ function App() {
                 </div>
             )}
 
-            {pdfFile && !isExpired && (
+            {isRejectedSimultaneous && (
+                <div className="expired-card">
+                    <div className="expired-icon" style={{ color: "#d32f2f" }}>
+                        <svg className="expired-svg" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+
+                    <h3 className="expired-title" style={{ color: "#d32f2f" }}>Something Went Wrong</h3>
+
+                    <p className="expired-message">Facing issue with this document. Please try again later.</p>
+
+                    <p className="expired-hint" style={{ fontWeight: 500, marginTop: "12px" }}>
+                        Please contact the document sender:
+                    </p>
+                    <p className="expired-hint" style={{ marginTop: "4px", fontSize: "14px" }}>
+                        <strong>{documentRecord?.CreatedBy?.Name || "Unknown User"}</strong>
+                        <br />
+                        <span style={{ color: "#555" }}>{documentRecord?.CreatedBy?.Email || "No Email Available"}</span>
+                    </p>
+                </div>
+            )}
+
+            {pdfFile && !isExpired && !isRejectedSimultaneous && (
                 <>
                     <div className="pdf-container">
                         <div className="heading">
@@ -2513,7 +2620,7 @@ function App() {
                 </>
             )}
 
-            {!pdfFile && !loading && !error && !isExpired && (
+            {!pdfFile && !loading && !error && !isExpired && !isRejectedSimultaneous && (
                 <div className="placeholder">
                     <div className="placeholder-content">
                         <p>The URL is incorrect. Please contact the sender of this link.</p>
