@@ -272,10 +272,14 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
                             }}>{fieldName || "Checkbox"}</span>
                         </div>
                     ) : (
-                        <div className="field-value-text" style={{
-                            fontSize: `${12 * canvasScale}px`,
-                            padding: `${4 * canvasScale}px`
-                        }}>
+                        <div 
+                            className="field-value-text" 
+                            data-multiline={fieldType === "text" && field.multiline === true}
+                            style={{
+                                fontSize: `${15.16 * canvasScale -1.55}px`,
+                                padding: `${4 * canvasScale}px`
+                            }}
+                        >
                             {value}
                         </div>
                     )}

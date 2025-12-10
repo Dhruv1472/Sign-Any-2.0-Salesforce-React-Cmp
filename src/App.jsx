@@ -56,6 +56,55 @@ function App() {
     const canvasRefsArray = useRef([]);
     const pdfDocRef = useRef(null);
     const resizeTimeoutRef = useRef(null);
+    const broadcastChannelRef = useRef(null);
+
+    // Setup BroadcastChannel for cross-tab communication
+    useEffect(() => {
+        // Get the current URL (which uniquely identifies the document)
+        const currentUrl = window.location.href;
+        
+        // Create a unique channel name based on the document URL
+        // This ensures only tabs with the same document URL will communicate
+        const channelName = `document-sync-${btoa(currentUrl).replace(/=/g, '')}`;
+        
+        // Create the broadcast channel
+        if (typeof BroadcastChannel !== 'undefined') {
+            broadcastChannelRef.current = new BroadcastChannel(channelName);
+            
+            // Listen for messages from other tabs
+            broadcastChannelRef.current.onmessage = (event) => {
+                console.log('Received broadcast message:', event.data);
+                
+                if (event.data.type === 'DOCUMENT_SUBMITTED') {
+                    console.log('Another tab submitted the document. Reloading this tab...');
+                    
+                    // Show a toast before reloading
+                    setToast({
+                        isVisible: true,
+                        message: "Document was submitted in another tab. Refreshing...",
+                        type: "success",
+                    });
+                    
+                    // Reload the page after a short delay to show the toast
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                }
+            };
+            
+            console.log(`BroadcastChannel created: ${channelName}`);
+        } else {
+            console.warn('BroadcastChannel API is not supported in this browser');
+        }
+        
+        // Cleanup: close the channel when component unmounts
+        return () => {
+            if (broadcastChannelRef.current) {
+                broadcastChannelRef.current.close();
+                console.log('BroadcastChannel closed');
+            }
+        };
+    }, []);
 
     useEffect(() => {
         const parseUrlParams = async () => {
@@ -289,7 +338,8 @@ function App() {
             }
 
             if (!response.ok) {
-                throw new Error(`Failed to fetch Document record: ${response.status} ${response.statusText}`);
+                console.error(`Document fetch error: ${response.status} ${response.statusText}`);
+                throw new Error("Unable to load the document. Please check the link and try again.");
             }
 
             const data = await response.json();
@@ -325,7 +375,7 @@ function App() {
             const signatureDataJson = documentData.Signing_Details__c;
 
             if (!contentVersionId) {
-                throw new Error("Uploaded_Document_Id__c field is empty in Document__c record");
+                throw new Error("Document not found. Please contact the sender for a new link.");
             }
 
             // Parse signature and field data if available
@@ -472,7 +522,8 @@ function App() {
             });
 
             if (!response.ok) {
-                throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
+                console.error(`PDF fetch error: ${response.status} ${response.statusText}`);
+                throw new Error("Unable to load the PDF document. Please refresh and try again.");
             }
 
             const arrayBuffer = await response.arrayBuffer();
@@ -485,7 +536,7 @@ function App() {
             await loadPdfFromArrayBuffer(arrayBuffer, `Document_${contentVersionId}.pdf`);
         } catch (error) {
             console.error("Error fetching PDF from ContentVersion:", error);
-            throw error;
+            throw new Error("Failed to load the document. Please check your connection and try again.");
         }
     };
 
@@ -551,7 +602,8 @@ function App() {
             }
 
             if (!response.ok) {
-                throw new Error(`Failed to fetch Organization Id: ${response.status} ${response.statusText}`);
+                console.error(`Organization ID fetch error: ${response.status} ${response.statusText}`);
+                throw new Error("Unable to verify your organization. Please contact support.");
             }
 
             const data = await response.json();
@@ -590,7 +642,8 @@ function App() {
         }
 
             if (!response.ok) {
-                throw new Error(`Failed to fetch Admin Properties: ${response.status} ${response.statusText}`);
+                console.error(`Admin properties fetch error: ${response.status} ${response.statusToken}`);
+                throw new Error("Unable to load document settings. Please contact support.");
             }
 
             const data = await response.json();
@@ -636,7 +689,7 @@ function App() {
         const locationInfo = userLocation || "Location Unavailable";
         const deviceUniqueKey = userDeviceUniqueKey || "Unavailable";
 
-        // Format timestamp as "Nov 21 2025, hh:mm:ss AM/PM TimeZone"
+        // Format timestamp as "Nov 21 2025, HH:mm TimeZone" (24-hour format, no seconds)
         const now = new Date();
         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
         const month = monthNames[now.getMonth()];
@@ -645,8 +698,7 @@ function App() {
         const timeString = now.toLocaleTimeString("en-US", {
             hour: "2-digit",
             minute: "2-digit",
-            second: "2-digit",
-            hour12: true,
+            hour12: false,
         });
         // Get timezone abbreviation
         const timeZone = now.toLocaleTimeString("en-US", { timeZoneName: "short" }).split(" ").pop();
@@ -830,13 +882,101 @@ function App() {
                 // Show spinner during document saving
                 setShowSpinner(true);
 
+                // STEP 1: Check if document was already submitted by this user in another window/browser
+                if (salesforceConfig) {
+                    const { recordId, accessToken, instanceUrl, clientId, clientSecret } = salesforceConfig;
+                    
+                    try {
+                        // Fetch current document status and check if it's already been updated
+                        const query = `SELECT Id, Status__c, Document_Hash_Key__c, Signing_Details__c FROM Document__c WHERE Id = '${recordId}' LIMIT 1`;
+                        const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
+                        
+                        let response = await fetch(apiUrl, {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Bearer ${accessToken}`,
+                                'Content-Type': 'application/json',
+                            },
+                        });
+
+                        // Handle token refresh if needed
+                        if (response.status === 401 && clientId && clientSecret) {
+                            const newToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
+                            response = await fetch(apiUrl, {
+                                method: 'GET',
+                                headers: {
+                                    'Authorization': `Bearer ${newToken}`,
+                                    'Content-Type': 'application/json',
+                                },
+                            });
+                        }
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            const currentDoc = data?.records?.[0];
+                            
+                            if (currentDoc) {
+                                // Parse the current Signing_Details__c to check if this user's priority was already filled
+                                const currentSigningDetails = currentDoc.Signing_Details__c;
+                                
+                                if (currentSigningDetails) {
+                                    try {
+                                        const parsedDetails = JSON.parse(currentSigningDetails);
+                                        
+                                        // Find entries for current user's priority
+                                        const currentPriorityEntries = parsedDetails.filter(entry => entry.priority == urlPriority);
+                                        
+                                        if (currentPriorityEntries.length > 0) {
+                                            // Check if all fields for this priority are already filled
+                                            const allFieldsFilled = currentPriorityEntries.every(entry => {
+                                                if (entry.fields && Array.isArray(entry.fields)) {
+                                                    return entry.fields.every(field => field.filled === true);
+                                                }
+                                                return entry.filled === true;
+                                            });
+                                            
+                                            if (allFieldsFilled) {
+                                                console.log('Document already submitted by this user in another window. Refreshing...');
+                                                
+                                                // Hide spinner
+                                                setShowSpinner(false);
+                                                
+                                                // Show toast
+                                                setToast({
+                                                    isVisible: true,
+                                                    message: "This document was already submitted in another window. Refreshing...",
+                                                    type: "success",
+                                                });
+                                                
+                                                // Reload after short delay
+                                                setTimeout(() => {
+                                                    window.location.reload();
+                                                }, 1500);
+                                                
+                                                return; // Exit early, don't proceed with submission
+                                            }
+                                        }
+                                    } catch (parseError) {
+                                        console.warn('Could not parse Signing_Details__c:', parseError);
+                                        // Continue with submission if parsing fails
+                                    }
+                                }
+                            }
+                        }
+                    } catch (checkError) {
+                        console.warn('Error checking document status, proceeding with submission:', checkError);
+                        // Continue with submission if check fails
+                    }
+                }
+
+                // STEP 2: Proceed with normal submission flow
                 // All signatures are completed
                 if (!originalPdfBytes) {
-                    throw new Error("Original PDF data not available");
+                    throw new Error("Unable to process the document. Please refresh the page and try again.");
                 }
 
                 // Load the original PDF using pdf-lib
-                const pdfDoc = await PDFDocument.load(originalPdfBytes);
+                const pdfDoc = await PDFDocument.load(originalPdfBytes, {ignoreEncryption: true});
                 const pages = pdfDoc.getPages();
 
                 // Get all filled signature fields across all signatures
@@ -892,7 +1032,7 @@ function App() {
                             // Embed font for text
                             const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-                            // Create the metadata text on one line
+                            // Create the metadata text
                             let metadataText = "";
                             if (signerName && timestamp) {
                                 metadataText = `${signerName} | ${timestamp}`;
@@ -904,11 +1044,46 @@ function App() {
 
                             // Calculate font size relative to signature width (small text)
                             const fontSize = 8;
+                            const maxWidth = pdfWidth; // Max width is the signature width
                             const textWidth = font.widthOfTextAtSize(metadataText, fontSize);
 
-                            // Center the text below the signature
-                            const textX = pdfX + (pdfWidth - textWidth) / 2;
-                            const textY = pdfY - fontSize - 2; // Position below signature with small gap
+                            // Word wrapping logic for max 2 lines
+                            let lines = [];
+                            if (textWidth <= maxWidth) {
+                                // Fits in one line
+                                lines = [metadataText];
+                            } else {
+                                // Need to wrap - split into max 2 lines
+                                const words = metadataText.split(' ');
+                                let line1 = '';
+                                let line2 = '';
+                                
+                                for (let i = 0; i < words.length; i++) {
+                                    const testLine1 = line1 + (line1 ? ' ' : '') + words[i];
+                                    const testWidth = font.widthOfTextAtSize(testLine1, fontSize);
+                                    
+                                    if (testWidth <= maxWidth) {
+                                        line1 = testLine1;
+                                    } else {
+                                        // Move to second line
+                                        line2 = words.slice(i).join(' ');
+                                        break;
+                                    }
+                                }
+                                
+                                lines = [line1, line2].filter(l => l);
+                                // If line2 still exceeds, truncate with ellipsis
+                                if (lines[1]) {
+                                    const line2Width = font.widthOfTextAtSize(lines[1], fontSize);
+                                    if (line2Width > maxWidth) {
+                                        let truncated = lines[1];
+                                        while (font.widthOfTextAtSize(truncated + '...', fontSize) > maxWidth && truncated.length > 0) {
+                                            truncated = truncated.slice(0, -1);
+                                        }
+                                        lines[1] = truncated + '...';
+                                    }
+                                }
+                            }
 
                             // Draw a subtle line above the text
                             page.drawLine({
@@ -918,13 +1093,19 @@ function App() {
                                 color: rgb(0.88, 0.88, 0.88),
                             });
 
-                            // Draw the metadata text
-                            page.drawText(metadataText, {
-                                x: textX,
-                                y: textY,
-                                size: fontSize,
-                                font: font,
-                                color: rgb(0.4, 0.4, 0.4), // Gray color
+                            // Draw each line of metadata text
+                            lines.forEach((line, index) => {
+                                const lineWidth = font.widthOfTextAtSize(line, fontSize);
+                                const textX = pdfX + (pdfWidth - lineWidth) / 2;
+                                const textY = pdfY - fontSize - 2 - (index * (fontSize + 2));
+                                
+                                page.drawText(line, {
+                                    x: textX,
+                                    y: textY,
+                                    size: fontSize,
+                                    font: font,
+                                    color: rgb(0.4, 0.4, 0.4),
+                                });
                             });
                         }
                     } catch (error) {
@@ -1042,30 +1223,49 @@ function App() {
                             }
                         } else if (displayValue) {
                             // Draw text field
-                            // Calculate font size based on field height (leave some padding)
-                            const fontSize = 12;
+                            // Match preview font size (15.6px in preview = 10px in PDF due to scaling)
+                            const fontSize = 10;
                             const padding = 4;
-                            const maxWidth = pdfWidth;
-                            const lineHeight = fontSize * 1.4;
+                            const maxWidth = pdfWidth - padding * 2;
+                            const lineHeight = fontSize * 1.25;
 
-                            // Split text into words and build lines that fit within maxWidth
-                            const words = displayValue.split(" ");
-                            const lines = [];
-                            let currentLine = words[0] || "";
+                            // Check if this is a multiline text field
+                            const isMultiline = fieldType === "text" && field.multiline === true;
 
-                            for (let i = 1; i < words.length; i++) {
-                                const word = words[i];
-                                const testLine = currentLine + " " + word;
-                                const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+                            let lines = [];
+                            
+                            if (isMultiline) {
+                                // Split text into words and build lines that fit within maxWidth
+                                const words = displayValue.split(" ");
+                                let currentLine = words[0] || "";
 
-                                if (testWidth <= maxWidth) {
-                                    currentLine = testLine;
-                                } else {
-                                    lines.push(currentLine);
-                                    currentLine = word;
+                                for (let i = 1; i < words.length; i++) {
+                                    const word = words[i];
+                                    const testLine = currentLine + " " + word;
+                                    const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+
+                                    if (testWidth <= maxWidth) {
+                                        currentLine = testLine;
+                                    } else {
+                                        lines.push(currentLine);
+                                        currentLine = word;
+                                    }
                                 }
+                                lines.push(currentLine);
+                            } else {
+                                // Single line - truncate with ellipsis if needed
+                                let truncatedText = displayValue;
+                                const textWidth = font.widthOfTextAtSize(truncatedText, fontSize);
+                                
+                                if (textWidth > maxWidth) {
+                                    // Truncate and add ellipsis
+                                    while (font.widthOfTextAtSize(truncatedText + "...", fontSize) > maxWidth && truncatedText.length > 0) {
+                                        truncatedText = truncatedText.slice(0, -1);
+                                    }
+                                    truncatedText += "...";
+                                }
+                                lines = [truncatedText];
                             }
-                            lines.push(currentLine);
 
                             // Calculate starting Y position from top of field
                             const textY = pdfY + pdfHeight - padding - fontSize;
@@ -1079,7 +1279,7 @@ function App() {
                                     page.drawText(lines[i], {
                                         x: pdfX + padding,
                                         y: currentY,
-                                        size: fontSize - 2,
+                                        size: fontSize,
                                         font: font,
                                         color: rgb(0, 0, 0),
                                     });
@@ -1197,6 +1397,16 @@ function App() {
                     // Mark as submitted
                     setIsSubmitted(true);
 
+                    // Broadcast to other tabs that this document was submitted
+                    if (broadcastChannelRef.current) {
+                        broadcastChannelRef.current.postMessage({
+                            type: 'DOCUMENT_SUBMITTED',
+                            recordId: salesforceConfig.recordId,
+                            timestamp: new Date().toISOString()
+                        });
+                        console.log('Broadcasted document submission to other tabs');
+                    }
+
                     // Show success toast
                     setToast({
                         isVisible: true,
@@ -1223,6 +1433,15 @@ function App() {
                     // Mark as submitted
                     setIsSubmitted(true);
 
+                    // Broadcast to other tabs that this document was submitted
+                    if (broadcastChannelRef.current) {
+                        broadcastChannelRef.current.postMessage({
+                            type: 'DOCUMENT_SUBMITTED',
+                            timestamp: new Date().toISOString()
+                        });
+                        console.log('Broadcasted document submission to other tabs');
+                    }
+
                     // Show success toast
                     setToast({
                         isVisible: true,
@@ -1239,7 +1458,7 @@ function App() {
                 console.error("Error in save and submit:", error);
                 setToast({
                     isVisible: true,
-                    message: `Error creating signed PDF: ${error.message}`,
+                    message: "Failed to save your signatures. Please check your connection and try again.",
                     type: "error",
                 });
             } finally {
@@ -1295,14 +1514,15 @@ function App() {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                throw new Error(`Failed to upload ContentVersion: ${response.status} ${response.statusText} - ${errorText}`);
+                console.error(`Upload error details: ${response.status} ${response.statusText} - ${errorText}`);
+                throw new Error("Failed to upload the signed document. Please try again.");
             }
 
             const result = await response.json();
             return result.id;
         } catch (error) {
             console.error("Error uploading signed PDF to Salesforce:", error);
-            throw error;
+            throw new Error("Failed to upload the signed document. Please check your connection and try again.");
         }
     };
 
@@ -1380,13 +1600,14 @@ function App() {
             }
 
             if (!response.ok) {
-                throw new Error(`Failed to update Document record: ${response.status} ${response.statusText}`);
+                console.error(`Update error: ${response.status} ${response.statusText}`);
+                throw new Error("Failed to save signature information. Please try again.");
             }
 
             return true;
         } catch (error) {
             console.error("Error updating Document record:", error);
-            throw error;
+            throw new Error("Failed to save your signatures. Please check your connection and try again.");
         }
     };
 
@@ -1684,7 +1905,7 @@ function App() {
             if (!timestamp || timestamp === "--") return "--";
 
             // Check if timestamp contains AM or PM followed by timezone
-            const ampmRegex = /(.*?\s+(?:AM|PM|am|pm))(\s+.+)?$/;
+            const ampmRegex = /(.*?\d:\d\d)\s(.*?)$/;
             const match = timestamp.match(ampmRegex);
 
             if (match) {
@@ -2059,7 +2280,8 @@ function App() {
             }
 
             if (!response.ok) {
-                throw new Error(`Failed to update Status__c: ${response.status}`);
+                console.error(`Reject status update error: ${response.status}`);
+                throw new Error("Unable to reject the document. Please try again.");
             }
 
             // Navigate to rejected page and replace history so user can't go back
@@ -2068,7 +2290,7 @@ function App() {
             console.error("Reject error:", error);
             setToast({
                 isVisible: true,
-                message: `Error rejecting document: ${error.message}`,
+                message: "Failed to reject the document. Please check your connection and try again.",
                 type: "error",
             });
         }
@@ -2099,7 +2321,8 @@ function App() {
             });
 
             if (!response.ok) {
-                throw new Error(`Failed to refresh token: ${response.status} ${response.statusText}`);
+                console.error(`Token refresh error: ${response.status} ${response.statusText}`);
+                throw new Error("Your session has expired. Please request a new link from the sender.");
             }
 
             const data = await response.json();
@@ -2113,7 +2336,7 @@ function App() {
             return newToken;
         } catch (error) {
             console.error("Error refreshing access token:", error);
-            throw error;
+            throw new Error("Your session has expired. Please request a new link from the sender.");
         }
     };
 

@@ -41,13 +41,15 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false, canva
                     <img src={imageUrl} alt={`Signature-${key}`} className="signature-image" style={{ width: `${width}px` }} draggable="false" />
                     {canDelete && (
                         <button className="signature-delete-btn" onClick={handleDeleteClick} title="Delete signature" style={{ top: `${4 * canvasScale}px`, right: `${4 * canvasScale}px`, width: `${24 * canvasScale}px`, height: `${24 * canvasScale}px`, fontSize: `${16 * canvasScale}px` }}>
-                            ×
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                <path d="M7 7L17 17M7 17L17 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
                         </button>
                     )}
                 </div>
                 {(signerName || signatureTimestamp) && (
-                    <div className="signature-footer" style={{ marginTop: `${2 * canvasScale}px`, paddingTop: `${2 * canvasScale}px`, paddingBottom: `${2 * canvasScale}px`, bottom: `-${19.51 * canvasScale - 1.755}px` }}>
-                        <div className="signature-footer-text" style={{ fontSize: `${8 * canvasScale}px`}}>
+                    <div className="signature-footer" style={{ marginTop: `${2 * canvasScale}px`, paddingTop: `${2 * canvasScale}px`, paddingBottom: `${2 * canvasScale}px`, maxWidth: `${width}px` }}>
+                        <div className="signature-footer-text" style={{ fontSize: `${9.85 * canvasScale + 0.52}px`}}>
                             {signerName && <span className="signature-footer-name">{signerName}</span>}
                             {signerName && signatureTimestamp && <span className="signature-footer-separator"> | </span>}
                             {signatureTimestamp && <span className="signature-footer-timestamp">{signatureTimestamp}</span>}
