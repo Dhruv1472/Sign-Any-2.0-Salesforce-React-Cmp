@@ -126,7 +126,6 @@ input[type=number]::-webkit-outer-spin-button {
 
 .draw-signature-canvas-wrapper {
     width: 100%;
-    aspect-ratio: 1.65;
     position: relative;
     flex: 1;
     height: 277px;

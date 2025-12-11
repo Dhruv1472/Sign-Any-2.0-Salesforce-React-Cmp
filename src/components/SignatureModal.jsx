@@ -41,6 +41,12 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
         ? adminProperties.Available_Fonts__c.split(',').map(f => f.trim()).filter(f => f.length > 0)
         : ["Artecallya","Maytra","Mr Dafoe","Mr DeHaviland","The signature","Monsieur La Doulaise","Mrs Saint Delafield","Barokah","Bettina","High Summit"];
 
+    // Calculate aspect ratio from signature dimensions (width / height)
+    // Default to 1.65 if dimensions not available
+    const signatureAspectRatio = signature?.widthPercent && signature?.heightPercent 
+        ? signature.widthPercent / signature.heightPercent 
+        : 1.65;
+
     if (!isOpen) return null;
 
     const handleSave = () => {
@@ -106,6 +112,7 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
                                 hideRedo={hideUndoRedo}
                                 hideBrushSize={hideBrushSize}
                                 defaultPenSize={defaultBrushSize}
+                                aspectRatio={signatureAspectRatio}
                             />
                         )}
                         {activeTab === TABS.TYPE && (
@@ -121,6 +128,7 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
                                 defaultFontStyle={defaultFontStyle}
                                 defaultFontSize={defaultFontSize}
                                 availableFonts={availableFonts}
+                                aspectRatio={signatureAspectRatio}
                             />
                         )}
                     </div>

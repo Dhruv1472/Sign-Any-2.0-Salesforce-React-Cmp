@@ -229,7 +229,6 @@
 
 .type-signature-preview {
     width: 100%;
-    aspect-ratio: 1.65;
     height: 277px;
     border: 2px solid var(--primary-color);
     border-radius: 8px;

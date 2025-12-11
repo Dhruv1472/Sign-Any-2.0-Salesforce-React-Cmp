@@ -20,13 +20,14 @@ import "./TypeSignature.css";
  * @param {number} fontSizeStep - Step increment for font sizes
  * @param {number} maxTextLength - Maximum number of characters allowed
  */
-const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = false, hideItalic = false, hideFontStyle = false, hideFontSize = false, availableFonts = ["Artecallya", "Maytra", "Mr Dafoe", "Mr DeHaviland", "The signature", "Monsieur La Doulaise", "Mrs Saint Delafield", "Barokah", "Bettina", "High Summit"], defaultFontStyle = "Artecallya", defaultFontSize = 48, minFontSize = 2, maxFontSize = 100, fontSizeStep = 2, maxTextLength = 50 }) => {
+const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = false, hideItalic = false, hideFontStyle = false, hideFontSize = false, availableFonts = ["Artecallya", "Maytra", "Mr Dafoe", "Mr DeHaviland", "The signature", "Monsieur La Doulaise", "Mrs Saint Delafield", "Barokah", "Bettina", "High Summit"], defaultFontStyle = "Artecallya", defaultFontSize = 48, minFontSize = 2, maxFontSize = 100, fontSizeStep = 2, maxTextLength = 50, aspectRatio = 1.65 }) => {
     const [text, setText] = useState(defaultValue || "");
     const [selectedFont, setSelectedFont] = useState(defaultFontStyle);
     const [isBold, setIsBold] = useState(false);
     const [isItalic, setIsItalic] = useState(false);
     const [fontSize, setFontSize] = useState(defaultFontSize);
     const canvasRef = useRef(null);
+    const previewRef = useRef(null); // Reference to the preview container
 
     const fonts = availableFonts;
 
@@ -51,32 +52,36 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
         }
 
         const canvas = canvasRef.current;
-        if (!canvas) return;
+        const previewContainer = previewRef.current;
+        
+        if (!canvas || !previewContainer) return;
+
+        // Get the actual rendered dimensions of the preview container
+        const previewRect = previewContainer.getBoundingClientRect();
+        const previewWidth = previewRect.width;
+        const previewHeight = previewRect.height;
 
         const ctx = canvas.getContext("2d");
 
-        // Fixed canvas dimensions to match preview container (aspect ratio 1.65)
-        const canvasWidth = 457; // Matches preview width
-        const canvasHeight = 277; // Matches preview height
-        const padding = 24; // Padding from edges
-
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
+        // Set canvas to exact same size as preview container
+        canvas.width = previewWidth;
+        canvas.height = previewHeight;
 
         // Clear canvas with transparent background
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Set text styles
+        // Set text styles - use the exact same font size as preview
         const fontStyle = isItalic ? "italic" : "normal";
         const fontWeight = isBold ? "bold" : "normal";
         const actualFontSize = adjustedFontSize(selectedFont, fontSize);
         ctx.font = `${fontStyle} ${fontWeight} ${actualFontSize}px "${selectedFont}", cursive`;
         ctx.fillStyle = "#000000";
         ctx.textAlign = "center";
-        ctx.textBaseline = "top";
+        ctx.textBaseline = "middle";
 
-        // Word wrapping logic
-        const maxWidth = canvasWidth - padding * 2;
+        // The text will naturally wrap in the span based on container width
+        // We need to replicate that wrapping behavior in canvas
+        const maxWidth = previewWidth - 4; // Account for padding (12px each side)
         const words = text.split(' ');
         const lines = [];
         let currentLine = '';
@@ -84,9 +89,8 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
         for (let i = 0; i < words.length; i++) {
             const testLine = currentLine + (currentLine ? ' ' : '') + words[i];
             const metrics = ctx.measureText(testLine);
-            const testWidth = metrics.width;
-
-            if (testWidth > maxWidth && currentLine) {
+            
+            if (metrics.width > maxWidth && currentLine) {
                 lines.push(currentLine);
                 currentLine = words[i];
             } else {
@@ -97,24 +101,22 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
             lines.push(currentLine);
         }
 
-        // Calculate line height and total text height
+        // Calculate line height and center the text block vertically
         const lineHeight = actualFontSize * 1.2;
         const totalTextHeight = lines.length * lineHeight;
-
-        // Start drawing from vertical center
-        const startY = (canvasHeight - totalTextHeight) / 2;
+        const startY = (previewHeight - totalTextHeight) / 2 + (lineHeight / 2);
 
         // Draw each line
         lines.forEach((line, index) => {
             const y = startY + index * lineHeight;
-            ctx.fillText(line, canvasWidth / 2, y);
+            ctx.fillText(line, previewWidth / 2, y);
         });
 
         // Get image data and notify parent
         if (onChange) {
             onChange(canvas.toDataURL("image/png"));
         }
-    }, [text, selectedFont, isBold, isItalic, fontSize, onChange]);
+    }, [text, selectedFont, isBold, isItalic, fontSize, onChange, aspectRatio]);
 
     const adjustedFontSize = (selectedFont, fontSize) => {
         switch (selectedFont) {
@@ -203,7 +205,7 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
             </div>
 
             <div className="type-signature-preview-section">
-                <div className="type-signature-preview">
+                <div className="type-signature-preview" style={{ aspectRatio: aspectRatio }} ref={previewRef}>
                     {text ? (
                         <span
                             className="type-signature-preview-text"

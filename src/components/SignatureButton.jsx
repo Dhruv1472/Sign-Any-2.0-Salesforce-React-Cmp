@@ -13,7 +13,7 @@ import "./SignatureButton.css";
  * @param {Function} onReuseSignature - Callback when reusing stored signature
  */
 const SignatureButton = ({ signature, onSign, onDelete, canDelete = false, canvasScale = 1, hasStoredSignature = false, onReuseSignature }) => {
-    const { key, buttonName, width, signed, filled, imageUrl, disabled, timeStamp, timestamp, _parentSigner } = signature;
+    const { key, buttonName, signed, filled, imageUrl, disabled, timeStamp, timestamp, _parentSigner } = signature;
 
     const handleSignClick = (e) => {
         e.stopPropagation();
@@ -48,7 +48,7 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false, canva
         return (
             <>
                 <div className={`signature-image-container ${isCompleted ? "signed" : ""}`}>
-                    <img src={imageUrl} alt={`Signature-${key}`} className="signature-image" style={{ width: `${width}px` }} draggable="false" />
+                    <img src={imageUrl} alt={`Signature-${key}`} className="signature-image" draggable="false" />
                     {canDelete && (
                         <button className="signature-delete-btn" onClick={handleDeleteClick} title="Delete signature" style={{ top: `${4 * canvasScale}px`, right: `${4 * canvasScale}px`, width: `${24 * canvasScale}px`, height: `${24 * canvasScale}px`, fontSize: `${16 * canvasScale}px` }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -58,7 +58,7 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false, canva
                     )}
                 </div>
                 {(signerName || signatureTimestamp) && (
-                    <div className="signature-footer" style={{ marginTop: `${2 * canvasScale}px`, paddingTop: `${2 * canvasScale}px`, paddingBottom: `${2 * canvasScale}px`, maxWidth: `${width}px` }}>
+                    <div className="signature-footer" style={{ marginTop: `${2 * canvasScale}px`, paddingTop: `${2 * canvasScale}px`, paddingBottom: `${2 * canvasScale}px` }}>
                         <div className="signature-footer-text" style={{ fontSize: `${9.85 * canvasScale + 0.52}px`}}>
                             {signerName && <span className="signature-footer-name">{signerName}</span>}
                             {signerName && signatureTimestamp && <span className="signature-footer-separator"> | </span>}

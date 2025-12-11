@@ -739,7 +739,6 @@ function App() {
         // Store first signature/initial for quick reuse (same priority only)
         const signatureTypeLower = (signature.type || "").toLowerCase();
         if (signatureTypeLower === "signature") {
-            console.log("signatureadded==> ");
             setStoredSignature((prev) => {
                 // If no signature stored yet, store this one
                 if (!prev.signBase64) {
@@ -1321,17 +1320,38 @@ function App() {
                         }
 
                         // Use percentage-based coordinates from the field data
-                        const pdfX = (field.xPercent / 100) * pageWidth;
-                        const pdfY = pageHeight - (field.yPercent / 100) * pageHeight - (field.heightPercent / 100) * pageHeight;
-                        const pdfWidth = (field.widthPercent / 100) * pageWidth;
-                        const pdfHeight = (field.heightPercent / 100) * pageHeight;
+                        const boxX = (field.xPercent / 100) * pageWidth;
+                        const boxY = pageHeight - (field.yPercent / 100) * pageHeight - (field.heightPercent / 100) * pageHeight;
+                        const boxWidth = (field.widthPercent / 100) * pageWidth;
+                        const boxHeight = (field.heightPercent / 100) * pageHeight;
 
-                        // Draw the image on the page
+                        // Calculate image dimensions with "contain" behavior (maintain aspect ratio)
+                        const imageDims = image.scale(1); // Get original dimensions
+                        const imageAspectRatio = imageDims.width / imageDims.height;
+                        const boxAspectRatio = boxWidth / boxHeight;
+
+                        let drawWidth, drawHeight, drawX, drawY;
+
+                        if (imageAspectRatio > boxAspectRatio) {
+                            // Image is wider than box - fit to width
+                            drawWidth = boxWidth;
+                            drawHeight = boxWidth / imageAspectRatio;
+                            drawX = boxX;
+                            drawY = boxY + (boxHeight - drawHeight) / 2; // Center vertically
+                        } else {
+                            // Image is taller than box - fit to height
+                            drawHeight = boxHeight;
+                            drawWidth = boxHeight * imageAspectRatio;
+                            drawX = boxX + (boxWidth - drawWidth) / 2; // Center horizontally
+                            drawY = boxY;
+                        }
+
+                        // Draw the image on the page with contain behavior
                         page.drawImage(image, {
-                            x: pdfX,
-                            y: pdfY,
-                            width: pdfWidth,
-                            height: pdfHeight,
+                            x: drawX,
+                            y: drawY,
+                            width: drawWidth,
+                            height: drawHeight,
                         });
 
                         // Add timestamp and signer name below the signature
@@ -1354,7 +1374,7 @@ function App() {
 
                             // Calculate font size relative to signature width (small text)
                             const fontSize = 8;
-                            const maxWidth = pdfWidth; // Max width is the signature width
+                            const maxWidth = boxWidth; // Max width is the signature box width
                             const textWidth = font.widthOfTextAtSize(metadataText, fontSize);
 
                             // Word wrapping logic for max 2 lines
@@ -1397,8 +1417,8 @@ function App() {
 
                             // Draw a subtle line above the text
                             page.drawLine({
-                                start: { x: pdfX, y: pdfY - 1 },
-                                end: { x: pdfX + pdfWidth, y: pdfY - 1 },
+                                start: { x: boxX, y: boxY - 1 },
+                                end: { x: boxX + boxWidth, y: boxY - 1 },
                                 thickness: 0.5,
                                 color: rgb(0.88, 0.88, 0.88),
                             });
@@ -1406,8 +1426,8 @@ function App() {
                             // Draw each line of metadata text
                             lines.forEach((line, index) => {
                                 const lineWidth = font.widthOfTextAtSize(line, fontSize);
-                                const textX = pdfX + (pdfWidth - lineWidth) / 2;
-                                const textY = pdfY - fontSize - 2 - (index * (fontSize + 2));
+                                const textX = boxX + (boxWidth - lineWidth) / 2;
+                                const textY = boxY - fontSize - 2 - (index * (fontSize + 2));
                                 
                                 page.drawText(line, {
                                     x: textX,

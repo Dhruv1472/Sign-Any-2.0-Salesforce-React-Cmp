@@ -16,8 +16,9 @@ import "./DrawSignature.css";
  * @param {number} defaultEraseSize - Default eraser size (1-10)
  * @param {number} minBrushSize - Minimum brush size
  * @param {number} maxBrushSize - Maximum brush size
+ * @param {number} aspectRatio - Canvas aspect ratio (width/height)
  */
-const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = false, hideUndo = false, hideRedo = false, hideBrushSize = false, defaultPenSize = 2, defaultEraseSize = 10, minBrushSize = 1, maxBrushSize = 10 }) => {
+const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = false, hideUndo = false, hideRedo = false, hideBrushSize = false, defaultPenSize = 2, defaultEraseSize = 10, minBrushSize = 1, maxBrushSize = 10, aspectRatio = 1.65 }) => {
     const canvasRef = useRef(null);
     const [isDrawing, setIsDrawing] = useState(false);
     const [isEmpty, setIsEmpty] = useState(true);
@@ -370,7 +371,7 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
                 {hidePen && hideEraser && hideUndo && hideRedo && hideBrushSize && <div className="empty-state-text">No customization options available for now!</div>}
             </div>
 
-            <div className="draw-signature-canvas-wrapper">
+            <div className="draw-signature-canvas-wrapper" style={{ aspectRatio: aspectRatio }}>
                 <canvas ref={canvasRef} className="draw-signature-canvas" style={{ cursor: tool === "erase" ? "none" : "crosshair" }} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={handleMouseLeave} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} />
                 {isEmpty && <div className="draw-signature-placeholder">Draw your signature here</div>}
                 {tool === "erase" && cursorPosition && (
