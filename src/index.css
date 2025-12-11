@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap");
 
 * {
     margin: 0;
@@ -16,8 +16,8 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    --primary-color: #2863EB;
-    --secondary-color: #F5F8FF;
+    --primary-color: #2863eb;
+    --secondary-color: #f5f8ff;
     text-wrap: balance;
     user-select: none;
 }

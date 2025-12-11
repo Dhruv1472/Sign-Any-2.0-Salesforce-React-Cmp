@@ -30,22 +30,22 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
     const hideUndoRedo = adminProperties?.Hide_Undo_Redo__c || false;
     const hideBrushSize = adminProperties?.Hide_Brush_Size__c || false;
     const defaultBrushSize = hideBrushSize && adminProperties?.Default_Brush_Size__c ? adminProperties?.Default_Brush_Size__c : 2;
-    
+
     const hideAvailableFonts = adminProperties?.Hide_Available_Fonts__c || false;
     const hideBoldOption = adminProperties?.Hide_Bold_Option__c || false;
     const hideItalicOption = adminProperties?.Hide_Italic_Option__c || false;
     const hideFontSizeOption = adminProperties?.Hide_Font_Size_Option__c || false;
     const defaultFontSize = hideFontSizeOption && adminProperties?.Default_Font_Size__c ? adminProperties?.Default_Font_Size__c : 48;
     const defaultFontStyle = adminProperties?.Default_Font_Style__c || "Artecallya";
-    const availableFonts = adminProperties?.Available_Fonts__c 
-        ? adminProperties.Available_Fonts__c.split(',').map(f => f.trim()).filter(f => f.length > 0)
-        : ["Artecallya","Maytra","Mr Dafoe","Mr DeHaviland","The signature","Monsieur La Doulaise","Mrs Saint Delafield","Barokah","Bettina","High Summit"];
+    const availableFonts = adminProperties?.Available_Fonts__c
+        ? adminProperties.Available_Fonts__c.split(",")
+              .map((f) => f.trim())
+              .filter((f) => f.length > 0)
+        : ["Artecallya", "Maytra", "Mr Dafoe", "Mr DeHaviland", "The signature", "Monsieur La Doulaise", "Mrs Saint Delafield", "Barokah", "Bettina", "High Summit"];
 
     // Calculate aspect ratio from signature dimensions (width / height)
     // Default to 1.65 if dimensions not available
-    const signatureAspectRatio = signature?.widthPercent && signature?.heightPercent 
-        ? signature.widthPercent / signature.heightPercent 
-        : 1.65;
+    const signatureAspectRatio = signature?.widthPercent && signature?.heightPercent ? signature.widthPercent / signature.heightPercent : 1.65;
 
     if (!isOpen) return null;
 
@@ -91,7 +91,7 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
                             Draw
                         </button>
                         <button className={`signature-tab ${activeTab === TABS.TYPE ? "active" : ""}`} onClick={() => setActiveTab(TABS.TYPE)}>
-                            <svg xmlns="http://www.w3.org/2000/svg" style={{marginTop: "2px"}} fill="currentColor" viewBox="0 0 24 24" height="24" width="24">
+                            <svg xmlns="http://www.w3.org/2000/svg" style={{ marginTop: "2px" }} fill="currentColor" viewBox="0 0 24 24" height="24" width="24">
                                 <g id="keyboard-setting-bolt">
                                     <path fill="currentColor" d="M22 14.5v5L17.5 22 13 19.5v-5l4.5 -2.5zm-4.5 0.5c-1.1046 0 -2 0.8954 -2 2s0.8954 2 2 2 2 -0.8954 2 -2 -0.8954 -2 -2 -2m1.5 -5h-2V6H4v7h7v2H2V4h17zM7 12H5v-2h2zm6 0H8v-2h5zM7 9H5V7h2zm3 0H8V7h2zm3 0h-2V7h2zm3 0h-2V7h2z" stroke-width="1"></path>
                                 </g>
@@ -102,55 +102,28 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
                     </div>
 
                     <div className="signature-modal-content">
-                        {activeTab === TABS.DRAW && (
-                            <DrawSignature 
-                                onChange={handleSignatureChange} 
-                                clearTrigger={clearTrigger}
-                                hidePen={hidePenAndErase}
-                                hideEraser={hidePenAndErase}
-                                hideUndo={hideUndoRedo}
-                                hideRedo={hideUndoRedo}
-                                hideBrushSize={hideBrushSize}
-                                defaultPenSize={defaultBrushSize}
-                                aspectRatio={signatureAspectRatio}
-                            />
-                        )}
-                        {activeTab === TABS.TYPE && (
-                            <TypeSignature 
-                                onChange={handleSignatureChange} 
-                                clearTrigger={clearTrigger} 
-                                defaultValue={signature?.defaultValue || ""} 
-                                maxTextLength={signature?.maxLength || 50}
-                                hideBold={hideBoldOption}
-                                hideItalic={hideItalicOption}
-                                hideFontStyle={hideAvailableFonts}
-                                hideFontSize={hideFontSizeOption}
-                                defaultFontStyle={defaultFontStyle}
-                                defaultFontSize={defaultFontSize}
-                                availableFonts={availableFonts}
-                                aspectRatio={signatureAspectRatio}
-                            />
-                        )}
+                        {activeTab === TABS.DRAW && <DrawSignature onChange={handleSignatureChange} clearTrigger={clearTrigger} hidePen={hidePenAndErase} hideEraser={hidePenAndErase} hideUndo={hideUndoRedo} hideRedo={hideUndoRedo} hideBrushSize={hideBrushSize} defaultPenSize={defaultBrushSize} aspectRatio={signatureAspectRatio} />}
+                        {activeTab === TABS.TYPE && <TypeSignature onChange={handleSignatureChange} clearTrigger={clearTrigger} defaultValue={signature?.defaultValue || ""} maxTextLength={signature?.maxLength || 50} hideBold={hideBoldOption} hideItalic={hideItalicOption} hideFontStyle={hideAvailableFonts} hideFontSize={hideFontSizeOption} defaultFontStyle={defaultFontStyle} defaultFontSize={defaultFontSize} availableFonts={availableFonts} aspectRatio={signatureAspectRatio} />}
                     </div>
                 </div>
 
                 <div className="signature-modal-footer">
                     <button className="signature-btn-cancel" onClick={handleClose}>
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
-                            <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" strokeWidth="0.5"/>
+                            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z" />
+                            <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" strokeWidth="0.5" />
                         </svg>
                         Cancel
                     </button>
                     <button className="signature-btn-clear" onClick={handleClear} disabled={!signatureData}>
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M8.086 2.207a2 2 0 0 1 2.828 0l3.879 3.879a2 2 0 0 1 0 2.828l-5.5 5.5A2 2 0 0 1 7.879 15H5.12a2 2 0 0 1-1.414-.586l-2.5-2.5a2 2 0 0 1 0-2.828l6.879-6.879zm2.121.707a1 1 0 0 0-1.414 0L4.16 7.547l5.293 5.293 4.633-4.633a1 1 0 0 0 0-1.414l-3.879-3.879zM8.746 13.547 3.453 8.254 1.914 9.793a1 1 0 0 0 0 1.414l2.5 2.5a1 1 0 0 0 .707.293H7.88a1 1 0 0 0 .707-.293l.16-.16z"/>
+                            <path d="M8.086 2.207a2 2 0 0 1 2.828 0l3.879 3.879a2 2 0 0 1 0 2.828l-5.5 5.5A2 2 0 0 1 7.879 15H5.12a2 2 0 0 1-1.414-.586l-2.5-2.5a2 2 0 0 1 0-2.828l6.879-6.879zm2.121.707a1 1 0 0 0-1.414 0L4.16 7.547l5.293 5.293 4.633-4.633a1 1 0 0 0 0-1.414l-3.879-3.879zM8.746 13.547 3.453 8.254 1.914 9.793a1 1 0 0 0 0 1.414l2.5 2.5a1 1 0 0 0 .707.293H7.88a1 1 0 0 0 .707-.293l.16-.16z" />
                         </svg>
                         Clear
                     </button>
                     <button className="signature-btn-save" onClick={handleSave} disabled={!signatureData}>
                         <svg width="24" height="24" viewBox="0 0 14 14" fill="currentColor">
-                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" strokeWidth="0.8" stroke="currentColor"/>
+                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" strokeWidth="0.8" stroke="currentColor" />
                         </svg>
                         Save Signature
                     </button>

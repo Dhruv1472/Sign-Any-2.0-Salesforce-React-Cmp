@@ -10,16 +10,16 @@ const FIXED_IV = "SignatureAnyIV16"; // Must match Apex fixed IV (16 bytes)
 function prepareKey(key) {
     const encoder = new TextEncoder();
     let keyBytes = encoder.encode(key);
-    
+
     if (keyBytes.length < 32) {
         // Pad with spaces on the left to match Apex leftPad behavior
-        const paddedKey = key.padStart(32, ' ').substring(0, 32);
+        const paddedKey = key.padStart(32, " ").substring(0, 32);
         keyBytes = encoder.encode(paddedKey);
     } else if (keyBytes.length > 32) {
         // Truncate to 32 bytes
         keyBytes = keyBytes.slice(0, 32);
     }
-    
+
     return keyBytes;
 }
 
@@ -27,13 +27,7 @@ function prepareKey(key) {
  * Imports the key for Web Crypto API
  */
 async function importKey(keyBytes) {
-    return crypto.subtle.importKey(
-        "raw",
-        keyBytes,
-        { name: "AES-CBC", length: 256 },
-        false,
-        ["encrypt", "decrypt"]
-    );
+    return crypto.subtle.importKey("raw", keyBytes, { name: "AES-CBC", length: 256 }, false, ["encrypt", "decrypt"]);
 }
 
 /**
@@ -45,24 +39,19 @@ function arrayBufferToBase64Url(buffer) {
     for (let i = 0; i < bytes.length; i++) {
         binary += String.fromCharCode(bytes[i]);
     }
-    return btoa(binary)
-        .replace(/\+/g, "-")
-        .replace(/\//g, "_")
-        .replace(/=/g, "");
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
 /**
  * Converts Base64 URL-safe string to ArrayBuffer
  */
 function base64UrlToArrayBuffer(base64Url) {
-    const base64 = base64Url
-        .replace(/-/g, "+")
-        .replace(/_/g, "/");
-    
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+
     // Add padding if needed
     const padding = "=".repeat((4 - (base64.length % 4)) % 4);
     const base64Padded = base64 + padding;
-    
+
     const binary = atob(base64Padded);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {
@@ -76,7 +65,7 @@ function base64UrlToArrayBuffer(base64Url) {
  * @param {string} queryString - The query string to encrypt (e.g., "priority=1&recordId=abc...")
  * @param {string} key - Encryption key (defaults to ENCRYPTION_KEY)
  * @returns {Promise<string>} - Base64 URL-safe encrypted string
- * 
+ *
  * @example
  * const encrypted = await encryptUrlParams("priority=1&recordId=a00gL00000SxJ3JQAV&accessToken=abc");
  * console.log(encrypted); // "3R7T05Eouq61gHdolt4h0x..."
@@ -116,19 +105,19 @@ export async function encryptUrlParams(queryString, key = ENCRYPTION_KEY) {
  * @param {string} encryptedString - The Base64 URL-safe encrypted string
  * @param {string} key - Decryption key (defaults to ENCRYPTION_KEY)
  * @returns {Promise<string>} - Decrypted query string
- * 
+ *
  * @example
  * const decrypted = await decryptUrlParams("3R7T05Eouq61gHdolt4h0x...");
  * console.log(decrypted); // "priority=1&recordId=a00gL00000SxJ3JQAV&accessToken=abc"
  */
 export async function decryptUrlParams(encryptedString, key = ENCRYPTION_KEY) {
     if (!encryptedString) {
-        return '';
+        return "";
     }
 
     try {
         const encoder = new TextEncoder();
-        
+
         // Convert Base64 URL-safe string to ArrayBuffer
         const encryptedData = base64UrlToArrayBuffer(encryptedString);
 
@@ -162,7 +151,7 @@ export async function decryptUrlParams(encryptedString, key = ENCRYPTION_KEY) {
  * Helper function to parse decrypted query string into an object
  * @param {string} queryString - Query string like "key1=value1&key2=value2"
  * @returns {Object} - Object with key-value pairs
- * 
+ *
  * @example
  * const params = parseQueryString("priority=1&recordId=abc");
  * console.log(params); // { priority: "1", recordId: "abc" }
@@ -170,14 +159,14 @@ export async function decryptUrlParams(encryptedString, key = ENCRYPTION_KEY) {
 export function parseQueryString(queryString) {
     const params = {};
     const pairs = queryString.split("&");
-    
+
     for (const pair of pairs) {
         const [key, value] = pair.split("=");
         if (key) {
             params[decodeURIComponent(key)] = decodeURIComponent(value || "");
         }
     }
-    
+
     return params;
 }
 
@@ -185,7 +174,7 @@ export function parseQueryString(queryString) {
  * Helper function to build query string from object
  * @param {Object} params - Object with key-value pairs
  * @returns {string} - Query string like "key1=value1&key2=value2"
- * 
+ *
  * @example
  * const queryString = buildQueryString({ priority: 1, recordId: "abc" });
  * console.log(queryString); // "priority=1&recordId=abc"

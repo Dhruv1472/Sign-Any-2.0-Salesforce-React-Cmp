@@ -17,12 +17,8 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
     useEffect(() => {
         if (isOpen && field) {
             // Initialize with existing value, or default value, or empty
-            let initialValue = field.value !== undefined && field.value !== null 
-                ? field.value 
-                : (field.defaultValue !== undefined && field.defaultValue !== null
-                    ? field.defaultValue
-                    : (field.fieldType === "checkbox" ? false : ""));
-            
+            let initialValue = field.value !== undefined && field.value !== null ? field.value : field.defaultValue !== undefined && field.defaultValue !== null ? field.defaultValue : field.fieldType === "checkbox" ? false : "";
+
             // Convert formatted date "Nov 21 2025" back to "YYYY-MM-DD" for date input
             if (field.fieldType === "date" && initialValue && typeof initialValue === "string") {
                 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -30,19 +26,19 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
                 if (parts.length === 3) {
                     const monthIndex = monthNames.indexOf(parts[0]);
                     if (monthIndex !== -1) {
-                        const day = String(parts[1]).padStart(2, '0');
+                        const day = String(parts[1]).padStart(2, "0");
                         const year = parts[2];
-                        const month = String(monthIndex + 1).padStart(2, '0');
+                        const month = String(monthIndex + 1).padStart(2, "0");
                         initialValue = `${year}-${month}-${day}`;
                     }
                 }
             }
-            
+
             // Ensure it's a string if it should be a string
             if (field.fieldType !== "checkbox" && initialValue !== "") {
                 initialValue = String(initialValue);
             }
-            
+
             setValue(initialValue);
             setError("");
         }
@@ -88,7 +84,7 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
         // Type-specific validation
         if (fieldType === "email" && value) {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            const emailValue = typeof value === 'string' ? value.trim() : String(value);
+            const emailValue = typeof value === "string" ? value.trim() : String(value);
             if (!emailRegex.test(emailValue)) {
                 setError("Please enter a valid email address");
                 return;
@@ -131,7 +127,7 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
         // Date validation with min/max
         if (fieldType === "date" && value) {
             const selectedDate = new Date(value);
-            
+
             const minStr = field.minDate || field.min;
             const maxStr = field.maxDate || field.max;
 
@@ -142,7 +138,7 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
                     return;
                 }
             }
-            
+
             if (maxStr) {
                 const maxDate = new Date(maxStr);
                 if (selectedDate > maxDate) {
@@ -243,65 +239,16 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
                         />
                     );
                 }
-                return (
-                    <input
-                        type="text"
-                        className="field-input"
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                        placeholder="Enter text here"
-                        autoFocus={!isReadOnly}
-                        maxLength={field.maxLength ? parseInt(field.maxLength, 10) : 100}
-                        readOnly={isReadOnly}
-                        disabled={isReadOnly}
-                    />
-                );
+                return <input type="text" className="field-input" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Enter text here" autoFocus={!isReadOnly} maxLength={field.maxLength ? parseInt(field.maxLength, 10) : 100} readOnly={isReadOnly} disabled={isReadOnly} />;
 
             case "initials":
-                return (
-                    <input
-                        type="text"
-                        className="field-input"
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                        placeholder="Enter initials here"
-                        autoFocus
-                        maxLength={5}
-                    />
-                );
+                return <input type="text" className="field-input" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Enter initials here" autoFocus maxLength={5} />;
 
             case "date":
-                return (
-                    <input
-                        type="date"
-                        className="field-input"
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                        autoFocus={!isReadOnly}
-                        min={field.minDate || field.min || undefined}
-                        max={field.maxDate || field.max || undefined}
-                        readOnly={isReadOnly}
-                        disabled={isReadOnly}
-                    />
-                );
+                return <input type="date" className="field-input" value={value} onChange={(e) => setValue(e.target.value)} autoFocus={!isReadOnly} min={field.minDate || field.min || undefined} max={field.maxDate || field.max || undefined} readOnly={isReadOnly} disabled={isReadOnly} />;
 
             case "number":
-                return (
-                    <input
-                        type="number"
-                        className="field-input"
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                        placeholder="Enter number here"
-                        autoFocus={!isReadOnly}
-                        maxLength={field.maxLength ? parseInt(field.maxLength, 10) : undefined}
-                        step={field.decimals !== undefined && field.decimals !== null ? (1 / Math.pow(10, parseInt(field.decimals, 10))).toFixed(parseInt(field.decimals, 10)) : undefined}
-                        min={field.allowNegative === false ? Math.max(0, field.min || 0) : (field.min ?? undefined)}
-                        max={field.max ?? undefined}
-                        readOnly={isReadOnly}
-                        disabled={isReadOnly}
-                    />
-                );
+                return <input type="number" className="field-input" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Enter number here" autoFocus={!isReadOnly} maxLength={field.maxLength ? parseInt(field.maxLength, 10) : undefined} step={field.decimals !== undefined && field.decimals !== null ? (1 / Math.pow(10, parseInt(field.decimals, 10))).toFixed(parseInt(field.decimals, 10)) : undefined} min={field.allowNegative === false ? Math.max(0, field.min || 0) : field.min ?? undefined} max={field.max ?? undefined} readOnly={isReadOnly} disabled={isReadOnly} />;
 
             case "email":
                 return (
@@ -329,29 +276,14 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
                 return (
                     <div className="checkbox-input-container">
                         <label className="checkbox-label-input">
-                            <input
-                                type="checkbox"
-                                checked={value || false}
-                                onChange={(e) => setValue(e.target.checked)}
-                                className="checkbox-input"
-                                disabled={isReadOnly}
-                            />
+                            <input type="checkbox" checked={value || false} onChange={(e) => setValue(e.target.checked)} className="checkbox-input" disabled={isReadOnly} />
                             <span className="checkbox-label-text">{fieldName || "Check this box"}</span>
                         </label>
                     </div>
                 );
 
             default:
-                return (
-                    <input
-                        type="text"
-                        className="field-input"
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                        placeholder="Enter value here"
-                        autoFocus
-                    />
-                );
+                return <input type="text" className="field-input" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Enter value here" autoFocus />;
         }
     };
 
@@ -373,11 +305,16 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
 
                 <div className="field-modal-footer">
                     <button className="field-btn-cancel" onClick={handleClose}>
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"></path><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" stroke-width="0.5"></path></svg>
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"></path>
+                            <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" stroke-width="0.5"></path>
+                        </svg>
                         Cancel
                     </button>
                     <button className="field-btn-save" onClick={handleSave}>
-                        <svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" stroke-width="0.8" stroke="currentColor"></path></svg>
+                        <svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor">
+                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" stroke-width="0.8" stroke="currentColor"></path>
+                        </svg>
                         {fieldType === "checkbox" ? "Save" : "Save Value"}
                     </button>
                 </div>
@@ -387,4 +324,3 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
 };
 
 export default FieldModal;
-

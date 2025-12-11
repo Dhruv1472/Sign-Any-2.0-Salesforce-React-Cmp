@@ -44,7 +44,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
 
     const handleFieldClick = () => {
         if (isDisabled) return;
-        
+
         // For text and number fields, enable inline editing
         // Email, date, and initials use modal
         if (["text", "number"].includes(fieldType)) {
@@ -54,7 +54,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
             setIsEditing(true);
             return;
         }
-        
+
         // For other fields (email, date, initials, checkbox), use the modal
         if (onFieldClick) {
             onFieldClick(field);
@@ -66,7 +66,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
             alert("This field is required");
             return;
         }
-        
+
         // Email validation
         if (fieldType === "email" && editValue && editValue.trim() !== "") {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -75,7 +75,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
                 return;
             }
         }
-        
+
         // Number validations and normalization
         if (fieldType === "number" && editValue && editValue.trim() !== "") {
             const raw = editValue.trim();
@@ -134,7 +134,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
                 return;
             }
         }
-        
+
         if (onSave) {
             onSave(editValue, field);
         }
@@ -178,33 +178,31 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
             // Prevent illegal characters
             // Allow digits, dot, minus (if allowed), and commas (which we strip on save)
             const allowNeg = field.allowNegative !== false ? true : false;
-            const cleaned = newValue
-                .replace(/,/g, "")
-                .replace(allowNeg ? /[^0-9.\-eE]/g : /[^0-9.]/g, "");
+            const cleaned = newValue.replace(/,/g, "").replace(allowNeg ? /[^0-9.\-eE]/g : /[^0-9.]/g, "");
             newValue = cleaned;
         }
-        
+
         // Check if trying to exceed max length
         if (newValue.length > maxLength) {
             // Show warning
             setShowLimitWarning(true);
-            
+
             // Clear any existing timeout
             if (warningTimeoutRef.current) {
                 clearTimeout(warningTimeoutRef.current);
             }
-            
+
             // Hide warning after 3 seconds
             warningTimeoutRef.current = setTimeout(() => {
                 setShowLimitWarning(false);
             }, 3000);
-            
+
             // Don't update value beyond max length
             return;
         }
-        
+
         setEditValue(newValue);
-        
+
         // Hide warning if user is within limit
         if (showLimitWarning && newValue.length < maxLength) {
             setShowLimitWarning(false);
@@ -221,7 +219,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
                 e.preventDefault();
                 return;
             }
-            if (field.allowNegative === false && (e.key === "-")) {
+            if (field.allowNegative === false && e.key === "-") {
                 e.preventDefault();
                 return;
             }
@@ -258,47 +256,48 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
                 <div className="field-value" onClick={handleFieldClick}>
                     {fieldType === "checkbox" ? (
                         <div className="checkbox-display">
-                            <span 
+                            <span
                                 className={`checkbox-icon ${value ? "checked" : ""}`}
                                 style={{
                                     width: `${16 * canvasScale}px`,
                                     height: `${16 * canvasScale}px`,
                                     fontSize: `${12 * canvasScale}px`,
-                                    borderWidth: `${1 * canvasScale}px`
-                                }}
-                            >
+                                    borderWidth: `${1 * canvasScale}px`,
+                                }}>
                                 {value ? "✓" : ""}
                             </span>
-                            <span className="checkbox-label" style={{
-                                fontSize: `${12 * canvasScale}px`
-                            }}>{fieldName || "Checkbox"}</span>
+                            <span
+                                className="checkbox-label"
+                                style={{
+                                    fontSize: `${12 * canvasScale}px`,
+                                }}>
+                                {fieldName || "Checkbox"}
+                            </span>
                         </div>
                     ) : (
-                        <div 
-                            className="field-value-text" 
+                        <div
+                            className="field-value-text"
                             data-multiline={fieldType === "text" && field.multiline === true}
                             style={{
-                                fontSize: `${15.16 * canvasScale -1.55}px`,
-                                padding: `${4 * canvasScale}px`
-                            }}
-                        >
+                                fontSize: `${15.16 * canvasScale - 1.55}px`,
+                                padding: `${4 * canvasScale}px`,
+                            }}>
                             {value}
                         </div>
                     )}
                 </div>
                 {canDelete && fieldType !== "checkbox" && (
-                    <button 
-                        className="field-delete-btn" 
-                        onClick={handleDeleteClick} 
+                    <button
+                        className="field-delete-btn"
+                        onClick={handleDeleteClick}
                         title="Clear field"
                         style={{
                             top: `${2 * canvasScale}px`,
                             right: `${2 * canvasScale}px`,
                             width: `${20 * canvasScale}px`,
                             height: `${20 * canvasScale}px`,
-                            fontSize: `${14 * canvasScale}px`
-                        }}
-                    >
+                            fontSize: `${14 * canvasScale}px`,
+                        }}>
                         ×
                     </button>
                 )}
@@ -312,13 +311,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
         const isChecked = filled && (value === true || value === "true" || value === "True");
         return (
             <div className="checkbox-wrapper" onClick={handleFieldClick}>
-                <input 
-                    type="checkbox" 
-                    checked={isChecked}
-                    disabled={isDisabled}
-                    readOnly
-                    data-key={key}
-                />
+                <input type="checkbox" checked={isChecked} disabled={isDisabled} readOnly data-key={key} />
             </div>
         );
     }
@@ -328,48 +321,14 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
         const remainingChars = maxLength - editValue.length;
         const isNearLimit = remainingChars <= 10;
         const isAtLimit = remainingChars === 0;
-        
+
         return (
             <div className="field-inline-edit">
-                {fieldType === "text" && field.multiline ? (
-                    <textarea
-                        ref={inputRef}
-                        className="field-inline-input"
-                        value={editValue}
-                        onChange={handleInputChange}
-                        onKeyDown={handleKeyDown}
-                        onBlur={handleBlur}
-                        placeholder="Enter text..."
-                        disabled={isDisabled}
-                        maxLength={maxLength}
-                        rows={field.maxLines ? parseInt(field.maxLines, 10) : 3}
-                        style={{ resize: "vertical" }}
-                    />
-                ) : (
-                    <input
-                        ref={inputRef}
-                        type={fieldType}
-                        className="field-inline-input"
-                        value={editValue}
-                        onChange={handleInputChange}
-                        onKeyDown={handleKeyDown}
-                        onBlur={handleBlur}
-                        placeholder={fieldType === "number" ? "Enter number..." : "Enter text..."}
-                        disabled={isDisabled}
-                        maxLength={maxLength}
-                        step={fieldType === "number" && field.decimals !== undefined && field.decimals !== null ? (1 / Math.pow(10, parseInt(field.decimals, 10))).toFixed(parseInt(field.decimals, 10)) : undefined}
-                        min={fieldType === "number" ? (field.allowNegative === false ? Math.max(0, field.min || 0) : (field.min ?? undefined)) : undefined}
-                        max={fieldType === "number" ? (field.max ?? undefined) : undefined}
-                    />
-                )}
-                {showLimitWarning && (
-                    <div className="field-limit-warning">
-                        Max character limit reached ({maxLength})
-                    </div>
-                )}
+                {fieldType === "text" && field.multiline ? <textarea ref={inputRef} className="field-inline-input" value={editValue} onChange={handleInputChange} onKeyDown={handleKeyDown} onBlur={handleBlur} placeholder="Enter text..." disabled={isDisabled} maxLength={maxLength} rows={field.maxLines ? parseInt(field.maxLines, 10) : 3} style={{ resize: "vertical" }} /> : <input ref={inputRef} type={fieldType} className="field-inline-input" value={editValue} onChange={handleInputChange} onKeyDown={handleKeyDown} onBlur={handleBlur} placeholder={fieldType === "number" ? "Enter number..." : "Enter text..."} disabled={isDisabled} maxLength={maxLength} step={fieldType === "number" && field.decimals !== undefined && field.decimals !== null ? (1 / Math.pow(10, parseInt(field.decimals, 10))).toFixed(parseInt(field.decimals, 10)) : undefined} min={fieldType === "number" ? (field.allowNegative === false ? Math.max(0, field.min || 0) : field.min ?? undefined) : undefined} max={fieldType === "number" ? field.max ?? undefined : undefined} />}
+                {showLimitWarning && <div className="field-limit-warning">Max character limit reached ({maxLength})</div>}
                 {!showLimitWarning && isNearLimit && editValue.length > 0 && (
-                    <div className={`field-char-counter ${isAtLimit ? 'at-limit' : ''}`}>
-                        {remainingChars} character{remainingChars !== 1 ? 's' : ''} remaining
+                    <div className={`field-char-counter ${isAtLimit ? "at-limit" : ""}`}>
+                        {remainingChars} character{remainingChars !== 1 ? "s" : ""} remaining
                     </div>
                 )}
             </div>
@@ -433,12 +392,16 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
                         <path d="M9 11l3 3L22 4" />
                         <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
                     </svg>
-                    {required && <span className="required-indicator" style={{
-                        width: `${6 * canvasScale}px`,
-                        height: `${6 * canvasScale}px`,
-                        top: `${-2 * canvasScale}px`,
-                        right: `${-2 * canvasScale}px`
-                    }}></span>}
+                    {required && (
+                        <span
+                            className="required-indicator"
+                            style={{
+                                width: `${6 * canvasScale}px`,
+                                height: `${6 * canvasScale}px`,
+                                top: `${-2 * canvasScale}px`,
+                                right: `${-2 * canvasScale}px`,
+                            }}></span>
+                    )}
                 </button>
                 <button
                     className={`${getButtonClass()} field-button-new`}
@@ -462,28 +425,30 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
     }
 
     return (
-        <button 
-            className={getButtonClass()} 
-            onClick={handleFieldClick} 
-            disabled={isDisabled} 
+        <button
+            className={getButtonClass()}
+            onClick={handleFieldClick}
+            disabled={isDisabled}
             data-key={key}
             style={{
                 padding: `${8 * canvasScale}px ${12 * canvasScale}px`,
                 borderWidth: `${2 * canvasScale}px`,
                 fontSize: `${12 * canvasScale}px`,
-                borderRadius: `${4 * canvasScale}px`
-            }}
-        >
+                borderRadius: `${4 * canvasScale}px`,
+            }}>
             {getButtonText()}
-            {required && <span className="required-indicator" style={{
-                width: `${6 * canvasScale}px`,
-                height: `${6 * canvasScale}px`,
-                top: `${-2 * canvasScale}px`,
-                right: `${-2 * canvasScale}px`
-            }}></span>}
+            {required && (
+                <span
+                    className="required-indicator"
+                    style={{
+                        width: `${6 * canvasScale}px`,
+                        height: `${6 * canvasScale}px`,
+                        top: `${-2 * canvasScale}px`,
+                        right: `${-2 * canvasScale}px`,
+                    }}></span>
+            )}
         </button>
     );
 };
 
 export default FieldButton;
-

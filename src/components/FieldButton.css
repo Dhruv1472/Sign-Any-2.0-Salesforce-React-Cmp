@@ -147,7 +147,7 @@
 .field-value-text:not([data-multiline="true"]) {
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;;
+    white-space: nowrap;
 }
 
 /* Multi-line text fields: wrap text */
@@ -280,7 +280,7 @@
 }
 
 .field-limit-warning::after {
-    content: '';
+    content: "";
     position: absolute;
     top: 100%;
     left: 50%;
@@ -315,7 +315,7 @@
 }
 
 .field-char-counter::after {
-    content: '';
+    content: "";
     position: absolute;
     top: 100%;
     left: 50%;
@@ -375,7 +375,7 @@
 }
 
 .field-button-reuse::after {
-    content: '';
+    content: "";
     position: absolute;
     right: 0;
     top: 20%;

@@ -44,11 +44,11 @@ const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave,
         .map((field) => {
             const fieldPriority = field.signerPriority ?? field.priority;
             const isCurrentPriority = fieldPriority == priority;
-            
+
             // Mark lower priority fields as disabled (read-only)
             return {
                 ...field,
-                disabled: !isCurrentPriority || isSubmitted
+                disabled: !isCurrentPriority || isSubmitted,
             };
         });
 

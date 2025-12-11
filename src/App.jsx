@@ -1,18 +1,22 @@
 import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+
+import { Buffer } from "buffer";
+import html2pdf from "html2pdf.js";
+import "./pdfjs/pdf.worker.min.mjs";
 import * as pdfjsLib from "pdfjs-dist";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { Buffer } from "buffer";
-import "./pdfjs/pdf.worker.min.mjs";
-import "./App.css";
+import { useNavigate } from "react-router-dom";
+
 import SignatureOverlay from "./components/SignatureOverlay";
 import SignatureModal from "./components/SignatureModal";
 import FieldOverlay from "./components/FieldOverlay";
 import FieldModal from "./components/FieldModal";
 import Toast from "./components/Toast";
-import html2pdf from "html2pdf.js";
+
 import { updateSignatureWithImage, deleteSignatureImage, updateFieldWithValue, deleteFieldValue, updateNestedFieldValue, deleteNestedFieldValue } from "./utils/signatureUtils";
 import { decryptUrlParams, parseQueryString, encryptUrlParams, buildQueryString } from "./utils/encryption";
+
+import "./App.css";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "./pdfjs/pdf.worker.min.mjs";
 
@@ -57,7 +61,7 @@ function App() {
     const pdfDocRef = useRef(null);
     const resizeTimeoutRef = useRef(null);
     const broadcastChannelRef = useRef(null);
-    
+
     // State for storing first signature/initial for quick reuse (same priority only)
     const [storedSignature, setStoredSignature] = useState({ signBase64: null, arrStored: [] });
     const [storedInitials, setStoredInitials] = useState({ signBase64: null, arrStored: [] });
@@ -66,46 +70,39 @@ function App() {
     useEffect(() => {
         // Get the current URL (which uniquely identifies the document)
         const currentUrl = window.location.href;
-        
+
         // Create a unique channel name based on the document URL
         // This ensures only tabs with the same document URL will communicate
-        const channelName = `document-sync-${btoa(currentUrl).replace(/=/g, '')}`;
-        
+        const channelName = `document-sync-${btoa(currentUrl).replace(/=/g, "")}`;
+
         // Create the broadcast channel
-        if (typeof BroadcastChannel !== 'undefined') {
+        if (typeof BroadcastChannel !== "undefined") {
             broadcastChannelRef.current = new BroadcastChannel(channelName);
-            
+
             // Listen for messages from other tabs
             broadcastChannelRef.current.onmessage = (event) => {
-                console.log('Received broadcast message:', event.data);
-                
-                if (event.data.type === 'DOCUMENT_SUBMITTED') {
-                    console.log('Another tab submitted the document. Reloading this tab...');
-                    
+                if (event.data.type === "DOCUMENT_SUBMITTED") {
                     // Show a toast before reloading
                     setToast({
                         isVisible: true,
                         message: "Document was submitted in another tab. Refreshing...",
                         type: "success",
                     });
-                    
+
                     // Reload the page after a short delay to show the toast
                     setTimeout(() => {
                         window.location.reload();
                     }, 1500);
                 }
             };
-            
-            console.log(`BroadcastChannel created: ${channelName}`);
         } else {
-            console.warn('BroadcastChannel API is not supported in this browser');
+            console.warn("BroadcastChannel API is not supported in this browser");
         }
-        
+
         // Cleanup: close the channel when component unmounts
         return () => {
             if (broadcastChannelRef.current) {
                 broadcastChannelRef.current.close();
-                console.log('BroadcastChannel closed');
             }
         };
     }, []);
@@ -113,18 +110,18 @@ function App() {
     useEffect(() => {
         const parseUrlParams = async () => {
             const urlParams = new URLSearchParams(window.location.search);
-            
+
             let accessToken, recordId, instanceUrl, clientId, clientSecret, priority;
 
             // Check if URL is encrypted (has 'q' parameter)
             const encryptedQuery = urlParams.get("q");
-            
+
             if (encryptedQuery) {
                 try {
                     // Decrypt the query string
                     const decryptedString = await decryptUrlParams(encryptedQuery);
                     const decryptedParams = parseQueryString(decryptedString);
-                    
+
                     // Extract parameters from decrypted string
                     accessToken = decryptedParams.act || decryptedParams.accessToken;
                     recordId = decryptedParams.recordId;
@@ -132,7 +129,6 @@ function App() {
                     clientId = decryptedParams.clientId;
                     clientSecret = decryptedParams.clientSecret;
                     priority = decryptedParams.priority;
-                    
                 } catch (error) {
                     console.error("Failed to decrypt URL:", error);
                     setError("Invalid or tampered URL. Please contact the sender for a new link.");
@@ -207,7 +203,6 @@ function App() {
             // Set new timeout (300ms debounce)
             resizeTimeoutRef.current = setTimeout(() => {
                 if (pdfDocRef.current && totalPages > 0) {
-                    console.log("Window resized - re-rendering PDF pages");
                     renderAllPages(pdfDocRef.current);
                 }
             }, 300);
@@ -243,14 +238,14 @@ function App() {
 
     useEffect(() => {
         const handleBeforeUnload = (event) => {
-        event.preventDefault();
-        event.returnValue = "";  // Required for Chrome
+            event.preventDefault();
+            event.returnValue = ""; // Required for Chrome
         };
 
         window.addEventListener("beforeunload", handleBeforeUnload);
 
         return () => {
-        window.removeEventListener("beforeunload", handleBeforeUnload);
+            window.removeEventListener("beforeunload", handleBeforeUnload);
         };
     }, []);
 
@@ -328,7 +323,6 @@ function App() {
 
             // If token expired (401), try to refresh it
             if (response.status === 401 && clientId && clientSecret) {
-                console.log("Access token expired, attempting to refresh...");
                 currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
 
                 // Retry the request with new token
@@ -350,7 +344,7 @@ function App() {
             const documentData = data.records[0];
 
             // Check if document is rejected with simultaneous emails
-            if (documentData.Send_Emails_Simultaneously__c === true && documentData.Status__c === 'Rejected') {
+            if (documentData.Send_Emails_Simultaneously__c === true && documentData.Status__c === "Rejected") {
                 setIsRejectedSimultaneous(true);
                 setDocumentRecord(documentData);
                 setError(null);
@@ -365,8 +359,6 @@ function App() {
                 today.setHours(0, 0, 0, 0);
                 expirationDate.setHours(0, 0, 0, 0);
 
-                // console.log(`Document expiration date: ${expirationDate}, Today: ${today}`);
-                // console.log(`Is document expired? ${expirationDate < today}`);
                 if (expirationDate < today) {
                     setIsExpired(true);
                     setDocumentRecord(documentData);
@@ -571,8 +563,6 @@ function App() {
                     height: pageHeight,
                     orientation: orientation,
                 });
-
-                console.log(`Detected PDF format: ${pageWidth.toFixed(2)}pt x ${pageHeight.toFixed(2)}pt (${orientation})`);
             }
         } catch (error) {
             console.error("Error loading PDF:", error);
@@ -643,7 +633,7 @@ function App() {
                         "Content-Type": "application/json",
                     },
                 });
-        }
+            }
 
             if (!response.ok) {
                 console.error(`Admin properties fetch error: ${response.status} ${response.statusToken}`);
@@ -652,7 +642,6 @@ function App() {
 
             const data = await response.json();
             const properties = data?.records?.[0] || null;
-            console.log("properties==> ", properties);
             return properties;
         } catch (e) {
             console.warn("Unable to fetch Admin Properties:", e);
@@ -662,13 +651,13 @@ function App() {
 
     const handleSignatureClick = (signature) => {
         if (isSubmitted) return;
-        
+
         // Silent check: Only allow signing if signature belongs to current priority
         const signaturePriority = signature._parentSigner?.priority ?? (signature.priority || null);
         if (signaturePriority !== null && signaturePriority != urlPriority) {
             return; // Silently ignore - signature belongs to different priority
         }
-        
+
         setCurrentSignature(signature);
         setIsModalOpen(true);
     };
@@ -759,42 +748,42 @@ function App() {
         // Hide spinner after signature is saved
         setShowSpinner(false);
     };
-    
+
     // Handle reusing stored signature (one-click signing)
     const handleReuseSignature = async (signatureOrField) => {
         if (isSubmitted) return;
-        
+
         // Silent check: Only allow signing if signature belongs to current priority
         const itemPriority = signatureOrField._parentSigner?.priority ?? (signatureOrField.priority || null);
         if (itemPriority !== null && itemPriority != urlPriority) {
             return; // Silently ignore - signature belongs to different priority
         }
-        
+
         // Determine if this is a signature-type field or text-based initial field
         const itemType = (signatureOrField.type || signatureOrField.fieldType || "").toLowerCase();
         const isTextBasedInitial = itemType === "initials" && signatureOrField.fieldType;
-        
+
         // Handle text-based initials (from FieldButton)
         if (isTextBasedInitial) {
             if (!storedInitials.signBase64) {
                 console.warn("No stored initials to reuse");
                 return;
             }
-            
+
             // Simply save the stored text value
             handleFieldSave(storedInitials.signBase64, signatureOrField);
             return;
         }
-        
+
         // Handle signature-type fields (signatures and signature-based initials)
         const signatureTypeLower = itemType;
         const storedData = signatureTypeLower === "initials" ? storedInitials : storedSignature;
-        
+
         if (!storedData.signBase64) {
             console.warn("No stored signature/initial to reuse");
             return;
         }
-        
+
         // Show spinner during signature application
         setShowSpinner(true);
 
@@ -883,32 +872,29 @@ function App() {
 
         // Track that this field was filled in the current session
         setSessionFilledKeys((prev) => new Set(prev).add(field.index));
-        
+
         // Store first initials for quick reuse (same priority only)
         const fieldTypeLower = (field.fieldType || field.type || "").toLowerCase();
         if (fieldTypeLower === "initials") {
-            console.log("Storing initials:", value, "for field index:", field.index);
             setStoredInitials((prev) => {
                 // If no initials stored yet, store this one
                 if (!prev.signBase64) {
-                    console.log("First initials stored:", { signBase64: value, arrStored: [field.index] });
                     return { signBase64: value, arrStored: [field.index] };
                 }
                 // If initials already stored, just add index to arrStored
                 if (!prev.arrStored.includes(field.index)) {
                     const newArrStored = [...prev.arrStored, field.index];
-                    
+
                     // Check if all initials fields are now filled
                     const updatedSignatureData = field._parentSigner ? signatureData : signatureData;
                     const updatedFieldData = field._parentSigner ? fieldData : fieldData;
                     const { total, filled } = countInitialsFields(updatedSignatureData, updatedFieldData, urlPriority);
-                    
+
                     // If all initials fields are filled, clear storage
                     if (filled + 1 >= total) {
-                        console.log("All initials fields filled, clearing storage");
                         return { signBase64: null, arrStored: [] };
                     }
-                    
+
                     return { ...prev, arrStored: newArrStored };
                 }
                 return prev;
@@ -918,13 +904,13 @@ function App() {
 
     const handleFieldDelete = (field) => {
         if (isSubmitted) return;
-        
+
         // Silent check: Only allow deletion if field belongs to current priority
         const fieldPriority = field._parentSigner?.priority ?? (field.priority || null);
         if (fieldPriority !== null && fieldPriority != urlPriority) {
             return; // Silently ignore - field belongs to different priority
         }
-        
+
         // Check if this field belongs to nested structure (has _parentSigner)
         if (field._parentSigner) {
             // Delete nested field within signatureData
@@ -943,38 +929,32 @@ function App() {
             newSet.delete(field.index);
             return newSet;
         });
-        
+
         // Update stored initials management
         const fieldTypeLower = (field.fieldType || field.type || "").toLowerCase();
-        
+
         if (fieldTypeLower === "initials") {
             setStoredInitials((prev) => {
                 if (!prev.signBase64) return prev; // No storage to manage
-                
+
                 // Remove this index from arrStored
-                const newArrStored = prev.arrStored.filter(idx => idx !== field.index);
-                
+                const newArrStored = prev.arrStored.filter((idx) => idx !== field.index);
+
                 // If arrStored becomes empty (all autofilled fields deleted), find replacement
                 if (newArrStored.length === 0) {
                     // Get updated data after deletion
-                    const updatedSignatureData = field._parentSigner ? 
-                        deleteNestedFieldValue(signatureData, field.index, field.fieldType || field.type, field._parentSigner) : 
-                        signatureData;
-                    const updatedFieldData = !field._parentSigner ? 
-                        deleteFieldValue(fieldData, field.index, field.fieldType || field.type) : 
-                        fieldData;
-                    
+                    const updatedSignatureData = field._parentSigner ? deleteNestedFieldValue(signatureData, field.index, field.fieldType || field.type, field._parentSigner) : signatureData;
+                    const updatedFieldData = !field._parentSigner ? deleteFieldValue(fieldData, field.index, field.fieldType || field.type) : fieldData;
+
                     // Find first filled initial of same priority to use as new source
                     const firstFilledInitial = findFirstFilledField(updatedSignatureData, updatedFieldData, urlPriority, "initials");
                     if (firstFilledInitial) {
-                        console.log("All autofilled fields deleted, replacing stored initial with:", firstFilledInitial.value);
                         return { signBase64: firstFilledInitial.value, arrStored: [firstFilledInitial.index] };
                     }
                     // No filled initials left, clear storage
-                    console.log("No filled initials left, clearing storage");
                     return { signBase64: null, arrStored: [] };
                 }
-                
+
                 // Stored value still exists, just update arrStored
                 return { ...prev, arrStored: newArrStored };
             });
@@ -983,13 +963,13 @@ function App() {
 
     const handleSignatureDelete = (signature) => {
         if (isSubmitted) return;
-        
+
         // Silent check: Only allow deletion if signature belongs to current priority
         const signaturePriority = signature._parentSigner?.priority ?? (signature.priority || null);
         if (signaturePriority !== null && signaturePriority != urlPriority) {
             return; // Silently ignore - signature belongs to different priority
         }
-        
+
         const signerObject = signature._parentSigner;
 
         const updatedSignatures = deleteSignatureImage(signatureData, signature.index, signature.type, signerObject);
@@ -1001,16 +981,15 @@ function App() {
             newSet.delete(signature.index);
             return newSet;
         });
-        
+
         // Update stored signature/initial management
         const signatureTypeLower = (signature.type || "").toLowerCase();
-        
+
         if (signatureTypeLower === "signature") {
-            console.log("storedSignature==> ", storedSignature);
             setStoredSignature((prev) => {
                 // Remove this index from arrStored
-                const newArrStored = prev.arrStored.filter(idx => idx !== signature.index);
-                
+                const newArrStored = prev.arrStored.filter((idx) => idx !== signature.index);
+
                 // If arrStored becomes empty, find the first signed signature for same priority
                 if (newArrStored.length === 0) {
                     // Find first signed signature of same priority
@@ -1021,14 +1000,14 @@ function App() {
                     // No signed signatures left, clear storage
                     return { signBase64: null, arrStored: [] };
                 }
-                
+
                 return { ...prev, arrStored: newArrStored };
             });
         } else if (signatureTypeLower === "initials") {
             setStoredInitials((prev) => {
                 // Remove this index from arrStored
-                const newArrStored = prev.arrStored.filter(idx => idx !== signature.index);
-                
+                const newArrStored = prev.arrStored.filter((idx) => idx !== signature.index);
+
                 // If arrStored becomes empty, find the first signed initial for same priority
                 if (newArrStored.length === 0) {
                     // Find first signed initial of same priority
@@ -1039,21 +1018,21 @@ function App() {
                     // No signed initials left, clear storage
                     return { signBase64: null, arrStored: [] };
                 }
-                
+
                 return { ...prev, arrStored: newArrStored };
             });
         }
     };
-    
+
     // Helper function to count total and filled initials fields for a given priority
     const countInitialsFields = (signatureData, fieldData, priority) => {
         let total = 0;
         let filled = 0;
-        
+
         // Check nested structure (signatureData)
         for (const sig of signatureData) {
             if (sig.priority != priority) continue;
-            
+
             const fields = sig.fields || [];
             for (const field of fields) {
                 const fieldTypeLower = (field.type || "").toLowerCase();
@@ -1063,27 +1042,27 @@ function App() {
                 }
             }
         }
-        
+
         // Check flat structure (fieldData)
         for (const field of fieldData) {
             const fieldPriority = field.signerPriority ?? field.priority;
             if (fieldPriority != priority) continue;
-            
+
             const fieldTypeLower = (field.fieldType || field.type || "").toLowerCase();
             if (fieldTypeLower === "initials") {
                 total++;
                 if (field.filled) filled++;
             }
         }
-        
+
         return { total, filled };
     };
-    
+
     // Helper function to find first signed signature/initial for a given priority and type
     const findFirstSignedSignature = (signatures, priority, type) => {
         for (const sig of signatures) {
             if (sig.priority != priority) continue;
-            
+
             const fields = sig.fields || [];
             for (const field of fields) {
                 const fieldTypeLower = (field.type || "").toLowerCase();
@@ -1094,13 +1073,13 @@ function App() {
         }
         return null;
     };
-    
+
     // Helper function to find first filled field (for text-based initials) for a given priority and type
     const findFirstFilledField = (signatureData, fieldData, priority, type) => {
         // Check nested structure (signatureData)
         for (const sig of signatureData) {
             if (sig.priority != priority) continue;
-            
+
             const fields = sig.fields || [];
             for (const field of fields) {
                 const fieldTypeLower = (field.type || "").toLowerCase();
@@ -1109,30 +1088,30 @@ function App() {
                 }
             }
         }
-        
+
         // Check flat structure (fieldData)
         for (const field of fieldData) {
             const fieldPriority = field.signerPriority ?? field.priority;
             if (fieldPriority != priority) continue;
-            
+
             const fieldTypeLower = (field.fieldType || field.type || "").toLowerCase();
             if (fieldTypeLower === type && field.filled && field.value) {
                 return { index: field.index, value: field.value };
             }
         }
-        
+
         return null;
     };
 
     const handleFieldClick = (field) => {
         if (isSubmitted) return;
-        
+
         // Silent check: Only allow editing if field belongs to current priority
         const fieldPriority = field._parentSigner?.priority ?? (field.priority || null);
         if (fieldPriority !== null && fieldPriority != urlPriority) {
             return; // Silently ignore - field belongs to different priority
         }
-        
+
         // For checkbox, toggle directly without opening modal
         const fType = (field.fieldType || field.type || "").toLowerCase();
         if (fType === "checkbox") {
@@ -1194,17 +1173,17 @@ function App() {
                 // STEP 1: Check if document was already submitted by this user in another window/browser
                 if (salesforceConfig) {
                     const { recordId, accessToken, instanceUrl, clientId, clientSecret } = salesforceConfig;
-                    
+
                     try {
                         // Fetch current document status and check if it's already been updated
                         const query = `SELECT Id, Status__c, Document_Hash_Key__c, Signing_Details__c FROM Document__c WHERE Id = '${recordId}' LIMIT 1`;
                         const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
-                        
+
                         let response = await fetch(apiUrl, {
-                            method: 'GET',
+                            method: "GET",
                             headers: {
-                                'Authorization': `Bearer ${accessToken}`,
-                                'Content-Type': 'application/json',
+                                Authorization: `Bearer ${accessToken}`,
+                                "Content-Type": "application/json",
                             },
                         });
 
@@ -1212,10 +1191,10 @@ function App() {
                         if (response.status === 401 && clientId && clientSecret) {
                             const newToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
                             response = await fetch(apiUrl, {
-                                method: 'GET',
+                                method: "GET",
                                 headers: {
-                                    'Authorization': `Bearer ${newToken}`,
-                                    'Content-Type': 'application/json',
+                                    Authorization: `Bearer ${newToken}`,
+                                    "Content-Type": "application/json",
                                 },
                             });
                         }
@@ -1223,57 +1202,54 @@ function App() {
                         if (response.ok) {
                             const data = await response.json();
                             const currentDoc = data?.records?.[0];
-                            
+
                             if (currentDoc) {
                                 // Parse the current Signing_Details__c to check if this user's priority was already filled
                                 const currentSigningDetails = currentDoc.Signing_Details__c;
-                                
+
                                 if (currentSigningDetails) {
                                     try {
                                         const parsedDetails = JSON.parse(currentSigningDetails);
-                                        
+
                                         // Find entries for current user's priority
-                                        const currentPriorityEntries = parsedDetails.filter(entry => entry.priority == urlPriority);
-                                        
+                                        const currentPriorityEntries = parsedDetails.filter((entry) => entry.priority == urlPriority);
+
                                         if (currentPriorityEntries.length > 0) {
                                             // Check if all fields for this priority are already filled
-                                            const allFieldsFilled = currentPriorityEntries.every(entry => {
+                                            const allFieldsFilled = currentPriorityEntries.every((entry) => {
                                                 if (entry.fields && Array.isArray(entry.fields)) {
-                                                    return entry.fields.every(field => field.filled === true);
+                                                    return entry.fields.every((field) => field.filled === true);
                                                 }
                                                 return entry.filled === true;
                                             });
-                                            
+
                                             if (allFieldsFilled) {
-                                                console.log('Document already submitted by this user in another window. Refreshing...');
-                                                
-                                                // Hide spinner
                                                 setShowSpinner(false);
-                                                
+
                                                 // Show toast
                                                 setToast({
                                                     isVisible: true,
                                                     message: "This document was already submitted in another window. Refreshing...",
                                                     type: "success",
                                                 });
-                                                
+
                                                 // Reload after short delay
                                                 setTimeout(() => {
                                                     window.location.reload();
                                                 }, 1500);
-                                                
+
                                                 return; // Exit early, don't proceed with submission
                                             }
                                         }
                                     } catch (parseError) {
-                                        console.warn('Could not parse Signing_Details__c:', parseError);
+                                        console.warn("Could not parse Signing_Details__c:", parseError);
                                         // Continue with submission if parsing fails
                                     }
                                 }
                             }
                         }
                     } catch (checkError) {
-                        console.warn('Error checking document status, proceeding with submission:', checkError);
+                        console.warn("Error checking document status, proceeding with submission:", checkError);
                         // Continue with submission if check fails
                     }
                 }
@@ -1285,7 +1261,7 @@ function App() {
                 }
 
                 // Load the original PDF using pdf-lib
-                const pdfDoc = await PDFDocument.load(originalPdfBytes, {ignoreEncryption: true});
+                const pdfDoc = await PDFDocument.load(originalPdfBytes, { ignoreEncryption: true });
                 const pages = pdfDoc.getPages();
 
                 // Get all filled signature fields across all signatures
@@ -1384,33 +1360,33 @@ function App() {
                                 lines = [metadataText];
                             } else {
                                 // Need to wrap - split into max 2 lines
-                                const words = metadataText.split(' ');
-                                let line1 = '';
-                                let line2 = '';
-                                
+                                const words = metadataText.split(" ");
+                                let line1 = "";
+                                let line2 = "";
+
                                 for (let i = 0; i < words.length; i++) {
-                                    const testLine1 = line1 + (line1 ? ' ' : '') + words[i];
+                                    const testLine1 = line1 + (line1 ? " " : "") + words[i];
                                     const testWidth = font.widthOfTextAtSize(testLine1, fontSize);
-                                    
+
                                     if (testWidth <= maxWidth) {
                                         line1 = testLine1;
                                     } else {
                                         // Move to second line
-                                        line2 = words.slice(i).join(' ');
+                                        line2 = words.slice(i).join(" ");
                                         break;
                                     }
                                 }
-                                
-                                lines = [line1, line2].filter(l => l);
+
+                                lines = [line1, line2].filter((l) => l);
                                 // If line2 still exceeds, truncate with ellipsis
                                 if (lines[1]) {
                                     const line2Width = font.widthOfTextAtSize(lines[1], fontSize);
                                     if (line2Width > maxWidth) {
                                         let truncated = lines[1];
-                                        while (font.widthOfTextAtSize(truncated + '...', fontSize) > maxWidth && truncated.length > 0) {
+                                        while (font.widthOfTextAtSize(truncated + "...", fontSize) > maxWidth && truncated.length > 0) {
                                             truncated = truncated.slice(0, -1);
                                         }
-                                        lines[1] = truncated + '...';
+                                        lines[1] = truncated + "...";
                                     }
                                 }
                             }
@@ -1427,8 +1403,8 @@ function App() {
                             lines.forEach((line, index) => {
                                 const lineWidth = font.widthOfTextAtSize(line, fontSize);
                                 const textX = boxX + (boxWidth - lineWidth) / 2;
-                                const textY = boxY - fontSize - 2 - (index * (fontSize + 2));
-                                
+                                const textY = boxY - fontSize - 2 - index * (fontSize + 2);
+
                                 page.drawText(line, {
                                     x: textX,
                                     y: textY,
@@ -1563,7 +1539,7 @@ function App() {
                             const isMultiline = fieldType === "text" && field.multiline === true;
 
                             let lines = [];
-                            
+
                             if (isMultiline) {
                                 // Split text into words and build lines that fit within maxWidth
                                 const words = displayValue.split(" ");
@@ -1586,7 +1562,7 @@ function App() {
                                 // Single line - truncate with ellipsis if needed
                                 let truncatedText = displayValue;
                                 const textWidth = font.widthOfTextAtSize(truncatedText, fontSize);
-                                
+
                                 if (textWidth > maxWidth) {
                                     // Truncate and add ellipsis
                                     while (font.widthOfTextAtSize(truncatedText + "...", fontSize) > maxWidth && truncatedText.length > 0) {
@@ -1603,7 +1579,6 @@ function App() {
                             // Draw each line
                             for (let i = 0; i < lines.length; i++) {
                                 const currentY = textY - i * lineHeight;
-                                console.log("Drawing line on PDF:", lines[i], "at Y:", currentY);
                                 // Only draw if within field bounds
                                 if (currentY >= pdfY) {
                                     page.drawText(lines[i], {
@@ -1620,38 +1595,31 @@ function App() {
                         console.error("Error adding form field to PDF:", field.index, error);
                     }
                 }
-                
+
                 // Check if this is the final priority (highest priority number)
-                const allPriorities = signatureData.map(sig => sig.priority).filter(p => p !== undefined && p !== null);
+                const allPriorities = signatureData.map((sig) => sig.priority).filter((p) => p !== undefined && p !== null);
                 const maxPriority = allPriorities.length > 0 ? Math.max(...allPriorities) : null;
                 const isFinalPriority = maxPriority !== null && urlPriority == maxPriority;
-                
-                console.log(`Current priority: ${urlPriority}, Max priority: ${maxPriority}, Is final: ${isFinalPriority}`);
-                
+
                 // Check audit report behavior setting
                 const auditBehavior = adminProperties?.Audit_Report_Behaviour__c || "attached";
                 const auditOnEverySignature = adminProperties?.Audit_Report_On_Every_Signature__c || false;
                 let pdfBytes;
                 let auditPdfBytes = null;
 
-                console.log(`Audit behavior: ${auditBehavior}, Audit on every signature: ${auditOnEverySignature}`);
-
                 if (auditBehavior === "separate") {
                     // Separate mode: Generate audit as separate file
                     if (auditOnEverySignature || isFinalPriority) {
                         // Generate audit on every signature if checkbox is enabled, or only on final priority
                         const showCompletedOnly = auditOnEverySignature && !isFinalPriority;
-                        console.log(`Generating separate audit report (Priority ${urlPriority}, Show completed only: ${showCompletedOnly})`);
                         try {
                             await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat, showCompletedOnly);
                             auditPdfBytes = await convertAuditHTMLToPDF();
                         } catch (e) {
                             console.warn("Failed to generate separate audit report:", e);
                         }
-                    } else {
-                        console.log(`Priority ${urlPriority} completed (audit report will be generated at final priority ${maxPriority})`);
                     }
-                    
+
                     // Save signed PDF without audit report
                     pdfBytes = await pdfDoc.save();
                 } else {
@@ -1659,7 +1627,6 @@ function App() {
                     if (auditOnEverySignature || isFinalPriority) {
                         // Generate audit on every signature if checkbox is enabled, or only on final priority
                         const showCompletedOnly = auditOnEverySignature && !isFinalPriority;
-                        console.log(`Attaching audit report to signed PDF (Priority ${urlPriority}, Show completed only: ${showCompletedOnly})`);
                         try {
                             await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat, showCompletedOnly);
                         } catch (e) {
@@ -1676,14 +1643,11 @@ function App() {
                         pdfBytes = await finalDoc.save();
                     } else {
                         // No audit generation for intermediate priorities when checkbox is disabled
-                        console.log(`Priority ${urlPriority} completed (audit report will be attached at final priority ${maxPriority})`);
                         pdfBytes = await pdfDoc.save();
                     }
                 }
-                console.log("Final PDF byte size:", pdfBytes);
                 // Generate SHA-256 hash of the final PDF
                 const pdfHash = await generatePdfHash(pdfBytes);
-                console.log("Generated PDF Hash:", pdfHash);
 
                 // Upload to Salesforce if config is available
                 if (salesforceConfig) {
@@ -1696,7 +1660,7 @@ function App() {
                     // Upload signed PDF as ContentVersion
                     let newContentVersionId = null;
                     let temporaryContentVersionId = null;
-                    
+
                     if (isFinalPriority) {
                         // Final priority - upload as final document
                         if (allRequiredFieldsFilled) {
@@ -1704,9 +1668,7 @@ function App() {
                         }
                     } else {
                         // Not final priority - upload as temporary document
-                        console.log("Uploading temporary ContentVersion for intermediate signature");
                         temporaryContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, `Temporary - ${urlPriority}`);
-                        console.log("Temporary ContentVersion ID:", temporaryContentVersionId);
                     }
 
                     // Upload separate audit report if configured
@@ -1715,7 +1677,6 @@ function App() {
                             // Determine audit report title based on priority
                             const auditTitle = isFinalPriority ? "Audit Report" : `Temporary Audit Report - Priority ${urlPriority}`;
                             await uploadSignedPdfToSalesforce(auditPdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, auditTitle);
-                            console.log(`${auditTitle} uploaded successfully`);
                         } catch (error) {
                             console.error("Failed to upload separate audit report:", error);
                         }
@@ -1730,11 +1691,10 @@ function App() {
                     // Broadcast to other tabs that this document was submitted
                     if (broadcastChannelRef.current) {
                         broadcastChannelRef.current.postMessage({
-                            type: 'DOCUMENT_SUBMITTED',
+                            type: "DOCUMENT_SUBMITTED",
                             recordId: salesforceConfig.recordId,
-                            timestamp: new Date().toISOString()
+                            timestamp: new Date().toISOString(),
                         });
-                        console.log('Broadcasted document submission to other tabs');
                     }
 
                     // Show success toast
@@ -1766,10 +1726,9 @@ function App() {
                     // Broadcast to other tabs that this document was submitted
                     if (broadcastChannelRef.current) {
                         broadcastChannelRef.current.postMessage({
-                            type: 'DOCUMENT_SUBMITTED',
-                            timestamp: new Date().toISOString()
+                            type: "DOCUMENT_SUBMITTED",
+                            timestamp: new Date().toISOString(),
                         });
-                        console.log('Broadcasted document submission to other tabs');
                     }
 
                     // Show success toast
@@ -1828,7 +1787,6 @@ function App() {
 
             // If token expired (401), try to refresh it
             if (response.status === 401 && clientId && clientSecret) {
-                console.log("Access token expired, attempting to refresh...");
                 currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
 
                 // Retry the request with new token
@@ -1915,7 +1873,6 @@ function App() {
 
             // If token expired (401), try to refresh it
             if (response.status === 401 && clientId && clientSecret) {
-                console.log("Access token expired, attempting to refresh...");
                 currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
 
                 // Retry the request with new token
@@ -1948,15 +1905,15 @@ function App() {
             let currentToken = accessToken;
 
             // Extract base64 data from data URL
-            const base64Data = imageUrl.split(',')[1];
+            const base64Data = imageUrl.split(",")[1];
             if (!base64Data) {
-                console.warn('No base64 data found in imageUrl');
+                console.warn("No base64 data found in imageUrl");
                 return null;
             }
 
             // Determine file extension from data URL
-            const mimeType = imageUrl.split(';')[0].split(':')[1];
-            const extension = mimeType.includes('png') ? 'png' : 'jpg';
+            const mimeType = imageUrl.split(";")[0].split(":")[1];
+            const extension = mimeType.includes("png") ? "png" : "jpg";
 
             // Create ContentVersion record
             const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/ContentVersion`;
@@ -1980,7 +1937,6 @@ function App() {
 
             // If token expired (401), try to refresh it
             if (response.status === 401 && clientId && clientSecret) {
-                console.log("Access token expired, attempting to refresh...");
                 currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
 
                 // Retry the request with new token
@@ -2001,7 +1957,6 @@ function App() {
             }
 
             const result = await response.json();
-            console.log(`Successfully uploaded signature image for ${fieldIndex}, ContentVersion ID: ${result.id}`);
             return result.id;
         } catch (error) {
             console.error("Error uploading signature image:", error);
@@ -2015,7 +1970,6 @@ function App() {
 
             // Check if Store_Sign__c is enabled in admin properties
             const storeSignatures = adminProperties?.Store_Sign__c === true;
-            console.log('Store_Sign__c setting:', storeSignatures);
 
             // Extract all fields with imageUrl and nested field values from signatureData
             const fieldsWithImages = [];
@@ -2109,7 +2063,6 @@ function App() {
             const upsertPromises = recordsToUpsert.map(async (record, index) => {
                 const isUpdate = !!record.Id;
                 const method = isUpdate ? "PATCH" : "POST";
-                console.log("isUpdate==> ", isUpdate);
                 const apiUrl = isUpdate ? `${instanceUrl}/services/data/v65.0/sobjects/Signature__c/${record.Id}` : `${instanceUrl}/services/data/v65.0/sobjects/Signature__c`;
 
                 // Remove Id from body if updating (Id is in URL)
@@ -2129,7 +2082,6 @@ function App() {
 
                 // If token expired (401), try to refresh it
                 if (response.status === 401 && clientId && clientSecret) {
-                    console.log("Access token expired, attempting to refresh...");
                     currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
 
                     // Retry the request with new token
@@ -2156,15 +2108,7 @@ function App() {
 
                 // If Store_Sign__c is enabled and this field has an imageUrl, upload it as ContentVersion
                 if (storeSignatures && fieldsWithImages[index]?.imageUrl) {
-                    await uploadSignatureImage(
-                        signatureRecordId, 
-                        fieldsWithImages[index].imageUrl, 
-                        record.Field_Index__c, 
-                        currentToken, 
-                        instanceUrl, 
-                        clientId, 
-                        clientSecret
-                    );
+                    await uploadSignatureImage(signatureRecordId, fieldsWithImages[index].imageUrl, record.Field_Index__c, currentToken, instanceUrl, clientId, clientSecret);
                 }
 
                 return { success: true, id: signatureRecordId };
@@ -2197,7 +2141,6 @@ function App() {
 
             // If token expired (401), try to refresh it
             if (response.status === 401 && clientId && clientSecret) {
-                console.log("Access token expired, attempting to refresh...");
                 currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
 
                 // Retry the request with new token
@@ -2215,7 +2158,6 @@ function App() {
             }
 
             const data = await response.json();
-            console.log("Fetched Signature records:", data);
             return data.records || [];
         } catch (error) {
             console.error("Error fetching Signature records:", error);
@@ -2225,11 +2167,6 @@ function App() {
 
     // Build HTML for audit report
     const generateAuditHTML = async (doc, sigData, orgId, totalPages, pageFormat, showCompletedOnly = false) => {
-        console.log("Generating audit report HTML with document and signatures:", doc);
-        console.log("Signature data:", sigData);
-        console.log("Using page format:", pageFormat);
-        console.log("Show completed only:", showCompletedOnly);
-
         // Helper function to format timestamp with smaller timezone
         const formatTimestamp = (timestamp) => {
             if (!timestamp || timestamp === "--") return "--";
@@ -2256,18 +2193,13 @@ function App() {
                 .filter((f) => (f.type || f.fieldType || "").toLowerCase() == "signature") // Only include fields with type="signature"
                 .map((f) => ({ ...f, signerName: s.name || "--", signerEmail: s.email || "--" }))
         );
-        
+
         // Always calculate counts based on ALL signatures
         const signedFields = allFields.filter((f) => f.filled);
         const pendingFields = allFields.filter((f) => !f.filled);
-        
+
         // Filter fields to display in table based on showCompletedOnly flag
         const displayFields = showCompletedOnly ? signedFields : allFields;
-
-        console.log("All signature fields:", allFields);
-        console.log("Signed fields:", signedFields);
-        console.log("Pending fields:", pendingFields);
-        console.log("Display fields (in table):", displayFields);
 
         // SVG ICONS
         const SVG_TOTAL = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="4" fill="#E0F5FF"/><path d="M4 6C4 4.89688 4.89688 4 6 4H10.6719C11.2031 4 11.7125 4.20938 12.0875 4.58438L15.4125 7.91563C15.7875 8.29063 15.9969 8.8 15.9969 9.33125V12.3781L11.8719 16.5031H10.5562L10.0531 14.8281C9.90625 14.3375 9.45625 14.0031 8.94375 14.0031C8.59063 14.0031 8.25937 14.1625 8.04062 14.4375L6.1625 16.7812C5.90313 17.1031 5.95625 17.5781 6.27813 17.8344C6.6 18.0906 7.075 18.0406 7.33125 17.7156L8.80313 15.8781L9.27812 17.4625C9.37187 17.7812 9.66562 17.9969 9.99687 17.9969H10.9812C10.9531 18.0938 10.9281 18.1937 10.9094 18.2937L10.5687 19.9969H6C4.89688 19.9969 4 19.1 4 17.9969V5.99688V6ZM10.5 5.82812V8.75C10.5 9.16563 10.8344 9.5 11.25 9.5H14.1719L10.5 5.82812ZM12.3812 18.5906C12.4594 18.2031 12.65 17.8469 12.9281 17.5688L16.6438 13.8531L19.1438 16.3531L15.4281 20.0688C15.15 20.3469 14.7937 20.5375 14.4062 20.6156L12.5437 20.9875C12.5156 20.9937 12.4844 20.9969 12.4531 20.9969C12.2031 20.9969 11.9969 20.7937 11.9969 20.5406C11.9969 20.5094 12 20.4813 12.0062 20.45L12.3781 18.5875L12.3812 18.5906ZM20.75 14.7469L19.85 15.6469L17.35 13.1469L18.25 12.2469C18.9406 11.5562 20.0594 11.5562 20.75 12.2469C21.4406 12.9375 21.4406 14.0562 20.75 14.7469Z" fill="#42C0FF"/></svg>`;
@@ -2515,8 +2447,6 @@ function App() {
         const pageHeight = pdfPageFormat.height || A4_HEIGHT;
         const orientation = pdfPageFormat.orientation || "portrait";
 
-        console.log(`Generating audit report with format: ${pageWidth.toFixed(2)}pt x ${pageHeight.toFixed(2)}pt (${orientation})`);
-
         const pdfBlob = await html2pdf()
             .from(element)
             .set({
@@ -2592,8 +2522,6 @@ function App() {
 
             // token refresh fallback
             if (response.status === 401 && clientId && clientSecret) {
-                console.log("Access token expired, refreshing…");
-
                 currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
 
                 response = await fetch(apiUrl, {
@@ -2676,28 +2604,26 @@ function App() {
         try {
             const url = new URL(window.location.href);
             const encryptedQuery = url.searchParams.get("q");
-            
+
             if (encryptedQuery) {
                 // URL is encrypted - decrypt, update token, re-encrypt
                 try {
                     // Decrypt the current URL
                     const decryptedString = await decryptUrlParams(encryptedQuery);
                     const params = parseQueryString(decryptedString);
-                    
+
                     // Update the access token
                     params.act = token;
-                    
+
                     // Rebuild query string
                     const updatedQueryString = buildQueryString(params);
-                    
+
                     // Re-encrypt
                     const newEncryptedQuery = await encryptUrlParams(updatedQueryString);
-                    
+
                     // Update URL with new encrypted parameter
                     url.searchParams.set("q", newEncryptedQuery);
                     window.history.replaceState({}, document.title, url.toString());
-                    
-                    console.log("Encrypted URL updated with new access token");
                 } catch (error) {
                     console.error("Failed to update encrypted URL:", error);
                     // Fall back to updating state only
@@ -2810,8 +2736,6 @@ function App() {
             }
         }
 
-        console.log("Rendering PDF with target width:", targetWidth);
-
         for (let pageNum = 1; pageNum <= numPages; pageNum++) {
             const canvas = canvasRefsArray.current[pageNum - 1];
             if (canvas) {
@@ -2820,7 +2744,6 @@ function App() {
                 // Update scale state with the first page's scale (all pages use same scale)
                 if (pageNum === 1 && dims) {
                     setCanvasScale(dims.scale);
-                    console.log("Updated canvas scale to:", dims.scale);
                 }
             }
         }
@@ -2896,12 +2819,10 @@ function App() {
             });
 
             const { latitude, longitude } = coords.coords;
-            console.log(`Obtained GPS coordinates: ${latitude}, ${longitude}`);
 
             // Reverse geocode to city/state/country
             const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
             const data = await res.json();
-            console.log("Reverse geocoding data:", data);
             const address = data.address;
 
             const city = address.city || address.state_district || address.town || address.village || "Unknown City";
@@ -2917,38 +2838,37 @@ function App() {
     const getDeviceUniqueKey = async () => {
         try {
             // Canvas fingerprint
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            ctx.textBaseline = 'top';
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            ctx.textBaseline = "top";
             ctx.font = "14px 'Arial'";
-            ctx.fillText('Unique Device Test', 2, 2);
+            ctx.fillText("Unique Device Test", 2, 2);
             const canvasData = canvas.toDataURL();
-            
+
             // Collect stable browser signals
             const signals = {
                 userAgent: navigator.userAgent,
                 screen: `${screen.width}x${screen.height}`,
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                cores: navigator.hardwareConcurrency || 'unknown',
+                cores: navigator.hardwareConcurrency || "unknown",
                 platform: navigator.platform,
                 language: navigator.language,
-                canvas: canvasData.slice(0, 50) + '...'
+                canvas: canvasData.slice(0, 50) + "...",
             };
-            
-            // console.table(signals);
-            // console.log(signals);
+
             // Generate hash
             const fingerprint = JSON.stringify(signals);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(fingerprint));
+            const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprint));
             const uniqueKey = Array.from(new Uint8Array(hashBuffer))
-                .map(b => b.toString(16).padStart(2, '0'))
-                .join('').slice(0, 32);
-            
-            localStorage.setItem('deviceUniqueKey', uniqueKey);
-            
+                .map((b) => b.toString(16).padStart(2, "0"))
+                .join("")
+                .slice(0, 32);
+
+            localStorage.setItem("deviceUniqueKey", uniqueKey);
+
             return uniqueKey;
         } catch (error) {
-            console.error('Error generating device unique key:', error.message);
+            console.error("Error generating device unique key:", error.message);
         }
     };
 
@@ -3020,7 +2940,9 @@ function App() {
                         </svg>
                     </div>
 
-                    <h3 className="expired-title" style={{ color: "#d32f2f" }}>Something Went Wrong</h3>
+                    <h3 className="expired-title" style={{ color: "#d32f2f" }}>
+                        Something Went Wrong
+                    </h3>
 
                     <p className="expired-message">Facing issue with this document. Please try again later.</p>
 

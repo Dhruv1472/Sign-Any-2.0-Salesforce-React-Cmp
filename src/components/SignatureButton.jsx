@@ -21,7 +21,7 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false, canva
             onSign(signature);
         }
     };
-    
+
     const handleReuseClick = (e) => {
         e.stopPropagation();
         if (!disabled && onReuseSignature) {
@@ -59,7 +59,7 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false, canva
                 </div>
                 {(signerName || signatureTimestamp) && (
                     <div className="signature-footer" style={{ marginTop: `${2 * canvasScale}px`, paddingTop: `${2 * canvasScale}px`, paddingBottom: `${2 * canvasScale}px` }}>
-                        <div className="signature-footer-text" style={{ fontSize: `${9.85 * canvasScale + 0.52}px`}}>
+                        <div className="signature-footer-text" style={{ fontSize: `${9.85 * canvasScale + 0.52}px` }}>
                             {signerName && <span className="signature-footer-name">{signerName}</span>}
                             {signerName && signatureTimestamp && <span className="signature-footer-separator"> | </span>}
                             {signatureTimestamp && <span className="signature-footer-timestamp">{signatureTimestamp}</span>}
@@ -109,7 +109,7 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false, canva
             </div>
         );
     }
-    
+
     return (
         <button
             className="signature-button"

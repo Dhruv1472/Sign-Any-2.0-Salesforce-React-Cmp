@@ -32,32 +32,28 @@ export const updateSignatureWithImage = (signatures, index, imageUrl, expectedTy
         if (sig.index === index && isSignatureEntry(sig) && typeMatches) {
             return { ...sig, signed: true, imageUrl, ...metadata };
         }
-        
+
         // Check if this signature has fields array with the matching index
         if (sig.fields && Array.isArray(sig.fields)) {
-            const hasMatchingField = sig.fields.some(field => field.index === index);
+            const hasMatchingField = sig.fields.some((field) => field.index === index);
             if (hasMatchingField) {
                 // If signerObject is provided, verify this is the correct signer
                 // by matching priority or email
                 let isCorrectSigner = true;
                 if (signerObject) {
                     // Strict priority matching only - each priority represents a unique signer
-                    isCorrectSigner = (sig.priority === signerObject.priority);
+                    isCorrectSigner = sig.priority === signerObject.priority;
                 }
-                
+
                 if (isCorrectSigner) {
                     return {
                         ...sig,
-                        fields: sig.fields.map(field => 
-                            field.index === index 
-                                ? { ...field, filled: true, imageUrl, ...metadata } 
-                                : field
-                        )
+                        fields: sig.fields.map((field) => (field.index === index ? { ...field, filled: true, imageUrl, ...metadata } : field)),
                     };
                 }
             }
         }
-        
+
         return sig;
     });
 };
@@ -76,32 +72,28 @@ export const deleteSignatureImage = (signatures, index, expectedType, signerObje
         if (sig.index === index && isSignatureEntry(sig) && typeMatches) {
             return { ...sig, signed: false, imageUrl: null };
         }
-        
+
         // Check if this signature has fields array with the matching index
         if (sig.fields && Array.isArray(sig.fields)) {
-            const hasMatchingField = sig.fields.some(field => field.index === index);
+            const hasMatchingField = sig.fields.some((field) => field.index === index);
             if (hasMatchingField) {
                 // If signerObject is provided, verify this is the correct signer
                 // by matching priority or email
                 let isCorrectSigner = true;
                 if (signerObject) {
                     // Strict priority matching only - each priority represents a unique signer
-                    isCorrectSigner = (sig.priority === signerObject.priority);
+                    isCorrectSigner = sig.priority === signerObject.priority;
                 }
-                
+
                 if (isCorrectSigner) {
                     return {
                         ...sig,
-                        fields: sig.fields.map(field => 
-                            field.index === index 
-                                ? { ...field, filled: false, imageUrl: null } 
-                                : field
-                        )
+                        fields: sig.fields.map((field) => (field.index === index ? { ...field, filled: false, imageUrl: null } : field)),
                     };
                 }
             }
         }
-        
+
         return sig;
     });
 };
@@ -147,25 +139,25 @@ export const updateNestedFieldValue = (signatures, index, value, expectedFieldTy
     return signatures.map((sig) => {
         // Check if this signature has fields array with the matching index
         if (sig.fields && Array.isArray(sig.fields)) {
-            const hasMatchingField = sig.fields.some(field => field.index === index);
+            const hasMatchingField = sig.fields.some((field) => field.index === index);
             if (hasMatchingField) {
                 // If signerObject is provided, verify this is the correct signer
                 let isCorrectSigner = true;
                 if (signerObject) {
-                    isCorrectSigner = (sig.priority === signerObject.priority);
+                    isCorrectSigner = sig.priority === signerObject.priority;
                 }
-                
+
                 if (isCorrectSigner) {
                     return {
                         ...sig,
-                        fields: sig.fields.map(field => {
+                        fields: sig.fields.map((field) => {
                             const fType = normalizeType(field.fieldType || field.type);
                             const typeMatches = expected ? fType === expected : true;
                             if (field.index === index && isFieldEntry(field) && typeMatches) {
                                 return { ...field, filled: true, value };
                             }
                             return field;
-                        })
+                        }),
                     };
                 }
             }
@@ -183,25 +175,25 @@ export const deleteNestedFieldValue = (signatures, index, expectedFieldType, sig
     return signatures.map((sig) => {
         // Check if this signature has fields array with the matching index
         if (sig.fields && Array.isArray(sig.fields)) {
-            const hasMatchingField = sig.fields.some(field => field.index === index);
+            const hasMatchingField = sig.fields.some((field) => field.index === index);
             if (hasMatchingField) {
                 // If signerObject is provided, verify this is the correct signer
                 let isCorrectSigner = true;
                 if (signerObject) {
-                    isCorrectSigner = (sig.priority === signerObject.priority);
+                    isCorrectSigner = sig.priority === signerObject.priority;
                 }
-                
+
                 if (isCorrectSigner) {
                     return {
                         ...sig,
-                        fields: sig.fields.map(field => {
+                        fields: sig.fields.map((field) => {
                             const fType = normalizeType(field.fieldType || field.type);
                             const typeMatches = expected ? fType === expected : true;
                             if (field.index === index && isFieldEntry(field) && typeMatches) {
                                 return { ...field, filled: false, value: null };
                             }
                             return field;
-                        })
+                        }),
                     };
                 }
             }

@@ -45,7 +45,7 @@
 }
 
 .signature-button-reuse::after {
-    content: '';
+    content: "";
     position: absolute;
     right: 0;
     top: 20%;

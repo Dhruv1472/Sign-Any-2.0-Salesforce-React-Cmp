@@ -53,7 +53,7 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
 
         const canvas = canvasRef.current;
         const previewContainer = previewRef.current;
-        
+
         if (!canvas || !previewContainer) return;
 
         // Get the actual rendered dimensions of the preview container
@@ -82,14 +82,14 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
         // The text will naturally wrap in the span based on container width
         // We need to replicate that wrapping behavior in canvas
         const maxWidth = previewWidth - 4; // Account for padding (12px each side)
-        const words = text.split(' ');
+        const words = text.split(" ");
         const lines = [];
-        let currentLine = '';
+        let currentLine = "";
 
         for (let i = 0; i < words.length; i++) {
-            const testLine = currentLine + (currentLine ? ' ' : '') + words[i];
+            const testLine = currentLine + (currentLine ? " " : "") + words[i];
             const metrics = ctx.measureText(testLine);
-            
+
             if (metrics.width > maxWidth && currentLine) {
                 lines.push(currentLine);
                 currentLine = words[i];
@@ -104,7 +104,7 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
         // Calculate line height and center the text block vertically
         const lineHeight = actualFontSize * 1.2;
         const totalTextHeight = lines.length * lineHeight;
-        const startY = (previewHeight - totalTextHeight) / 2 + (lineHeight / 2);
+        const startY = (previewHeight - totalTextHeight) / 2 + lineHeight / 2;
 
         // Draw each line
         lines.forEach((line, index) => {
