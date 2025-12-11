@@ -5,7 +5,7 @@
     background-color: transparent;
     border-radius: 4px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: background-color 0.3s ease;
     font-weight: 500;
     min-width: 100px;
     width: 100%;
@@ -21,6 +21,10 @@
     color: #ccc;
     cursor: not-allowed;
     opacity: 0.6;
+}
+
+.field-button:hover:not(:disabled) {
+    background-color: rgba(33, 150, 243, 0.1);
 }
 
 /* Field type specific colors */
@@ -344,4 +348,63 @@
     to {
         opacity: 1;
     }
+}
+
+/* Split button styles for initials */
+.field-button-split-container {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    gap: 0;
+    /* overflow: hidden; */
+    box-sizing: border-box;
+}
+
+.field-button-reuse {
+    flex: 0 0 80%;
+    width: 80%;
+    min-width: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-right: none;
+    position: relative;
+    box-sizing: border-box;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.field-button-reuse::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 20%;
+    bottom: 20%;
+    width: 1px;
+    background-color: #2196f3;
+    z-index: 1;
+}
+
+.field-button-new {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border: 2px dashed #2196f3;
+    border-left: none;
+}
+
+.field-button-new svg {
+    color: #2196f3;
+    stroke: currentColor;
+}
+
+.field-button-reuse:hover:not(:disabled) {
+    background-color: rgba(33, 150, 243, 0.15);
+}
+
+.field-button-new:hover:not(:disabled) {
+    background-color: rgba(33, 150, 243, 0.1);
 }

@@ -11,8 +11,10 @@ import "./FieldButton.css";
  * @param {Function} onSave - Callback when inline edit is saved
  * @param {boolean} canDelete - Whether the delete button should be shown
  * @param {number} canvasScale - Scale factor for responsive sizing
+ * @param {Object} storedInitials - Stored initials data for quick reuse
+ * @param {Function} onReuseInitials - Callback when reusing stored initials
  */
-const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false, disabled = false, canvasScale = 1 }) => {
+const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false, disabled = false, canvasScale = 1, storedInitials, onReuseInitials }) => {
     const { key, fieldName, fieldType, value, filled, disabled: fieldDisabled, required, readonly } = field;
     const isDisabled = Boolean(disabled || fieldDisabled || readonly);
     const [isEditing, setIsEditing] = useState(false);
@@ -401,6 +403,63 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
         const requiredClass = required ? "field-button-required" : "";
         return `${baseClass} ${typeClass} ${requiredClass}`.trim();
     };
+
+    // Check if we should show split button for initials
+    const hasStoredInitials = fieldType === "initials" && storedInitials?.signBase64 && !filled && !isDisabled;
+
+    const handleReuseClick = (e) => {
+        e.stopPropagation();
+        if (!isDisabled && onReuseInitials) {
+            onReuseInitials(field);
+        }
+    };
+
+    // If initials field with stored value, show split button
+    if (hasStoredInitials) {
+        return (
+            <div className="field-button-split-container" data-key={key}>
+                <button
+                    className={`${getButtonClass()} field-button-reuse`}
+                    onClick={handleReuseClick}
+                    title="Use stored initials"
+                    style={{
+                        padding: `${8 * canvasScale}px ${12 * canvasScale}px`,
+                        borderWidth: `${2 * canvasScale}px`,
+                        fontSize: `${12 * canvasScale}px`,
+                        borderTopRightRadius: 0,
+                        borderBottomRightRadius: 0,
+                    }}>
+                    <svg width={`${16 * canvasScale}px`} height={`${16 * canvasScale}px`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M9 11l3 3L22 4" />
+                        <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+                    </svg>
+                    {required && <span className="required-indicator" style={{
+                        width: `${6 * canvasScale}px`,
+                        height: `${6 * canvasScale}px`,
+                        top: `${-2 * canvasScale}px`,
+                        right: `${-2 * canvasScale}px`
+                    }}></span>}
+                </button>
+                <button
+                    className={`${getButtonClass()} field-button-new`}
+                    onClick={handleFieldClick}
+                    title="Create new initials"
+                    style={{
+                        padding: `${8 * canvasScale}px ${12 * canvasScale}px`,
+                        borderWidth: `${2 * canvasScale}px`,
+                        fontSize: `${12 * canvasScale}px`,
+                        borderTopLeftRadius: 0,
+                        borderBottomLeftRadius: 0,
+                        borderRadius: `0 ${4 * canvasScale}px ${4 * canvasScale}px 0`,
+                    }}>
+                    <svg width={`${16 * canvasScale}px`} height={`${16 * canvasScale}px`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                    </svg>
+                </button>
+            </div>
+        );
+    }
 
     return (
         <button 

@@ -28,16 +28,20 @@
     width: 100%;
     height: 100%;
     gap: 0;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 .signature-button-reuse {
-    flex: 0 0 auto;
-    min-width: 40px;
+    flex: 0 0 80%;
+    width: 80%;
+    min-width: 60px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-right: none;
     position: relative;
+    box-sizing: border-box;
 }
 
 .signature-button-reuse::after {
@@ -53,6 +57,11 @@
 .signature-button-new {
     flex: 1 1 auto;
     border-left: none;
+    box-sizing: border-box;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .signature-button-reuse:hover:not(:disabled) {

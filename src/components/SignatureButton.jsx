@@ -101,7 +101,10 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false, canva
                         borderTopLeftRadius: 0,
                         borderBottomLeftRadius: 0,
                     }}>
-                    {buttonName || "Sign Here"}
+                    <svg width={`${16 * canvasScale}px`} height={`${16 * canvasScale}px`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                    </svg>
                 </button>
             </div>
         );

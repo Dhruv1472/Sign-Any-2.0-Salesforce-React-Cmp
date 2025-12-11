@@ -762,16 +762,33 @@ function App() {
     };
     
     // Handle reusing stored signature (one-click signing)
-    const handleReuseSignature = async (signature) => {
+    const handleReuseSignature = async (signatureOrField) => {
         if (isSubmitted) return;
         
         // Silent check: Only allow signing if signature belongs to current priority
-        const signaturePriority = signature._parentSigner?.priority ?? (signature.priority || null);
-        if (signaturePriority !== null && signaturePriority != urlPriority) {
+        const itemPriority = signatureOrField._parentSigner?.priority ?? (signatureOrField.priority || null);
+        if (itemPriority !== null && itemPriority != urlPriority) {
             return; // Silently ignore - signature belongs to different priority
         }
         
-        const signatureTypeLower = (signature.type || "").toLowerCase();
+        // Determine if this is a signature-type field or text-based initial field
+        const itemType = (signatureOrField.type || signatureOrField.fieldType || "").toLowerCase();
+        const isTextBasedInitial = itemType === "initials" && signatureOrField.fieldType;
+        
+        // Handle text-based initials (from FieldButton)
+        if (isTextBasedInitial) {
+            if (!storedInitials.signBase64) {
+                console.warn("No stored initials to reuse");
+                return;
+            }
+            
+            // Simply save the stored text value
+            handleFieldSave(storedInitials.signBase64, signatureOrField);
+            return;
+        }
+        
+        // Handle signature-type fields (signatures and signature-based initials)
+        const signatureTypeLower = itemType;
         const storedData = signatureTypeLower === "initials" ? storedInitials : storedSignature;
         
         if (!storedData.signBase64) {
@@ -808,7 +825,7 @@ function App() {
         const chromeVersion = chromeMatch ? chromeMatch[1] : "Unknown Chrome Version";
         const deviceInfo = `${osVersion} Chrome/${chromeVersion}`;
 
-        const signerObject = signature._parentSigner;
+        const signerObject = signatureOrField._parentSigner;
 
         // Create metadata object
         const metadata = {
@@ -821,20 +838,20 @@ function App() {
         };
 
         // Apply stored signature to this field
-        const updatedSignatures = updateSignatureWithImage(signatureData, signature.index, storedData.signBase64, signature.type, signerObject, metadata);
+        const updatedSignatures = updateSignatureWithImage(signatureData, signatureOrField.index, storedData.signBase64, signatureOrField.type, signerObject, metadata);
         setSignatureData(updatedSignatures);
-        setSessionSignedKeys((prev) => new Set(prev).add(signature.index));
+        setSessionSignedKeys((prev) => new Set(prev).add(signatureOrField.index));
 
         // Update arrStored for the appropriate type
         if (signatureTypeLower === "initials") {
             setStoredInitials((prev) => ({
                 ...prev,
-                arrStored: [...prev.arrStored, signature.index],
+                arrStored: [...prev.arrStored, signatureOrField.index],
             }));
         } else {
             setStoredSignature((prev) => ({
                 ...prev,
-                arrStored: [...prev.arrStored, signature.index],
+                arrStored: [...prev.arrStored, signatureOrField.index],
             }));
         }
 
@@ -867,6 +884,37 @@ function App() {
 
         // Track that this field was filled in the current session
         setSessionFilledKeys((prev) => new Set(prev).add(field.index));
+        
+        // Store first initials for quick reuse (same priority only)
+        const fieldTypeLower = (field.fieldType || field.type || "").toLowerCase();
+        if (fieldTypeLower === "initials") {
+            console.log("Storing initials:", value, "for field index:", field.index);
+            setStoredInitials((prev) => {
+                // If no initials stored yet, store this one
+                if (!prev.signBase64) {
+                    console.log("First initials stored:", { signBase64: value, arrStored: [field.index] });
+                    return { signBase64: value, arrStored: [field.index] };
+                }
+                // If initials already stored, just add index to arrStored
+                if (!prev.arrStored.includes(field.index)) {
+                    const newArrStored = [...prev.arrStored, field.index];
+                    
+                    // Check if all initials fields are now filled
+                    const updatedSignatureData = field._parentSigner ? signatureData : signatureData;
+                    const updatedFieldData = field._parentSigner ? fieldData : fieldData;
+                    const { total, filled } = countInitialsFields(updatedSignatureData, updatedFieldData, urlPriority);
+                    
+                    // If all initials fields are filled, clear storage
+                    if (filled + 1 >= total) {
+                        console.log("All initials fields filled, clearing storage");
+                        return { signBase64: null, arrStored: [] };
+                    }
+                    
+                    return { ...prev, arrStored: newArrStored };
+                }
+                return prev;
+            });
+        }
     };
 
     const handleFieldDelete = (field) => {
@@ -896,6 +944,42 @@ function App() {
             newSet.delete(field.index);
             return newSet;
         });
+        
+        // Update stored initials management
+        const fieldTypeLower = (field.fieldType || field.type || "").toLowerCase();
+        
+        if (fieldTypeLower === "initials") {
+            setStoredInitials((prev) => {
+                if (!prev.signBase64) return prev; // No storage to manage
+                
+                // Remove this index from arrStored
+                const newArrStored = prev.arrStored.filter(idx => idx !== field.index);
+                
+                // If arrStored becomes empty (all autofilled fields deleted), find replacement
+                if (newArrStored.length === 0) {
+                    // Get updated data after deletion
+                    const updatedSignatureData = field._parentSigner ? 
+                        deleteNestedFieldValue(signatureData, field.index, field.fieldType || field.type, field._parentSigner) : 
+                        signatureData;
+                    const updatedFieldData = !field._parentSigner ? 
+                        deleteFieldValue(fieldData, field.index, field.fieldType || field.type) : 
+                        fieldData;
+                    
+                    // Find first filled initial of same priority to use as new source
+                    const firstFilledInitial = findFirstFilledField(updatedSignatureData, updatedFieldData, urlPriority, "initials");
+                    if (firstFilledInitial) {
+                        console.log("All autofilled fields deleted, replacing stored initial with:", firstFilledInitial.value);
+                        return { signBase64: firstFilledInitial.value, arrStored: [firstFilledInitial.index] };
+                    }
+                    // No filled initials left, clear storage
+                    console.log("No filled initials left, clearing storage");
+                    return { signBase64: null, arrStored: [] };
+                }
+                
+                // Stored value still exists, just update arrStored
+                return { ...prev, arrStored: newArrStored };
+            });
+        }
     };
 
     const handleSignatureDelete = (signature) => {
@@ -962,6 +1046,40 @@ function App() {
         }
     };
     
+    // Helper function to count total and filled initials fields for a given priority
+    const countInitialsFields = (signatureData, fieldData, priority) => {
+        let total = 0;
+        let filled = 0;
+        
+        // Check nested structure (signatureData)
+        for (const sig of signatureData) {
+            if (sig.priority != priority) continue;
+            
+            const fields = sig.fields || [];
+            for (const field of fields) {
+                const fieldTypeLower = (field.type || "").toLowerCase();
+                if (fieldTypeLower === "initials") {
+                    total++;
+                    if (field.filled) filled++;
+                }
+            }
+        }
+        
+        // Check flat structure (fieldData)
+        for (const field of fieldData) {
+            const fieldPriority = field.signerPriority ?? field.priority;
+            if (fieldPriority != priority) continue;
+            
+            const fieldTypeLower = (field.fieldType || field.type || "").toLowerCase();
+            if (fieldTypeLower === "initials") {
+                total++;
+                if (field.filled) filled++;
+            }
+        }
+        
+        return { total, filled };
+    };
+    
     // Helper function to find first signed signature/initial for a given priority and type
     const findFirstSignedSignature = (signatures, priority, type) => {
         for (const sig of signatures) {
@@ -975,6 +1093,35 @@ function App() {
                 }
             }
         }
+        return null;
+    };
+    
+    // Helper function to find first filled field (for text-based initials) for a given priority and type
+    const findFirstFilledField = (signatureData, fieldData, priority, type) => {
+        // Check nested structure (signatureData)
+        for (const sig of signatureData) {
+            if (sig.priority != priority) continue;
+            
+            const fields = sig.fields || [];
+            for (const field of fields) {
+                const fieldTypeLower = (field.type || "").toLowerCase();
+                if (fieldTypeLower === type && field.filled && field.value) {
+                    return { index: field.index, value: field.value };
+                }
+            }
+        }
+        
+        // Check flat structure (fieldData)
+        for (const field of fieldData) {
+            const fieldPriority = field.signerPriority ?? field.priority;
+            if (fieldPriority != priority) continue;
+            
+            const fieldTypeLower = (field.fieldType || field.type || "").toLowerCase();
+            if (fieldTypeLower === type && field.filled && field.value) {
+                return { index: field.index, value: field.value };
+            }
+        }
+        
         return null;
     };
 
@@ -2936,7 +3083,7 @@ function App() {
                                             <div className="canvas-wrapper">
                                                 <canvas ref={(el) => (canvasRefsArray.current[index] = el)}></canvas>
                                                 {signatureData.length > 0 && <SignatureOverlay key={`sig-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedSignature={storedSignature} storedInitials={storedInitials} onReuseSignature={handleReuseSignature} />}
-                                                {fieldData.length > 0 && <FieldOverlay key={`field-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} />}
+                                                {fieldData.length > 0 && <FieldOverlay key={`field-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedInitials={storedInitials} onReuseInitials={handleReuseSignature} />}
                                             </div>
                                         </div>
                                     );

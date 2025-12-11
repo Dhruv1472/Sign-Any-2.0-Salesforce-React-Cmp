@@ -92,7 +92,7 @@ const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onFieldCli
 
                 return (
                     <div key={uniqueKey} className={isSignatureField ? "signature-position" : "field-position"} style={{ position: "absolute", left: `${field.xPercent}%`, top: `${field.yPercent}%`, width: `${field.widthPercent}%`, height: `${field.heightPercent}%` }}>
-                        {isSignatureField ? <SignatureButton signature={{ ...field, disabled: field.disabled }} onSign={onSign} onDelete={onDelete} canDelete={canDelete} canvasScale={canvasScale} hasStoredSignature={hasStoredSignature} onReuseSignature={onReuseSignature} /> : isTextField ? <FieldButton field={{ ...field, fieldType: fieldType }} onFieldClick={onFieldClick} onSave={onFieldSave} onDelete={onFieldDelete} canDelete={canDelete} disabled={field.disabled} canvasScale={canvasScale} /> : null}
+                        {isSignatureField ? <SignatureButton signature={{ ...field, disabled: field.disabled }} onSign={onSign} onDelete={onDelete} canDelete={canDelete} canvasScale={canvasScale} hasStoredSignature={hasStoredSignature} onReuseSignature={onReuseSignature} /> : isTextField ? <FieldButton field={{ ...field, fieldType: fieldType }} onFieldClick={onFieldClick} onSave={onFieldSave} onDelete={onFieldDelete} canDelete={canDelete} disabled={field.disabled} canvasScale={canvasScale} storedInitials={storedInitials} onReuseInitials={onReuseSignature} /> : null}
                     </div>
                 );
             })}

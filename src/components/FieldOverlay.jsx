@@ -15,8 +15,10 @@ import "./FieldOverlay.css";
  * @param {boolean} isSubmitted - Whether document has been submitted
  * @param {Set} sessionFilledKeys - Set of field keys filled in current session
  * @param {number} canvasScale - Scale factor for responsive sizing
+ * @param {Object} storedInitials - Stored initials data { signBase64, arrStored }
+ * @param {Function} onReuseInitials - Callback when reusing stored initials
  */
-const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave, onDelete, isSubmitted, sessionFilledKeys, canvasScale = 1 }) => {
+const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave, onDelete, isSubmitted, sessionFilledKeys, canvasScale = 1, storedInitials, onReuseInitials }) => {
     // Filter fields for this page
     // Show: 1. Current priority fields (editable), 2. Lower priority filled fields (read-only)
     const pageFields = fields
@@ -64,7 +66,7 @@ const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave,
 
                 return (
                     <div key={field.index} className="field-position" style={{ position: "absolute", left: `${field.xPercent}%`, top: `${field.yPercent}%`, width: `${field.widthPercent}%`, height: `${field.heightPercent}%` }}>
-                        <FieldButton field={field} onFieldClick={onFieldClick} onSave={onFieldSave} onDelete={onDelete} canDelete={canDelete} disabled={field.disabled} canvasScale={canvasScale} />
+                        <FieldButton field={field} onFieldClick={onFieldClick} onSave={onFieldSave} onDelete={onDelete} canDelete={canDelete} disabled={field.disabled} canvasScale={canvasScale} storedInitials={storedInitials} onReuseInitials={onReuseInitials} />
                     </div>
                 );
             })}
