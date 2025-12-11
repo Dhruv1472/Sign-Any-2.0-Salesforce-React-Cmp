@@ -19,8 +19,11 @@ import "./SignatureOverlay.css";
  * @param {Set} sessionSignedKeys - Set of signature keys signed in current session
  * @param {Set} sessionFilledKeys - Set of field keys filled in current session
  * @param {number} canvasScale - Scale factor for responsive sizing
+ * @param {Object} storedSignature - Stored signature data { signBase64, arrStored }
+ * @param {Object} storedInitials - Stored initials data { signBase64, arrStored }
+ * @param {Function} onReuseSignature - Callback when reusing stored signature
  */
-const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onFieldClick, onFieldSave, onDelete, onFieldDelete, isSubmitted, sessionSignedKeys, sessionFilledKeys, canvasScale = 1 }) => {
+const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onFieldClick, onFieldSave, onDelete, onFieldDelete, isSubmitted, sessionSignedKeys, sessionFilledKeys, canvasScale = 1, storedSignature, storedInitials, onReuseSignature }) => {
     // Filter signatures for this page
     // Show: 1. Current priority fields (editable), 2. Lower priority filled fields (read-only, already signed)
     const pageSignatures = signatures
@@ -83,9 +86,13 @@ const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onFieldCli
                 const isCurrentPriorityField = parentPriority == priority;
                 const canDelete = !isSubmitted && isCurrentPriorityField && (isSignatureField ? sessionSignedKeys.has(field.index) : sessionFilledKeys?.has(field.index));
 
+                // Determine if stored signature/initial is available for this field type
+                const storedData = fieldType === "initials" ? storedInitials : storedSignature;
+                const hasStoredSignature = storedData?.signBase64 && isSignatureField && !field.filled;
+
                 return (
                     <div key={uniqueKey} className={isSignatureField ? "signature-position" : "field-position"} style={{ position: "absolute", left: `${field.xPercent}%`, top: `${field.yPercent}%`, width: `${field.widthPercent}%`, height: `${field.heightPercent}%` }}>
-                        {isSignatureField ? <SignatureButton signature={{ ...field, disabled: field.disabled }} onSign={onSign} onDelete={onDelete} canDelete={canDelete} canvasScale={canvasScale} /> : isTextField ? <FieldButton field={{ ...field, fieldType: fieldType }} onFieldClick={onFieldClick} onSave={onFieldSave} onDelete={onFieldDelete} canDelete={canDelete} disabled={field.disabled} canvasScale={canvasScale} /> : null}
+                        {isSignatureField ? <SignatureButton signature={{ ...field, disabled: field.disabled }} onSign={onSign} onDelete={onDelete} canDelete={canDelete} canvasScale={canvasScale} hasStoredSignature={hasStoredSignature} onReuseSignature={onReuseSignature} /> : isTextField ? <FieldButton field={{ ...field, fieldType: fieldType }} onFieldClick={onFieldClick} onSave={onFieldSave} onDelete={onFieldDelete} canDelete={canDelete} disabled={field.disabled} canvasScale={canvasScale} /> : null}
                     </div>
                 );
             })}

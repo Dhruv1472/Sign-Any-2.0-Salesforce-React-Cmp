@@ -57,6 +57,10 @@ function App() {
     const pdfDocRef = useRef(null);
     const resizeTimeoutRef = useRef(null);
     const broadcastChannelRef = useRef(null);
+    
+    // State for storing first signature/initial for quick reuse (same priority only)
+    const [storedSignature, setStoredSignature] = useState({ signBase64: null, arrStored: [] });
+    const [storedInitials, setStoredInitials] = useState({ signBase64: null, arrStored: [] });
 
     // Setup BroadcastChannel for cross-tab communication
     useEffect(() => {
@@ -732,7 +736,108 @@ function App() {
         setSignatureData(updatedSignatures);
         setSessionSignedKeys((prev) => new Set(prev).add(signature.index));
 
+        // Store first signature/initial for quick reuse (same priority only)
+        const signatureTypeLower = (signature.type || "").toLowerCase();
+        if (signatureTypeLower === "signature") {
+            console.log("signatureadded==> ");
+            setStoredSignature((prev) => {
+                // If no signature stored yet, store this one
+                if (!prev.signBase64) {
+                    return { signBase64: imageData, arrStored: [signature.index] };
+                }
+                return prev;
+            });
+        } else if (signatureTypeLower === "initials") {
+            setStoredInitials((prev) => {
+                // If no initials stored yet, store this one
+                if (!prev.signBase64) {
+                    return { signBase64: imageData, arrStored: [signature.index] };
+                }
+                return prev;
+            });
+        }
+
         // Hide spinner after signature is saved
+        setShowSpinner(false);
+    };
+    
+    // Handle reusing stored signature (one-click signing)
+    const handleReuseSignature = async (signature) => {
+        if (isSubmitted) return;
+        
+        // Silent check: Only allow signing if signature belongs to current priority
+        const signaturePriority = signature._parentSigner?.priority ?? (signature.priority || null);
+        if (signaturePriority !== null && signaturePriority != urlPriority) {
+            return; // Silently ignore - signature belongs to different priority
+        }
+        
+        const signatureTypeLower = (signature.type || "").toLowerCase();
+        const storedData = signatureTypeLower === "initials" ? storedInitials : storedSignature;
+        
+        if (!storedData.signBase64) {
+            console.warn("No stored signature/initial to reuse");
+            return;
+        }
+        
+        // Show spinner during signature application
+        setShowSpinner(true);
+
+        // Use pre-fetched IP, location, and device unique key data
+        const ipAddress = userIpAddress || "Unknown IP";
+        const locationInfo = userLocation || "Location Unavailable";
+        const deviceUniqueKey = userDeviceUniqueKey || "Unavailable";
+
+        // Format timestamp
+        const now = new Date();
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const month = monthNames[now.getMonth()];
+        const day = now.getDate();
+        const year = now.getFullYear();
+        const timeString = now.toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+        });
+        const timeZone = now.toLocaleTimeString("en-US", { timeZoneName: "short" }).split(" ").pop();
+        const timeStamp = `${month} ${day} ${year}, ${timeString} ${timeZone}`;
+
+        const userAgent = navigator.userAgent || "Unknown Device";
+        const osMatch = userAgent.match(/\(([^;]+);/);
+        const osVersion = osMatch ? osMatch[1].trim() : "Unknown OS";
+        const chromeMatch = userAgent.match(/Chrome\/([\d.]+)/);
+        const chromeVersion = chromeMatch ? chromeMatch[1] : "Unknown Chrome Version";
+        const deviceInfo = `${osVersion} Chrome/${chromeVersion}`;
+
+        const signerObject = signature._parentSigner;
+
+        // Create metadata object
+        const metadata = {
+            ipAddress,
+            deviceInfo,
+            locationInfo,
+            deviceUniqueKey,
+            timeStamp,
+            signatureType: signatureTypeLower === "initials" ? "initials" : "signature",
+        };
+
+        // Apply stored signature to this field
+        const updatedSignatures = updateSignatureWithImage(signatureData, signature.index, storedData.signBase64, signature.type, signerObject, metadata);
+        setSignatureData(updatedSignatures);
+        setSessionSignedKeys((prev) => new Set(prev).add(signature.index));
+
+        // Update arrStored for the appropriate type
+        if (signatureTypeLower === "initials") {
+            setStoredInitials((prev) => ({
+                ...prev,
+                arrStored: [...prev.arrStored, signature.index],
+            }));
+        } else {
+            setStoredSignature((prev) => ({
+                ...prev,
+                arrStored: [...prev.arrStored, signature.index],
+            }));
+        }
+
         setShowSpinner(false);
     };
 
@@ -813,6 +918,64 @@ function App() {
             newSet.delete(signature.index);
             return newSet;
         });
+        
+        // Update stored signature/initial management
+        const signatureTypeLower = (signature.type || "").toLowerCase();
+        
+        if (signatureTypeLower === "signature") {
+            console.log("storedSignature==> ", storedSignature);
+            setStoredSignature((prev) => {
+                // Remove this index from arrStored
+                const newArrStored = prev.arrStored.filter(idx => idx !== signature.index);
+                
+                // If arrStored becomes empty, find the first signed signature for same priority
+                if (newArrStored.length === 0) {
+                    // Find first signed signature of same priority
+                    const firstSignedSig = findFirstSignedSignature(updatedSignatures, urlPriority, "signature");
+                    if (firstSignedSig) {
+                        return { signBase64: firstSignedSig.imageUrl, arrStored: [firstSignedSig.index] };
+                    }
+                    // No signed signatures left, clear storage
+                    return { signBase64: null, arrStored: [] };
+                }
+                
+                return { ...prev, arrStored: newArrStored };
+            });
+        } else if (signatureTypeLower === "initials") {
+            setStoredInitials((prev) => {
+                // Remove this index from arrStored
+                const newArrStored = prev.arrStored.filter(idx => idx !== signature.index);
+                
+                // If arrStored becomes empty, find the first signed initial for same priority
+                if (newArrStored.length === 0) {
+                    // Find first signed initial of same priority
+                    const firstSignedInitial = findFirstSignedSignature(updatedSignatures, urlPriority, "initials");
+                    if (firstSignedInitial) {
+                        return { signBase64: firstSignedInitial.imageUrl, arrStored: [firstSignedInitial.index] };
+                    }
+                    // No signed initials left, clear storage
+                    return { signBase64: null, arrStored: [] };
+                }
+                
+                return { ...prev, arrStored: newArrStored };
+            });
+        }
+    };
+    
+    // Helper function to find first signed signature/initial for a given priority and type
+    const findFirstSignedSignature = (signatures, priority, type) => {
+        for (const sig of signatures) {
+            if (sig.priority != priority) continue;
+            
+            const fields = sig.fields || [];
+            for (const field of fields) {
+                const fieldTypeLower = (field.type || "").toLowerCase();
+                if (fieldTypeLower === type && field.filled && field.imageUrl) {
+                    return { index: field.index, imageUrl: field.imageUrl };
+                }
+            }
+        }
+        return null;
     };
 
     const handleFieldClick = (field) => {
@@ -2772,7 +2935,7 @@ function App() {
                                             {/* <div className="page-number">Page {pageNumber}</div> */}
                                             <div className="canvas-wrapper">
                                                 <canvas ref={(el) => (canvasRefsArray.current[index] = el)}></canvas>
-                                                {signatureData.length > 0 && <SignatureOverlay key={`sig-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} />}
+                                                {signatureData.length > 0 && <SignatureOverlay key={`sig-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedSignature={storedSignature} storedInitials={storedInitials} onReuseSignature={handleReuseSignature} />}
                                                 {fieldData.length > 0 && <FieldOverlay key={`field-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} />}
                                             </div>
                                         </div>
