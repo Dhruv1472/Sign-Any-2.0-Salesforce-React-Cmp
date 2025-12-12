@@ -461,13 +461,52 @@ function App() {
                                 }
                             }
 
+                            // Helper function to generate default value based on field type
+                            const getDefaultValueForField = (field, signerName, signerEmail) => {
+                                if (field.defaultValue === "{defaultValue}") {
+                                    const fieldType = (field.fieldType || field.type || "").toLowerCase();
+                                    
+                                    if (fieldType === "signature") {
+                                        // For signature fields, use signer's full name
+                                        return signerName || "";
+                                    } else if (fieldType === "initials") {
+                                        // For initials fields, extract first letter of each word
+                                        if (!signerName) return "";
+                                        return signerName
+                                            .split(/\s+/)
+                                            .map(word => word.charAt(0).toUpperCase())
+                                            .join("");
+                                    } else if (fieldType === "email") {
+                                        // For email fields, use signer's email
+                                        return signerEmail || "";
+                                    }
+                                }
+                                return field.defaultValue;
+                            };
+
                             // Auto-fill readonly fields with default value if not already filled
                             if (field.readonly === true && !field.filled && field.defaultValue) {
                                 return {
                                     ...field,
-                                    value: field.defaultValue,
+                                    value: getDefaultValueForField(field, sig.name, sig.email),
                                     filled: true,
                                 };
+                            }
+
+                            // Auto-populate {defaultValue} fields for current user's priority
+                            if (!field.filled && field.defaultValue === "{defaultValue}" && sig.priority == urlPriority) {
+                                const fieldType = (field.fieldType || field.type || "").toLowerCase();
+                                const computedValue = getDefaultValueForField(field, sig.name, sig.email);
+                                
+                                // Only auto-fill non-signature fields (text, initials, email)
+                                // Signature fields should remain empty until user actively signs
+                                if (fieldType !== "signature" && computedValue) {
+                                    return {
+                                        ...field,
+                                        value: computedValue,
+                                        filled: true,
+                                    };
+                                }
                             }
 
                             if (sigData) {
@@ -657,7 +696,29 @@ function App() {
             return; // Silently ignore - signature belongs to different priority
         }
 
-        setCurrentSignature(signature);
+        // Replace {defaultValue} with actual computed value for signature fields
+        let processedSignature = { ...signature };
+        if (signature.defaultValue === "{defaultValue}" && signature._parentSigner) {
+            const fieldType = (signature.fieldType || signature.type || "").toLowerCase();
+            const signerName = signature._parentSigner.name || "";
+            const signerEmail = signature._parentSigner.email || "";
+            
+            if (fieldType === "signature") {
+                // For signature fields, use signer's full name
+                processedSignature.defaultValue = signerName;
+            } else if (fieldType === "initials") {
+                // For initials fields, extract first letter of each word
+                processedSignature.defaultValue = signerName
+                    .split(/\s+/)
+                    .map(word => word.charAt(0).toUpperCase())
+                    .join("");
+            } else if (fieldType === "email") {
+                // For email fields, use signer's email
+                processedSignature.defaultValue = signerEmail;
+            }
+        }
+
+        setCurrentSignature(processedSignature);
         setIsModalOpen(true);
     };
 
@@ -1206,7 +1267,7 @@ function App() {
                                     // Check if all fields for this priority are already filled
                                     const allFieldsFilled = currentPriorityEntries.every((entry) => {
                                         if (entry.fields && Array.isArray(entry.fields)) {
-                                            return entry.fields.every((field) => (field.filled && field.required) || !field.required);
+                                            return entry.fields.every((field) => (field.filled));
                                         }
                                         return entry.filled === true;
                                     });
