@@ -126,14 +126,15 @@ input[type="number"]::-webkit-outer-spin-button {
 
 .draw-signature-canvas-wrapper {
     width: 100%;
+    max-width: 547px;
     position: relative;
     flex: 1;
-    height: 277px;
     border: 2px solid var(--primary-color);
     border-radius: 8px;
     background: white;
     overflow: hidden;
     min-width: 0;
+    margin: auto;
 }
 
 .draw-signature-canvas {
@@ -181,6 +182,7 @@ input[type="number"]::-webkit-outer-spin-button {
 
     .draw-signature-canvas-wrapper {
         width: 100%;
-        aspect-ratio: 1.65;
+        max-width: 100%;
+        max-height: none;
     }
 }

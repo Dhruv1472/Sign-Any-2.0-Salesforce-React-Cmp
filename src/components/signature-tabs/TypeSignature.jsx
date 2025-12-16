@@ -19,8 +19,10 @@ import "./TypeSignature.css";
  * @param {number} maxFontSize - Maximum font size
  * @param {number} fontSizeStep - Step increment for font sizes
  * @param {number} maxTextLength - Maximum number of characters allowed
+ * @param {number} canvasWidth - Canvas width in pixels
+ * @param {number} canvasHeight - Canvas height in pixels
  */
-const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = false, hideItalic = false, hideFontStyle = false, hideFontSize = false, availableFonts = ["Artecallya", "Maytra", "Mr Dafoe", "Mr DeHaviland", "The signature", "Monsieur La Doulaise", "Mrs Saint Delafield", "Barokah", "Bettina", "High Summit"], defaultFontStyle = "Artecallya", defaultFontSize = 48, minFontSize = 2, maxFontSize = 100, fontSizeStep = 2, maxTextLength = 50, aspectRatio = 1.65 }) => {
+const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = false, hideItalic = false, hideFontStyle = false, hideFontSize = false, availableFonts = ["Artecallya", "Maytra", "Mr Dafoe", "Mr DeHaviland", "The signature", "Monsieur La Doulaise", "Mrs Saint Delafield", "Barokah", "Bettina", "High Summit"], defaultFontStyle = "Artecallya", defaultFontSize = 48, minFontSize = 2, maxFontSize = 100, fontSizeStep = 2, maxTextLength = 50, aspectRatio = 4, canvasWidth = 547, canvasHeight = 274 }) => {
     const [text, setText] = useState(defaultValue || "");
     const [selectedFont, setSelectedFont] = useState(defaultFontStyle);
     const [isBold, setIsBold] = useState(false);
@@ -205,7 +207,7 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
             </div>
 
             <div className="type-signature-preview-section">
-                <div className="type-signature-preview" style={{ aspectRatio: aspectRatio }} ref={previewRef}>
+                <div className="type-signature-preview" style={{ width: `${canvasWidth}px`, height: `${canvasHeight}px` }} ref={previewRef}>
                     {text ? (
                         <span
                             className="type-signature-preview-text"

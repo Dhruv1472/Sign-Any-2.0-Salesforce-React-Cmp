@@ -19,8 +19,9 @@ const TABS = {
  * @param {Object} signature - Signature configuration object
  * @param {string} title - Modal title (default: "Create Signature")
  * @param {Object} adminProperties - Admin configuration properties
+ * @param {Object} pdfPageFormat - PDF page dimensions {width, height}
  */
-const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Signature", adminProperties = null }) => {
+const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Signature", adminProperties = null, pdfPageFormat = { width: 595, height: 842 } }) => {
     const [activeTab, setActiveTab] = useState(TABS.DRAW);
     const [signatureData, setSignatureData] = useState(null);
     const [clearTrigger, setClearTrigger] = useState(0);
@@ -44,8 +45,30 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
         : ["Artecallya", "Maytra", "Mr Dafoe", "Mr DeHaviland", "The signature", "Monsieur La Doulaise", "Mrs Saint Delafield", "Barokah", "Bettina", "High Summit"];
 
     // Calculate aspect ratio from signature dimensions (width / height)
-    // Default to 1.65 if dimensions not available
-    const signatureAspectRatio = signature?.widthPercent && signature?.heightPercent ? signature.widthPercent / signature.heightPercent : 1.65;
+    // widthPercent and heightPercent are relative to page dimensions, so we need to account for page aspect ratio
+    // Formula: (widthPercent/100 * pageWidth) / (heightPercent/100 * pageHeight) = (widthPercent * pageWidth) / (heightPercent * pageHeight)
+    const pageAspectRatio = pdfPageFormat.width / pdfPageFormat.height;
+    const signatureAspectRatio = signature?.widthPercent && signature?.heightPercent 
+        ? (signature.widthPercent / signature.heightPercent) * pageAspectRatio
+        : 1.65;
+
+    // Smart sizing based on aspect ratio threshold (1.65)
+    // Wide boxes (ratio > 1.65): Fix width at 547px, adjust height
+    // Tall boxes (ratio < 1.65): Fix height at 274px, adjust width
+    const THRESHOLD_RATIO = 1.65;
+    const MAX_WIDTH = 547;
+    const MAX_HEIGHT = 274;
+    
+    let canvasWidth, canvasHeight;
+    if (signatureAspectRatio > THRESHOLD_RATIO) {
+        // Wide box: fix width, calculate height
+        canvasWidth = MAX_WIDTH;
+        canvasHeight = MAX_WIDTH / signatureAspectRatio;
+    } else {
+        // Tall box: fix height, calculate width
+        canvasHeight = MAX_HEIGHT;
+        canvasWidth = MAX_HEIGHT * signatureAspectRatio;
+    }
 
     if (!isOpen) return null;
 
@@ -102,8 +125,8 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
                     </div>
 
                     <div className="signature-modal-content">
-                        {activeTab === TABS.DRAW && <DrawSignature onChange={handleSignatureChange} clearTrigger={clearTrigger} hidePen={hidePenAndErase} hideEraser={hidePenAndErase} hideUndo={hideUndoRedo} hideRedo={hideUndoRedo} hideBrushSize={hideBrushSize} defaultPenSize={defaultBrushSize} aspectRatio={signatureAspectRatio} />}
-                        {activeTab === TABS.TYPE && <TypeSignature onChange={handleSignatureChange} clearTrigger={clearTrigger} defaultValue={signature?.defaultValue || ""} maxTextLength={signature?.maxLength || 50} hideBold={hideBoldOption} hideItalic={hideItalicOption} hideFontStyle={hideAvailableFonts} hideFontSize={hideFontSizeOption} defaultFontStyle={defaultFontStyle} defaultFontSize={defaultFontSize} availableFonts={availableFonts} aspectRatio={signatureAspectRatio} />}
+                        {activeTab === TABS.DRAW && <DrawSignature onChange={handleSignatureChange} clearTrigger={clearTrigger} hidePen={hidePenAndErase} hideEraser={hidePenAndErase} hideUndo={hideUndoRedo} hideRedo={hideUndoRedo} hideBrushSize={hideBrushSize} defaultPenSize={defaultBrushSize} aspectRatio={signatureAspectRatio} canvasWidth={canvasWidth} canvasHeight={canvasHeight} />}
+                        {activeTab === TABS.TYPE && <TypeSignature onChange={handleSignatureChange} clearTrigger={clearTrigger} defaultValue={signature?.defaultValue || ""} maxTextLength={signature?.maxLength || 50} hideBold={hideBoldOption} hideItalic={hideItalicOption} hideFontStyle={hideAvailableFonts} hideFontSize={hideFontSizeOption} defaultFontStyle={defaultFontStyle} defaultFontSize={defaultFontSize} availableFonts={availableFonts} aspectRatio={signatureAspectRatio} canvasWidth={canvasWidth} canvasHeight={canvasHeight} />}
                     </div>
                 </div>
 
