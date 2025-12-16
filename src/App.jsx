@@ -11,6 +11,7 @@ import SignatureModal from "./components/SignatureModal";
 import FieldOverlay from "./components/FieldOverlay";
 import FieldModal from "./components/FieldModal";
 import Toast from "./components/Toast";
+import Inactive from "./pages/Inactive";
 
 import { updateSignatureWithImage, deleteSignatureImage, updateFieldWithValue, deleteFieldValue, updateNestedFieldValue, deleteNestedFieldValue } from "./utils/signatureUtils";
 import { decryptUrlParams, parseQueryString, encryptUrlParams, buildQueryString } from "./utils/encryption";
@@ -31,6 +32,7 @@ function App() {
     const [error, setError] = useState(null);
     const [isExpired, setIsExpired] = useState(false);
     const [isRejectedSimultaneous, setIsRejectedSimultaneous] = useState(false);
+    const [isInactive, setIsInactive] = useState(false);
     const [initialAccepted, setInitialAccepted] = useState(false);
     const [signatureData, setSignatureData] = useState([]);
     const [fieldData, setFieldData] = useState([]);
@@ -255,10 +257,23 @@ function App() {
         setError(null);
         setIsExpired(false);
         setIsRejectedSimultaneous(false);
+        setIsInactive(false);
 
         try {
             // Step 1: Fetch Document__c record to get ContentVersion ID and signature/field data
-            const { contentVersionId, currentToken, documentData, signatureData: sigData, fieldData: fieldDataFromRecord, isExpired: documentExpired, isRejectedSimultaneous: docRejectedSimultaneous } = await fetchDocumentRecord(documentId, accessToken, instanceUrl, clientId, clientSecret);
+            const { contentVersionId, currentToken, documentData, signatureData: sigData, fieldData: fieldDataFromRecord, isExpired: documentExpired, isRejectedSimultaneous: docRejectedSimultaneous, isInactive: documentInactive } = await fetchDocumentRecord(documentId, accessToken, instanceUrl, clientId, clientSecret);
+
+            // Check if document is inactive
+            if (documentInactive) {
+                setIsInactive(true);
+                if (documentData) setDocumentRecord(documentData);
+                setPdfFile(null);
+                setTotalPages(0);
+                pdfDocRef.current = null;
+                canvasRefsArray.current = [];
+                setLoading(false);
+                return;
+            }
 
             // Check if document is rejected with simultaneous emails
             if (docRejectedSimultaneous) {
@@ -311,7 +326,7 @@ function App() {
         try {
             let currentToken = accessToken;
             // Salesforce REST API endpoint to get Document__c record
-            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(`SELECT Id, Uploaded_Document_Id__c, Signing_Details__c, Status__c, CreatedDate, CreatedBy.Name, CreatedBy.Email, Email_Subject__c, Document_Name__c, Expiration_Date__c, Send_Emails_Simultaneously__c FROM Document__c WHERE Id='${documentId}' LIMIT 1`)}`;
+            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(`SELECT Id, Uploaded_Document_Id__c, Signing_Details__c, Status__c, CreatedDate, CreatedBy.Name, CreatedBy.Email, Email_Subject__c, Document_Name__c, Expiration_Date__c, Send_Emails_Simultaneously__c, Active__c FROM Document__c WHERE Id='${documentId}' LIMIT 1`)}`;
 
             let response = await fetch(apiUrl, {
                 method: "GET",
@@ -342,6 +357,14 @@ function App() {
 
             const data = await response.json();
             const documentData = data.records[0];
+
+            // Check if document is inactive
+            if (documentData.Active__c === false) {
+                setIsInactive(true);
+                setDocumentRecord(documentData);
+                setError(null);
+                return { isInactive: true };
+            }
 
             // Check if document is rejected with simultaneous emails
             if (documentData.Send_Emails_Simultaneously__c === true && documentData.Status__c === "Rejected") {
@@ -465,7 +488,7 @@ function App() {
                             const getDefaultValueForField = (field, signerName, signerEmail) => {
                                 if (field.defaultValue === "{defaultValue}") {
                                     const fieldType = (field.fieldType || field.type || "").toLowerCase();
-                                    
+
                                     if (fieldType === "signature") {
                                         // For signature fields, use signer's full name
                                         return signerName || "";
@@ -474,7 +497,7 @@ function App() {
                                         if (!signerName) return "";
                                         return signerName
                                             .split(/\s+/)
-                                            .map(word => word.charAt(0).toUpperCase())
+                                            .map((word) => word.charAt(0).toUpperCase())
                                             .join("");
                                     } else if (fieldType === "email") {
                                         // For email fields, use signer's email
@@ -497,7 +520,7 @@ function App() {
                             if (!field.filled && field.defaultValue === "{defaultValue}" && sig.priority == urlPriority) {
                                 const fieldType = (field.fieldType || field.type || "").toLowerCase();
                                 const computedValue = getDefaultValueForField(field, sig.name, sig.email);
-                                
+
                                 // Only auto-fill non-signature fields (text, initials, email)
                                 // Signature fields should remain empty until user actively signs
                                 if (fieldType !== "signature" && computedValue) {
@@ -702,7 +725,7 @@ function App() {
             const fieldType = (signature.fieldType || signature.type || "").toLowerCase();
             const signerName = signature._parentSigner.name || "";
             const signerEmail = signature._parentSigner.email || "";
-            
+
             if (fieldType === "signature") {
                 // For signature fields, use signer's full name
                 processedSignature.defaultValue = signerName;
@@ -710,7 +733,7 @@ function App() {
                 // For initials fields, extract first letter of each word
                 processedSignature.defaultValue = signerName
                     .split(/\s+/)
-                    .map(word => word.charAt(0).toUpperCase())
+                    .map((word) => word.charAt(0).toUpperCase())
                     .join("");
             } else if (fieldType === "email") {
                 // For email fields, use signer's email
@@ -1267,7 +1290,7 @@ function App() {
                                     // Check if all fields for this priority are already filled
                                     const allFieldsFilled = currentPriorityEntries.every((entry) => {
                                         if (entry.fields && Array.isArray(entry.fields)) {
-                                            return entry.fields.every((field) => (field.filled));
+                                            return entry.fields.every((field) => field.filled);
                                         }
                                         return entry.filled === true;
                                     });
@@ -2595,14 +2618,6 @@ function App() {
 
     return (
         <div className="app">
-            {error && !pdfFile && !isExpired && (
-                <div className="placeholder">
-                    <div className="placeholder-content">
-                        <p style={{ color: "#d32f2f" }}>The URL is not right. Please contact the sender of this link.</p>
-                    </div>
-                </div>
-            )}
-
             {isExpired && (
                 <div className="expired-card">
                     <div className="expired-icon">
@@ -2612,7 +2627,6 @@ function App() {
                     </div>
 
                     <h3 className="expired-title">Document Expired</h3>
-
                     <p className="expired-message">This document has expired and is no longer available for signing.</p>
 
                     <p className="expired-hint" style={{ fontWeight: 500, marginTop: "12px" }}>
@@ -2637,7 +2651,6 @@ function App() {
                     <h3 className="expired-title" style={{ color: "#d32f2f" }}>
                         Something Went Wrong
                     </h3>
-
                     <p className="expired-message">Facing issue with this document. Please try again later.</p>
 
                     <p className="expired-hint" style={{ fontWeight: 500, marginTop: "12px" }}>
@@ -2651,7 +2664,9 @@ function App() {
                 </div>
             )}
 
-            {pdfFile && !isExpired && !isRejectedSimultaneous && (
+            {isInactive && <Inactive />}
+
+            {pdfFile && !isExpired && !isRejectedSimultaneous && !isInactive && (
                 <>
                     <div className="pdf-container">
                         <div className="heading">
@@ -2672,6 +2687,7 @@ function App() {
                                         );
                                     })}
                                 </div>
+
                                 {shouldShowSaveButton() && (
                                     <div className="bottom-bar">
                                         <div className="bottom-bar-left">
@@ -2726,6 +2742,7 @@ function App() {
                                 })}
                             </div>
                         </div>
+
                         {shouldShowSaveButton() && areAllSignaturesCompleted() && (
                             <div className={`completion-footer ${areAllSignaturesCompleted() ? "show" : ""}`}>
                                 <div className="completion-content">
@@ -2757,7 +2774,7 @@ function App() {
                                 </div>
                             </div>
                         )}
-                        {/* this is replacte  html code of submit button footer for responsive page */}
+
                         {shouldShowSaveButton() && (
                             <div className="footer">
                                 <div className="bottom-bar-left">
@@ -2789,10 +2806,10 @@ function App() {
                 </>
             )}
 
-            {!pdfFile && !loading && !error && !isExpired && !isRejectedSimultaneous && (
+            {!pdfFile && !loading && !isExpired && !isRejectedSimultaneous && !isInactive && (
                 <div className="placeholder">
                     <div className="placeholder-content">
-                        <p>The URL is incorrect. Please contact the sender of this link.</p>
+                        <p style={error ? { color: "#d32f2f" } : undefined}>{error ? "The URL is not right. Please contact the sender of this link." : "The URL is incorrect. Please contact the sender of this link."}</p>
                     </div>
                 </div>
             )}
@@ -2817,36 +2834,13 @@ function App() {
                             <label htmlFor="reject-reason">
                                 Reason for Rejection <span style={{ color: "#d32f2f" }}>*</span>
                             </label>
-                            <textarea
-                                id="reject-reason"
-                                value={rejectReason}
-                                onChange={(e) => setRejectReason(e.target.value)}
-                                placeholder="Please provide a reason for rejecting this document..."
-                                rows="4"
-                                style={{
-                                    width: "100%",
-                                    padding: "10px",
-                                    borderRadius: "6px",
-                                    border: "1px solid #ddd",
-                                    fontSize: "14px",
-                                    fontFamily: "inherit",
-                                    resize: "vertical",
-                                    minHeight: "80px",
-                                }}
-                            />
+                            <textarea id="reject-reason" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Please provide a reason for rejecting this document..." rows="4" style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #ddd", fontSize: "14px", fontFamily: "inherit", resize: "vertical", minHeight: "80px" }} />
                         </div>
                         <div className="reject-confirm-actions">
                             <button className="reject-cancel-btn" onClick={handleCancelReject}>
                                 Cancel
                             </button>
-                            <button
-                                className="reject-confirm-btn"
-                                onClick={handleConfirmReject}
-                                disabled={!rejectReason.trim()}
-                                style={{
-                                    opacity: !rejectReason.trim() ? 0.5 : 1,
-                                    cursor: !rejectReason.trim() ? "not-allowed" : "pointer",
-                                }}>
+                            <button className="reject-confirm-btn" onClick={handleConfirmReject} disabled={!rejectReason.trim()} style={{ opacity: !rejectReason.trim() ? 0.5 : 1, cursor: !rejectReason.trim() ? "not-allowed" : "pointer" }}>
                                 Yes, Reject
                             </button>
                         </div>
