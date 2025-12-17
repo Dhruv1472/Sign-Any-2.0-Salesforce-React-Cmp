@@ -277,7 +277,6 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
                     <div className="checkbox-input-container">
                         <label className="checkbox-label-input">
                             <input type="checkbox" checked={value || false} onChange={(e) => setValue(e.target.checked)} className="checkbox-input" disabled={isReadOnly} />
-                            <span className="checkbox-label-text">{fieldName || "Check this box"}</span>
                         </label>
                     </div>
                 );

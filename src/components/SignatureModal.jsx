@@ -55,8 +55,8 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
     // Smart sizing based on aspect ratio threshold (1.65)
     // Wide boxes (ratio > 1.65): Fix width at 547px, adjust height
     // Tall boxes (ratio < 1.65): Fix height at 274px, adjust width
-    const THRESHOLD_RATIO = 1.65;
-    const MAX_WIDTH = 547;
+    const THRESHOLD_RATIO = 1.6594202899;
+    const MAX_WIDTH = 453;
     const MAX_HEIGHT = 274;
     
     let canvasWidth, canvasHeight;

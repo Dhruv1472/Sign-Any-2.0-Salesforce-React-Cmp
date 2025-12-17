@@ -2316,6 +2316,7 @@ function App() {
         let currentToken = accessToken;
 
         try {
+            setShowSpinner(true);
             const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/Document__c/${recordId}`;
 
             let response = await fetch(apiUrl, {
@@ -2354,6 +2355,7 @@ function App() {
 
             // Navigate to rejected page and replace history so user can't go back
             navigate("/rejected", { replace: true });
+            setShowSpinner(false);
         } catch (error) {
             console.error("Reject error:", error);
             setToast({
@@ -2361,6 +2363,7 @@ function App() {
                 message: "Failed to reject the document. Please check your connection and try again.",
                 type: "error",
             });
+            setShowSpinner(false);
         }
     };
 
