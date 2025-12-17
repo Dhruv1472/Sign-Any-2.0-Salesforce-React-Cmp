@@ -326,7 +326,7 @@ function App() {
         try {
             let currentToken = accessToken;
             // Salesforce REST API endpoint to get Document__c record
-            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(`SELECT Id, Uploaded_Document_Id__c, Signing_Details__c, Status__c, CreatedDate, CreatedBy.Name, CreatedBy.Email, Email_Subject__c, Document_Name__c, Expiration_Date__c, Send_Emails_Simultaneously__c, Active__c FROM Document__c WHERE Id='${documentId}' LIMIT 1`)}`;
+            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(`SELECT Id, Uploaded_Document_Id__c, Signing_Details__c, Status__c, CreatedDate, CreatedBy.Name, CreatedBy.Email, Email_Subject__c, Document_Name__c, Expiration_Date__c, Send_Emails_Simultaneously__c, Active__c, Store_On_Parent_Record__c, Record_ID__c FROM Document__c WHERE Id='${documentId}' LIMIT 1`)}`;
 
             let response = await fetch(apiUrl, {
                 method: "GET",
@@ -357,6 +357,7 @@ function App() {
 
             const data = await response.json();
             const documentData = data.records[0];
+            console.log("documentData==> ", documentData);
 
             // Check if document is inactive
             if (documentData.Active__c === false) {
@@ -1688,7 +1689,7 @@ function App() {
             // Upload to Salesforce if config is available
             if (salesforceConfig) {
                 // Determine FirstPublishLocationId
-                const firstPublishLocationId = documentRecord?.Record_Id__c || salesforceConfig.recordId;
+                const firstPublishLocationId = salesforceConfig.recordId;
 
                 // Upload signed PDF as ContentVersion
                 let newContentVersionId = null;
@@ -1697,6 +1698,16 @@ function App() {
                 if (isFinalPriority) {
                     // Final priority - upload as final document
                     newContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c);
+                    
+                    // If Store_On_Parent_Record__c is true and Record_ID__c exists, create ContentDocumentLink
+                    if (documentRecord?.Store_On_Parent_Record__c === true && documentRecord?.Record_ID__c) {
+                        try {
+                            await createContentDocumentLink(newContentVersionId, documentRecord.Record_ID__c, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
+                        } catch (error) {
+                            console.error("Failed to create ContentDocumentLink on parent record:", error);
+                            // Continue execution even if linking fails
+                        }
+                    }
                 } else {
                     // Not final priority - upload as temporary document
                     temporaryContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, `Temporary - ${urlPriority}`);
@@ -1844,6 +1855,88 @@ function App() {
         }
     };
 
+    // Create ContentDocumentLink to link ContentDocument to a parent record
+    const createContentDocumentLink = async (contentVersionId, parentRecordId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+        try {
+            let currentToken = accessToken;
+
+            // First, get the ContentDocumentId from ContentVersionId
+            const queryUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(`SELECT ContentDocumentId FROM ContentVersion WHERE Id='${contentVersionId}' LIMIT 1`)}`;
+            
+            let queryResponse = await fetch(queryUrl, {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${currentToken}`,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (queryResponse.status === 401 && clientId && clientSecret) {
+                currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
+                queryResponse = await fetch(queryUrl, {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                        "Content-Type": "application/json",
+                    },
+                });
+            }
+
+            if (!queryResponse.ok) {
+                throw new Error(`Failed to query ContentDocument: ${queryResponse.status}`);
+            }
+
+            const queryData = await queryResponse.json();
+            const contentDocumentId = queryData.records[0]?.ContentDocumentId;
+
+            if (!contentDocumentId) {
+                throw new Error("ContentDocumentId not found");
+            }
+
+            // Create ContentDocumentLink
+            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/ContentDocumentLink`;
+            const contentDocumentLinkData = {
+                ContentDocumentId: contentDocumentId,
+                LinkedEntityId: parentRecordId,
+                ShareType: "V", // Viewer permission
+                Visibility: "AllUsers",
+            };
+
+            let response = await fetch(apiUrl, {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${currentToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(contentDocumentLinkData),
+            });
+
+            if (response.status === 401 && clientId && clientSecret) {
+                currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
+                response = await fetch(apiUrl, {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(contentDocumentLinkData),
+                });
+            }
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`ContentDocumentLink creation error: ${response.status} - ${errorText}`);
+                throw new Error("Failed to link document to parent record");
+            }
+
+            const result = await response.json();
+            return result.id;
+        } catch (error) {
+            console.error("Error creating ContentDocumentLink:", error);
+            throw error;
+        }
+    };
+
     // Update Document__c record with signature and field data
     const updateDocumentRecord = async (documentId, signatureData, fieldData, pdfHash, newContentVersionId, temporaryContentVersionId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
@@ -1861,7 +1954,7 @@ function App() {
                     return {
                         ...sig,
                         fields: sig.fields.map((field) => {
-                            const { imageUrl, ...fieldWithoutImage } = field;
+                            const { imageUrl: _, ...fieldWithoutImage } = field;
                             return fieldWithoutImage;
                         }),
                     };
@@ -2530,8 +2623,8 @@ function App() {
                 if (!navigator.geolocation) return reject("No GPS");
                 navigator.geolocation.getCurrentPosition(resolve, reject, {
                     enableHighAccuracy: false, // Changed to false for faster response
-                    timeout: 8000, // Increased timeout
-                    maximumAge: 60000, // Accept cached position up to 1 minute old
+                    timeout: 10000, // Increased timeout
+                    maximumAge: 300000, // Accept cached position up to 5 minutes old
                 });
             });
 
