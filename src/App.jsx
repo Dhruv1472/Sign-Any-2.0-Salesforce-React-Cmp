@@ -430,8 +430,8 @@ function App() {
                             } else {
                                 // Old flat structure (backward compatibility)
                                 const typeLower = typeof entry.type === "string" ? entry.type.toLowerCase() : "";
-                                const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(typeLower);
-                                const isSignatureType = ["signature"].includes(typeLower) || (!isFieldType && !entry.fieldType);
+                                const isFieldType = ["text", "date", "number", "email", "checkbox"].includes(typeLower);
+                                const isSignatureType = ["signature", "initials"].includes(typeLower) || (!isFieldType && !entry.fieldType);
                                 if (isFieldType) {
                                     parsedFieldData.push({
                                         ...entry,
@@ -522,13 +522,17 @@ function App() {
                                 const fieldType = (field.fieldType || field.type || "").toLowerCase();
                                 const computedValue = getDefaultValueForField(field, sig.name, sig.email);
 
-                                // Only auto-fill non-signature fields (text, initials, email)
-                                // Signature fields should remain empty until user actively signs
-                                if (fieldType !== "signature" && computedValue) {
+                                // Replace {defaultValue} with computed value in defaultValue property
+                                // This allows the value to be passed to modals for pre-population
+                                // For text-based fields (text, email), auto-fill them immediately
+                                // For signature-based fields (signature, initials), set defaultValue but don't auto-fill
+                                if (computedValue) {
+                                    const isTextBasedField = ["text", "email", "date", "number", "checkbox"].includes(fieldType);
                                     return {
                                         ...field,
-                                        value: computedValue,
-                                        filled: true,
+                                        defaultValue: computedValue,
+                                        value: isTextBasedField ? computedValue : field.value,
+                                        filled: isTextBasedField ? true : field.filled,
                                     };
                                 }
                             }
@@ -843,23 +847,8 @@ function App() {
             return; // Silently ignore - signature belongs to different priority
         }
 
-        // Determine if this is a signature-type field or text-based initial field
-        const itemType = (signatureOrField.type || signatureOrField.fieldType || "").toLowerCase();
-        const isTextBasedInitial = itemType === "initials" && signatureOrField.fieldType;
-
-        // Handle text-based initials (from FieldButton)
-        if (isTextBasedInitial) {
-            if (!storedInitials.signBase64) {
-                console.warn("No stored initials to reuse");
-                return;
-            }
-
-            // Simply save the stored text value
-            handleFieldSave(storedInitials.signBase64, signatureOrField);
-            return;
-        }
-
-        // Handle signature-type fields (signatures and signature-based initials)
+        // Handle signature-type fields (signatures and initials)
+        const itemType = (signatureOrField.type || "").toLowerCase();
         const signatureTypeLower = itemType;
         const storedData = signatureTypeLower === "initials" ? storedInitials : storedSignature;
 
@@ -956,34 +945,6 @@ function App() {
 
         // Track that this field was filled in the current session
         setSessionFilledKeys((prev) => new Set(prev).add(field.index));
-
-        // Store first initials for quick reuse (same priority only)
-        const fieldTypeLower = (field.fieldType || field.type || "").toLowerCase();
-        if (fieldTypeLower === "initials") {
-            setStoredInitials((prev) => {
-                // If no initials stored yet, store this one
-                if (!prev.signBase64) {
-                    return { signBase64: value, arrStored: [field.index] };
-                }
-                // If initials already stored, just add index to arrStored
-                if (!prev.arrStored.includes(field.index)) {
-                    const newArrStored = [...prev.arrStored, field.index];
-
-                    // Check if all initials fields are now filled
-                    const updatedSignatureData = field._parentSigner ? signatureData : signatureData;
-                    const updatedFieldData = field._parentSigner ? fieldData : fieldData;
-                    const { total, filled } = countInitialsFields(updatedSignatureData, updatedFieldData, urlPriority);
-
-                    // If all initials fields are filled, clear storage
-                    if (filled + 1 >= total) {
-                        return { signBase64: null, arrStored: [] };
-                    }
-
-                    return { ...prev, arrStored: newArrStored };
-                }
-                return prev;
-            });
-        }
     };
 
     const handleFieldDelete = (field) => {
@@ -1013,36 +974,6 @@ function App() {
             newSet.delete(field.index);
             return newSet;
         });
-
-        // Update stored initials management
-        const fieldTypeLower = (field.fieldType || field.type || "").toLowerCase();
-
-        if (fieldTypeLower === "initials") {
-            setStoredInitials((prev) => {
-                if (!prev.signBase64) return prev; // No storage to manage
-
-                // Remove this index from arrStored
-                const newArrStored = prev.arrStored.filter((idx) => idx !== field.index);
-
-                // If arrStored becomes empty (all autofilled fields deleted), find replacement
-                if (newArrStored.length === 0) {
-                    // Get updated data after deletion
-                    const updatedSignatureData = field._parentSigner ? deleteNestedFieldValue(signatureData, field.index, field.fieldType || field.type, field._parentSigner) : signatureData;
-                    const updatedFieldData = !field._parentSigner ? deleteFieldValue(fieldData, field.index, field.fieldType || field.type) : fieldData;
-
-                    // Find first filled initial of same priority to use as new source
-                    const firstFilledInitial = findFirstFilledField(updatedSignatureData, updatedFieldData, urlPriority, "initials");
-                    if (firstFilledInitial) {
-                        return { signBase64: firstFilledInitial.value, arrStored: [firstFilledInitial.index] };
-                    }
-                    // No filled initials left, clear storage
-                    return { signBase64: null, arrStored: [] };
-                }
-
-                // Stored value still exists, just update arrStored
-                return { ...prev, arrStored: newArrStored };
-            });
-        }
     };
 
     const handleSignatureDelete = (signature) => {
@@ -1066,7 +997,7 @@ function App() {
             return newSet;
         });
 
-        // Update stored signature/initial management
+        // Update stored signature/initials management
         const signatureTypeLower = (signature.type || "").toLowerCase();
 
         if (signatureTypeLower === "signature") {
@@ -1108,40 +1039,6 @@ function App() {
         }
     };
 
-    // Helper function to count total and filled initials fields for a given priority
-    const countInitialsFields = (signatureData, fieldData, priority) => {
-        let total = 0;
-        let filled = 0;
-
-        // Check nested structure (signatureData)
-        for (const sig of signatureData) {
-            if (sig.priority != priority) continue;
-
-            const fields = sig.fields || [];
-            for (const field of fields) {
-                const fieldTypeLower = (field.type || "").toLowerCase();
-                if (fieldTypeLower === "initials") {
-                    total++;
-                    if (field.filled) filled++;
-                }
-            }
-        }
-
-        // Check flat structure (fieldData)
-        for (const field of fieldData) {
-            const fieldPriority = field.signerPriority ?? field.priority;
-            if (fieldPriority != priority) continue;
-
-            const fieldTypeLower = (field.fieldType || field.type || "").toLowerCase();
-            if (fieldTypeLower === "initials") {
-                total++;
-                if (field.filled) filled++;
-            }
-        }
-
-        return { total, filled };
-    };
-
     // Helper function to find first signed signature/initial for a given priority and type
     const findFirstSignedSignature = (signatures, priority, type) => {
         for (const sig of signatures) {
@@ -1155,35 +1052,6 @@ function App() {
                 }
             }
         }
-        return null;
-    };
-
-    // Helper function to find first filled field (for text-based initials) for a given priority and type
-    const findFirstFilledField = (signatureData, fieldData, priority, type) => {
-        // Check nested structure (signatureData)
-        for (const sig of signatureData) {
-            if (sig.priority != priority) continue;
-
-            const fields = sig.fields || [];
-            for (const field of fields) {
-                const fieldTypeLower = (field.type || "").toLowerCase();
-                if (fieldTypeLower === type && field.filled && field.value) {
-                    return { index: field.index, value: field.value };
-                }
-            }
-        }
-
-        // Check flat structure (fieldData)
-        for (const field of fieldData) {
-            const fieldPriority = field.signerPriority ?? field.priority;
-            if (fieldPriority != priority) continue;
-
-            const fieldTypeLower = (field.fieldType || field.type || "").toLowerCase();
-            if (fieldTypeLower === type && field.filled && field.value) {
-                return { index: field.index, value: field.value };
-            }
-        }
-
         return null;
     };
 
@@ -1326,8 +1194,11 @@ function App() {
             const pdfDoc = await PDFDocument.load(originalPdfBytes, { ignoreEncryption: true });
             const pages = pdfDoc.getPages();
 
-            // Get all filled signature fields across all signatures
-            const filledFieldsNew = signatureData.flatMap((s) => (s.fields || []).filter((f) => f.type.toLowerCase() == "signature").map((f) => ({ ...f, signerName: s.name || "--", signerEmail: s.email || "--" })));
+            // Get all filled signature and initials fields across all signatures
+            const filledFieldsNew = signatureData.flatMap((s) => (s.fields || []).filter((f) => {
+                const fieldType = f.type.toLowerCase();
+                return fieldType === "signature" || fieldType === "initials";
+            }).map((f) => ({ ...f, signerName: s.name || "--", signerEmail: s.email || "--" })));
 
             for (const field of filledFieldsNew) {
                 try {
@@ -2859,7 +2730,7 @@ function App() {
                                         <p>You have successfully signed all required fields in this document.</p>
                                     </div>
                                     <div className="completion-actions">
-                                        <input type="checkbox" id="accept-terms" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px" }} />
+                                        <input type="checkbox" id="accept-terms" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px", accentColor: "#2863eb" }} />
                                         <label htmlFor="accept-terms" style={{ cursor: "pointer", marginLeft: "8px" }}>
                                             I accept the{" "}
                                             <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">
@@ -2916,7 +2787,7 @@ function App() {
                 </div>
             )}
 
-            <SignatureModal isOpen={isModalOpen} onClose={handleModalClose} onSave={handleSignatureSave} signature={currentSignature} title={currentSignature?.type === "text" ? "Enter Text" : currentSignature?.type === "initials" ? "Enter Initials" : "Create Signature"} adminProperties={adminProperties} pdfPageFormat={pdfPageFormat} />
+            <SignatureModal isOpen={isModalOpen} onClose={handleModalClose} onSave={handleSignatureSave} signature={currentSignature} title={currentSignature?.type === "initials" ? "Create Initials" : "Create Signature"} adminProperties={adminProperties} pdfPageFormat={pdfPageFormat} />
             <FieldModal isOpen={isFieldModalOpen} onClose={handleFieldModalClose} onSave={handleFieldSave} field={currentField} />
             <Toast isVisible={toast.isVisible} message={toast.message} type={toast.type} onClose={handleCloseToast} />
             <div id="audit-html" style={{ position: "absolute", top: "-9999px", left: "-9999px" }}></div>

@@ -1,5 +1,57 @@
 @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap");
 
+/* Signature fonts - preload at page start */
+@font-face {
+    font-family: "Artecallya";
+    src: url("./assets/fonts/Artecallya-Script.otf") format("opentype"), url("./assets/fonts/Artecallya-Script.ttf") format("truetype");
+    font-display: swap;
+}
+@font-face {
+    font-family: "Barokah";
+    src: url("./assets/fonts/Barokah-Signature.ttf") format("truetype");
+    font-display: swap;
+}
+@font-face {
+    font-family: "Bettina";
+    src: url("./assets/fonts/Bettina-Signature-Regular.otf") format("opentype"), url("./assets/fonts/Bettina-Signature-Regular.ttf") format("truetype");
+    font-display: swap;
+}
+@font-face {
+    font-family: "High Summit";
+    src: url("./assets/fonts/High-Summit.otf") format("opentype"), url("./assets/fonts/High-Summit.ttf") format("truetype");
+    font-display: swap;
+}
+@font-face {
+    font-family: "Maytra";
+    src: url("./assets/fonts/Maytra.otf") format("opentype"), url("./assets/fonts/Maytra.ttf") format("truetype");
+    font-display: swap;
+}
+@font-face {
+    font-family: "Monsieur La Doulaise";
+    src: url("./assets/fonts/MonsieurLaDoulaise-Regular.ttf") format("truetype");
+    font-display: swap;
+}
+@font-face {
+    font-family: "Mr Dafoe";
+    src: url("./assets/fonts/MrDafoe-Regular.ttf") format("truetype");
+    font-display: swap;
+}
+@font-face {
+    font-family: "Mr DeHaviland";
+    src: url("./assets/fonts/MrDeHaviland-Regular.ttf") format("truetype");
+    font-display: swap;
+}
+@font-face {
+    font-family: "Mrs Saint Delafield";
+    src: url("./assets/fonts/MrsSaintDelafield-Regular.ttf") format("truetype");
+    font-display: swap;
+}
+@font-face {
+    font-family: "The signature";
+    src: url("./assets/fonts/TheSignature.otf") format("opentype"), url("./assets/fonts/TheSignature.ttf") format("truetype");
+    font-display: swap;
+}
+
 * {
     margin: 0;
     padding: 0;

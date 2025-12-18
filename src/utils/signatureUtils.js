@@ -1,5 +1,5 @@
-const SIGNATURE_TYPES = new Set(["signature"]);
-const FIELD_TYPES = new Set(["text", "date", "number", "email", "checkbox", "initials"]);
+const SIGNATURE_TYPES = new Set(["signature", "initials"]);
+const FIELD_TYPES = new Set(["text", "date", "number", "email", "checkbox"]);
 
 const normalizeType = (value) => (typeof value === "string" ? value.toLowerCase() : "");
 
