@@ -266,13 +266,6 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
                                 }}>
                                 {value ? "✓" : ""}
                             </span>
-                            <span
-                                className="checkbox-label"
-                                style={{
-                                    fontSize: `${12 * canvasScale}px`,
-                                }}>
-                                {fieldName || "Checkbox"}
-                            </span>
                         </div>
                     ) : (
                         <div

@@ -220,7 +220,7 @@ export const generateAuditHTML = async (doc, sigData, orgId, totalPages, pageFor
                                 ${
                                     f.imageUrl
                                         ? `<img src="${f.imageUrl}" 
-                                        style="height:55px;width:110px;object-fit:contain;background:#fff;" />`
+                                        style="height:auto;width:auto;max-height:55px;max-width:110px;object-fit:contain;background:#fff;" />`
                                         : `<div style="border:1px solid #CBD5E0;height:35px;width:60px;border-radius:4px;background:#fff;display:flex;align-items:center;justify-content:center;margin:auto;">
                                             <span style="font-size:11px;color:#555;">#${f.index}</span>
                                     </div>`

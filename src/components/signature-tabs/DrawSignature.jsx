@@ -208,6 +208,13 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
             ctx.closePath();
             setIsDrawing(false);
             setLastPoint(null);
+            setIsEmpty(false);
+            
+            // Notify parent with canvas data
+            if (onChange) {
+                onChange(canvas.toDataURL("image/png"));
+            }
+            
             saveToHistory();
         }
     };
