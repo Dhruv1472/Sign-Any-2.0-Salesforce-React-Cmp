@@ -1097,6 +1097,15 @@ function App() {
             }
             return;
         }
+        if (fType === "email" && field.defaultValue == "{defaultValue}") {
+            field.value = field._parentSigner ? field._parentSigner.email || "" : "";
+        } else if (fType === "date" && field.defaultValue === "TODAY") {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            field.value = `${year}-${month}-${day}`;
+        }
         // Otherwise open modal
         setCurrentField(field);
         setIsFieldModalOpen(true);
