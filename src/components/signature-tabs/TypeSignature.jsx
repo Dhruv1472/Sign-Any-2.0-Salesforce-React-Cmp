@@ -52,13 +52,13 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
     // Clear text when clearTrigger changes
     useEffect(() => {
         if (clearTrigger > 0) {
-            setText(defaultValue || "");
+            setText("");
             setIsBold(false);
             setIsItalic(false);
             setFontSize(defaultFontSize);
             setSelectedFont(defaultFontStyle);
         }
-    }, [clearTrigger, defaultFontSize, defaultFontStyle, defaultValue]);
+    }, [clearTrigger, defaultFontSize, defaultFontStyle]);
 
     useEffect(() => {
         if (!text.trim()) {
