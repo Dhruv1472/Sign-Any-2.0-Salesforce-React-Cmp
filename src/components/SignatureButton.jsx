@@ -74,33 +74,10 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false, canva
     if (hasStoredSignature && !disabled) {
         return (
             <div className="signature-button-split-container" data-key={key}>
-                <button
-                    className="signature-button signature-button-reuse"
-                    onClick={handleReuseClick}
-                    title="Use stored signature"
-                    style={{
-                        padding: `${8 * canvasScale}px ${8 * canvasScale}px`,
-                        borderWidth: `${2 * canvasScale}px`,
-                        fontSize: `${14 * canvasScale}px`,
-                        borderTopRightRadius: 0,
-                        borderBottomRightRadius: 0,
-                    }}>
-                    <svg width={`${16 * canvasScale}px`} height={`${16 * canvasScale}px`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M9 11l3 3L22 4" />
-                        <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
-                    </svg>
+                <button className="signature-button signature-button-reuse" onClick={handleReuseClick} title="Use stored signature" style={{ padding: `${8 * canvasScale}px ${8 * canvasScale}px`, borderWidth: `${2 * canvasScale}px`, fontSize: `${14 * canvasScale}px`, borderTopRightRadius: 0, borderBottomRightRadius: 0 }}>
+                    <span style={{ padding: `${8 * canvasScale}px ${16 * canvasScale}px`, borderWidth: `${2 * canvasScale}px`, fontSize: `${14 * canvasScale}px` }}> Sign Here </span>
                 </button>
-                <button
-                    className="signature-button signature-button-new"
-                    onClick={handleSignClick}
-                    title="Create new signature"
-                    style={{
-                        padding: `${8 * canvasScale}px ${16 * canvasScale}px`,
-                        borderWidth: `${2 * canvasScale}px`,
-                        fontSize: `${14 * canvasScale}px`,
-                        borderTopLeftRadius: 0,
-                        borderBottomLeftRadius: 0,
-                    }}>
+                <button className="signature-button signature-button-new" onClick={handleSignClick} title="Create new signature" style={{ padding: `${8 * canvasScale}px ${16 * canvasScale}px`, borderWidth: `${2 * canvasScale}px`, fontSize: `${14 * canvasScale}px`, borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}>
                     <svg width={`${16 * canvasScale}px`} height={`${16 * canvasScale}px`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M12 20h9" />
                         <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
@@ -111,16 +88,7 @@ const SignatureButton = ({ signature, onSign, onDelete, canDelete = false, canva
     }
 
     return (
-        <button
-            className="signature-button"
-            onClick={handleSignClick}
-            disabled={disabled}
-            data-key={key}
-            style={{
-                padding: `${8 * canvasScale}px ${16 * canvasScale}px`,
-                borderWidth: `${2 * canvasScale}px`,
-                fontSize: `${14 * canvasScale}px`,
-            }}>
+        <button className="signature-button" onClick={handleSignClick} disabled={disabled} data-key={key} style={{ padding: `${8 * canvasScale}px ${16 * canvasScale}px`, borderWidth: `${2 * canvasScale}px`, fontSize: `${14 * canvasScale}px` }}>
             {buttonName || "Sign Here"}
         </button>
     );

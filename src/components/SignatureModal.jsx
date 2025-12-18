@@ -22,7 +22,7 @@ const TABS = {
  * @param {Object} pdfPageFormat - PDF page dimensions {width, height}
  */
 const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Signature", adminProperties = null, pdfPageFormat = { width: 595, height: 842 } }) => {
-    const [activeTab, setActiveTab] = useState(TABS.DRAW);
+    const [activeTab, setActiveTab] = useState(TABS.TYPE);
     const [signatureData, setSignatureData] = useState(null);
     const [clearTrigger, setClearTrigger] = useState(0);
 
@@ -81,7 +81,7 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
 
     const handleClose = () => {
         setSignatureData(null);
-        setActiveTab(TABS.DRAW);
+        setActiveTab(TABS.TYPE);
         setClearTrigger(0);
         if (onClose) onClose();
     };
