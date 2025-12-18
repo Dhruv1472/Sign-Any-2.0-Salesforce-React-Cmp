@@ -28,6 +28,7 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
     const [isBold, setIsBold] = useState(false);
     const [isItalic, setIsItalic] = useState(false);
     const [fontSize, setFontSize] = useState(defaultFontSize);
+    const [fontsLoaded, setFontsLoaded] = useState(false);
     const canvasRef = useRef(null);
     const previewRef = useRef(null); // Reference to the preview container
 
@@ -35,6 +36,18 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
 
     // Generate font size options based on min, max, and step
     const fontSizes = Array.from({ length: Math.floor((maxFontSize - minFontSize) / fontSizeStep) + 1 }, (_, i) => minFontSize + i * fontSizeStep);
+
+    // Wait for fonts to be fully loaded
+    useEffect(() => {
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(() => {
+                setFontsLoaded(true);
+            });
+        } else {
+            // Fallback for browsers without FontFaceSet API
+            setFontsLoaded(true);
+        }
+    }, []);
 
     // Clear text when clearTrigger changes
     useEffect(() => {
@@ -53,72 +66,100 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
             return;
         }
 
+        // Wait for fonts to be loaded before generating canvas
+        if (!fontsLoaded) return;
+
         const canvas = canvasRef.current;
         const previewContainer = previewRef.current;
 
         if (!canvas || !previewContainer) return;
 
-        // Get the actual rendered dimensions of the preview container
-        const previewRect = previewContainer.getBoundingClientRect();
-        const previewWidth = previewRect.width;
-        const previewHeight = previewRect.height;
-
-        const ctx = canvas.getContext("2d");
-
-        // Set canvas to exact same size as preview container
-        canvas.width = previewWidth;
-        canvas.height = previewHeight;
-
-        // Clear canvas with transparent background
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Set text styles - use the exact same font size as preview
-        const fontStyle = isItalic ? "italic" : "normal";
-        const fontWeight = isBold ? "bold" : "normal";
-        const actualFontSize = adjustedFontSize(selectedFont, fontSize);
-        ctx.font = `${fontStyle} ${fontWeight} ${actualFontSize}px "${selectedFont}", cursive`;
-        ctx.fillStyle = "#000000";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-
-        // The text will naturally wrap in the span based on container width
-        // We need to replicate that wrapping behavior in canvas
-        const maxWidth = previewWidth - 4; // Account for padding (12px each side)
-        const words = text.split(" ");
-        const lines = [];
-        let currentLine = "";
-
-        for (let i = 0; i < words.length; i++) {
-            const testLine = currentLine + (currentLine ? " " : "") + words[i];
-            const metrics = ctx.measureText(testLine);
-
-            if (metrics.width > maxWidth && currentLine) {
-                lines.push(currentLine);
-                currentLine = words[i];
-            } else {
-                currentLine = testLine;
+        // Additional check: ensure the specific font is loaded
+        const fontLoadCheck = async () => {
+            try {
+                if (document.fonts && document.fonts.check) {
+                    const fontStyle = isItalic ? "italic" : "normal";
+                    const fontWeight = isBold ? "bold" : "normal";
+                    const actualFontSize = adjustedFontSize(selectedFont, fontSize);
+                    const fontString = `${fontStyle} ${fontWeight} ${actualFontSize}px "${selectedFont}"`;
+                    
+                    // Check if font is loaded, if not wait for it
+                    if (!document.fonts.check(fontString)) {
+                        await document.fonts.load(fontString);
+                        // Small delay to ensure font is fully rendered
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+                }
+            } catch (error) {
+                console.warn("Font loading check failed:", error);
+                // Continue anyway after small delay
+                await new Promise(resolve => setTimeout(resolve, 100));
             }
-        }
-        if (currentLine) {
-            lines.push(currentLine);
-        }
+        };
 
-        // Calculate line height and center the text block vertically
-        const lineHeight = actualFontSize * 1.2;
-        const totalTextHeight = lines.length * lineHeight;
-        const startY = (previewHeight - totalTextHeight) / 2 + lineHeight / 2;
+        fontLoadCheck().then(() => {
+            // Get the actual rendered dimensions of the preview container
+            const previewRect = previewContainer.getBoundingClientRect();
+            const previewWidth = previewRect.width;
+            const previewHeight = previewRect.height;
 
-        // Draw each line
-        lines.forEach((line, index) => {
-            const y = startY + index * lineHeight;
-            ctx.fillText(line, previewWidth / 2, y);
+            const ctx = canvas.getContext("2d");
+
+            // Set canvas to exact same size as preview container
+            canvas.width = previewWidth;
+            canvas.height = previewHeight;
+
+            // Clear canvas with transparent background
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Set text styles - use the exact same font size as preview
+            const fontStyle = isItalic ? "italic" : "normal";
+            const fontWeight = isBold ? "bold" : "normal";
+            const actualFontSize = adjustedFontSize(selectedFont, fontSize);
+            ctx.font = `${fontStyle} ${fontWeight} ${actualFontSize}px "${selectedFont}", cursive`;
+            ctx.fillStyle = "#000000";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+
+            // The text will naturally wrap in the span based on container width
+            // We need to replicate that wrapping behavior in canvas
+            const maxWidth = previewWidth - 4; // Account for padding (12px each side)
+            const words = text.split(" ");
+            const lines = [];
+            let currentLine = "";
+
+            for (let i = 0; i < words.length; i++) {
+                const testLine = currentLine + (currentLine ? " " : "") + words[i];
+                const metrics = ctx.measureText(testLine);
+
+                if (metrics.width > maxWidth && currentLine) {
+                    lines.push(currentLine);
+                    currentLine = words[i];
+                } else {
+                    currentLine = testLine;
+                }
+            }
+            if (currentLine) {
+                lines.push(currentLine);
+            }
+
+            // Calculate line height and center the text block vertically
+            const lineHeight = actualFontSize * 1.2;
+            const totalTextHeight = lines.length * lineHeight;
+            const startY = (previewHeight - totalTextHeight) / 2 + lineHeight / 2;
+
+            // Draw each line
+            lines.forEach((line, index) => {
+                const y = startY + index * lineHeight;
+                ctx.fillText(line, previewWidth / 2, y);
+            });
+
+            // Get image data and notify parent
+            if (onChange) {
+                onChange(canvas.toDataURL("image/png"));
+            }
         });
-
-        // Get image data and notify parent
-        if (onChange) {
-            onChange(canvas.toDataURL("image/png"));
-        }
-    }, [text, selectedFont, isBold, isItalic, fontSize, onChange, aspectRatio]);
+    }, [text, selectedFont, isBold, isItalic, fontSize, onChange, aspectRatio, fontsLoaded]);
 
     const adjustedFontSize = (selectedFont, fontSize) => {
         switch (selectedFont) {
