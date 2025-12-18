@@ -2721,7 +2721,7 @@ function App() {
                                         <p>You have successfully signed all required fields in this document.</p>
                                     </div>
                                     <div className="completion-actions">
-                                        <input type="checkbox" id="accept-terms" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px" }} />
+                                        <input type="checkbox" id="accept-terms" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px", accentColor: "#2863eb" }} />
                                         <label htmlFor="accept-terms" style={{ cursor: "pointer", marginLeft: "8px" }}>
                                             I accept the{" "}
                                             <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">
