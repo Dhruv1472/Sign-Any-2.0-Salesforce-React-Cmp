@@ -1457,11 +1457,15 @@ function App() {
 
             // Get all filled fields from both flat fieldData and nested signatureData structures
             const flatFilledFields = fieldData.filter((field) => {
-                const hasValue = field.value !== null && field.value !== undefined && field.value !== "";
-                // For checkbox, false is a valid value
-                if (field.fieldType === "checkbox") {
-                    return hasValue || field.value === false;
+                const fieldType = (field.fieldType || field.type || "").toLowerCase();
+                
+                // Always include checkboxes regardless of their value (checked or unchecked)
+                if (fieldType === "checkbox") {
+                    return true;
                 }
+                
+                // For other fields, check if they have a value
+                const hasValue = field.value !== null && field.value !== undefined && field.value !== "";
                 return (field.filled || hasValue) && hasValue;
             });
 
@@ -1474,11 +1478,13 @@ function App() {
 
                     if (!isFieldType) return false;
 
-                    const hasValue = field.value !== null && field.value !== undefined && field.value !== "";
-                    // For checkbox, false is a valid value
+                    // Always include checkboxes regardless of their value (checked or unchecked)
                     if (fieldType === "checkbox") {
-                        return hasValue || field.value === false;
+                        return true;
                     }
+                    
+                    // For other fields, check if they have a value
+                    const hasValue = field.value !== null && field.value !== undefined && field.value !== "";
                     return (field.filled || hasValue) && hasValue;
                 })
             );
