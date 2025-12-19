@@ -1524,6 +1524,32 @@ function App() {
             const maxPriority = allPriorities.length > 0 ? Math.max(...allPriorities) : null;
             const isFinalPriority = maxPriority !== null && urlPriority == maxPriority;
 
+            // Check if we're in simultaneous signing mode
+            const isSimultaneousMode = documentRecord?.Send_Emails_Simultaneously__c === true;
+
+            // Helper function to check if all signers have completed their signatures
+            const areAllSignersComplete = () => {
+                if (!isSimultaneousMode) return isFinalPriority; // In priority mode, use existing logic
+
+                // In simultaneous mode, check if ALL signers (all priorities) have completed
+                return signatureData.every((signer) => {
+                    const signerFields = signer.fields || [];
+                    // Check if signer has at least one signature/initial field
+                    const signatureFields = signerFields.filter((f) => {
+                        const fType = (f.type || f.fieldType || "").toLowerCase();
+                        return fType === "signature" || fType === "initials";
+                    });
+
+                    // If no signature fields, consider signer complete
+                    if (signatureFields.length === 0) return true;
+
+                    // Check if all required signature fields are filled
+                    return signatureFields.every((f) => f.filled === true);
+                });
+            };
+
+            const allSignersComplete = areAllSignersComplete();
+
             // Check audit report behavior setting
             const auditBehavior = adminProperties?.Audit_Report_Behaviour__c || "attached";
             const auditOnEverySignature = adminProperties?.Audit_Report_On_Every_Signature__c || false;
@@ -1532,9 +1558,9 @@ function App() {
 
             if (auditBehavior === "separate") {
                 // Separate mode: Generate audit as separate file
-                if (auditOnEverySignature || isFinalPriority) {
-                    // Generate audit on every signature if checkbox is enabled, or only on final priority
-                    const showCompletedOnly = auditOnEverySignature && !isFinalPriority;
+                if (auditOnEverySignature || allSignersComplete) {
+                    // Generate audit on every signature if checkbox is enabled, or only when all signers complete
+                    const showCompletedOnly = auditOnEverySignature && !allSignersComplete;
                     try {
                         await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat, showCompletedOnly);
                         auditPdfBytes = await convertAuditHTMLToPDF(pdfPageFormat);
@@ -1547,9 +1573,9 @@ function App() {
                 pdfBytes = await pdfDoc.save();
             } else {
                 // Attached mode: Merge audit into PDF
-                if (auditOnEverySignature || isFinalPriority) {
-                    // Generate audit on every signature if checkbox is enabled, or only on final priority
-                    const showCompletedOnly = auditOnEverySignature && !isFinalPriority;
+                if (auditOnEverySignature || allSignersComplete) {
+                    // Generate audit on every signature if checkbox is enabled, or only when all signers complete
+                    const showCompletedOnly = auditOnEverySignature && !allSignersComplete;
                     try {
                         await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat, showCompletedOnly);
                     } catch (e) {
@@ -1565,7 +1591,7 @@ function App() {
 
                     pdfBytes = await finalDoc.save();
                 } else {
-                    // No audit generation for intermediate priorities when checkbox is disabled
+                    // No audit generation for intermediate steps when checkbox is disabled
                     pdfBytes = await pdfDoc.save();
                 }
             }
@@ -1581,9 +1607,9 @@ function App() {
                 let newContentVersionId = null;
                 let temporaryContentVersionId = null;
 
-                if (isFinalPriority) {
-                    // Final priority - upload as final document
-                    newContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c);
+                if (allSignersComplete) {
+                    // All signers complete - upload as final document
+                    newContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, "Signed");
                     
                     // If Store_On_Parent_Record__c is true and Record_ID__c exists, create ContentDocumentLink
                     if (documentRecord?.Store_On_Parent_Record__c === true && documentRecord?.Record_ID__c) {
@@ -1595,15 +1621,15 @@ function App() {
                         }
                     }
                 } else {
-                    // Not final priority - upload as temporary document
+                    // Not all signers complete - upload as temporary document with priority number
                     temporaryContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, `Temporary - ${urlPriority}`);
                 }
 
                 // Upload separate audit report if configured
                 if (auditPdfBytes && auditBehavior === "separate") {
                     try {
-                        // Determine audit report title based on priority
-                        const auditTitle = isFinalPriority ? "Audit Report" : `Temporary Audit Report - Priority ${urlPriority}`;
+                        // Determine audit report title based on completion
+                        const auditTitle = allSignersComplete ? "Audit Report" : `Temporary Audit Report - ${urlPriority}`;
                         await uploadSignedPdfToSalesforce(auditPdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, auditTitle);
                     } catch (error) {
                         console.error("Failed to upload separate audit report:", error);
