@@ -65,8 +65,8 @@ function App() {
     const broadcastChannelRef = useRef(null);
 
     // State for storing first signature/initial for quick reuse (same priority only)
-    const [storedSignature, setStoredSignature] = useState({ signBase64: null, arrStored: [] });
-    const [storedInitials, setStoredInitials] = useState({ signBase64: null, arrStored: [] });
+    const [storedSignature, setStoredSignature] = useState({ signBase64: null, arrStored: [], signatureType: "" });
+    const [storedInitials, setStoredInitials] = useState({ signBase64: null, arrStored: [], signatureType: "" });
 
     // Setup BroadcastChannel for cross-tab communication
     useEffect(() => {
@@ -819,7 +819,7 @@ function App() {
             setStoredSignature((prev) => {
                 // If no signature stored yet, store this one
                 if (!prev.signBase64) {
-                    return { signBase64: imageData, arrStored: [signature.index] };
+                    return { signBase64: imageData, arrStored: [signature.index], signatureType: signatureType };
                 }
                 return prev;
             });
@@ -827,7 +827,7 @@ function App() {
             setStoredInitials((prev) => {
                 // If no initials stored yet, store this one
                 if (!prev.signBase64) {
-                    return { signBase64: imageData, arrStored: [signature.index] };
+                    return { signBase64: imageData, arrStored: [signature.index], signatureType: signatureType};
                 }
                 return prev;
             });
@@ -895,7 +895,7 @@ function App() {
             locationInfo,
             deviceUniqueKey,
             timeStamp,
-            signatureType: signatureTypeLower === "initials" ? "initials" : "signature",
+            signatureType: storedData.signatureType,
         };
 
         // Apply stored signature to this field
