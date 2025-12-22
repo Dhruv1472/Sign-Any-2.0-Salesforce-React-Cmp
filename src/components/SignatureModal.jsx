@@ -30,13 +30,13 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
     const hidePenAndErase = adminProperties?.Hide_Pen_And_Erase__c || false;
     const hideUndoRedo = adminProperties?.Hide_Undo_Redo__c || false;
     const hideBrushSize = adminProperties?.Hide_Brush_Size__c || false;
-    const defaultBrushSize = hideBrushSize && adminProperties?.Default_Brush_Size__c ? adminProperties?.Default_Brush_Size__c : 2;
+    const defaultBrushSize = adminProperties?.Default_Brush_Size__c ? adminProperties?.Default_Brush_Size__c : 2;
 
     const hideAvailableFonts = adminProperties?.Hide_Available_Fonts__c || false;
     const hideBoldOption = adminProperties?.Hide_Bold_Option__c || false;
     const hideItalicOption = adminProperties?.Hide_Italic_Option__c || false;
     const hideFontSizeOption = adminProperties?.Hide_Font_Size_Option__c || false;
-    const defaultFontSize = hideFontSizeOption && adminProperties?.Default_Font_Size__c ? adminProperties?.Default_Font_Size__c : 48;
+    const defaultFontSize = adminProperties?.Default_Font_Size__c ? adminProperties?.Default_Font_Size__c : 48;
     const defaultFontStyle = adminProperties?.Default_Font_Style__c || "Artecallya";
     const availableFonts = adminProperties?.Available_Fonts__c
         ? adminProperties.Available_Fonts__c.split(",")
