@@ -1529,9 +1529,7 @@ function App() {
 
             // Helper function to check if all signers have completed their signatures
             const areAllSignersComplete = () => {
-                if (!isSimultaneousMode) return isFinalPriority; // In priority mode, use existing logic
-
-                // In simultaneous mode, check if ALL signers (all priorities) have completed
+                // Check if ALL signers (across all priorities) have completed their signatures
                 return signatureData.every((signer) => {
                     const signerFields = signer.fields || [];
                     // Check if signer has at least one signature/initial field
