@@ -11,7 +11,7 @@ import SignatureModal from "./components/SignatureModal";
 import FieldOverlay from "./components/FieldOverlay";
 import FieldModal from "./components/FieldModal";
 import Toast from "./components/Toast";
-import Inactive from "./pages/Inactive";
+import SomethingWentWrong from "./pages/SomethingWentWrong";
 
 import { updateSignatureWithImage, deleteSignatureImage, updateFieldWithValue, deleteFieldValue, updateNestedFieldValue, deleteNestedFieldValue } from "./utils/signatureUtils";
 import { decryptUrlParams, parseQueryString, encryptUrlParams, buildQueryString } from "./utils/encryption";
@@ -2646,7 +2646,7 @@ function App() {
                 </div>
             )}
 
-            {isInactive && <Inactive />}
+            {isInactive && <SomethingWentWrong />}
 
             {pdfFile && !isExpired && !isRejectedSimultaneous && !isInactive && (
                 <>
