@@ -89,6 +89,7 @@ const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onFieldCli
                 // Determine if stored signature/initial is available for this field type
                 const storedData = fieldType === "initials" ? storedInitials : storedSignature;
                 const hasStoredSignature = storedData?.signBase64 && isSignatureField && !field.filled;
+                field.buttonName = fieldType === "signature" ? "Sign Here" : "Enter Initials";
 
                 return (
                     <div key={uniqueKey} className={isSignatureField ? "signature-position" : "field-position"} style={{ position: "absolute", left: `${field.xPercent}%`, top: `${field.yPercent}%`, width: `${field.widthPercent}%`, height: `${field.heightPercent}%` }}>
