@@ -805,10 +805,38 @@ function App() {
         const osMatch = userAgent.match(/\(([^;]+);/);
         const osVersion = osMatch ? osMatch[1].trim() : "Unknown OS";
 
-        const chromeMatch = userAgent.match(/Chrome\/([\d.]+)/);
-        const chromeVersion = chromeMatch ? chromeMatch[1] : "Unknown Chrome Version";
+        // Detect browser name and version (check specific browsers first, then fall back to generic)
+        let browserName = "Unknown Browser";
+        let browserVersion = "";
 
-        const deviceInfo = `${osVersion} Chrome/${chromeVersion}`;
+        if (navigator.brave && typeof navigator.brave.isBrave === "function") {
+            // Brave browser detected
+            const match = userAgent.match(/Chrome\/([\d.]+)/);
+            browserName = "Brave";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("Edg/")) {
+            const match = userAgent.match(/Edg\/([\d.]+)/);
+            browserName = "Edge";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("OPR/") || userAgent.includes("Opera")) {
+            const match = userAgent.match(/(?:OPR|Opera)\/([\d.]+)/);
+            browserName = "Opera";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("Firefox/")) {
+            const match = userAgent.match(/Firefox\/([\d.]+)/);
+            browserName = "Firefox";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("Safari/") && !userAgent.includes("Chrome")) {
+            const match = userAgent.match(/Version\/([\d.]+)/);
+            browserName = "Safari";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("Chrome/")) {
+            const match = userAgent.match(/Chrome\/([\d.]+)/);
+            browserName = "Chrome";
+            browserVersion = match ? match[1] : "";
+        }
+
+        const deviceInfo = `${osVersion} ${browserName}${browserVersion ? `/${browserVersion}` : ""}`;
 
         const signerObject = signature._parentSigner;
 
@@ -897,9 +925,39 @@ function App() {
         const userAgent = navigator.userAgent || "Unknown Device";
         const osMatch = userAgent.match(/\(([^;]+);/);
         const osVersion = osMatch ? osMatch[1].trim() : "Unknown OS";
-        const chromeMatch = userAgent.match(/Chrome\/([\d.]+)/);
-        const chromeVersion = chromeMatch ? chromeMatch[1] : "Unknown Chrome Version";
-        const deviceInfo = `${osVersion} Chrome/${chromeVersion}`;
+        
+        // Detect browser name and version (check specific browsers first, then fall back to generic)
+        let browserName = "Unknown Browser";
+        let browserVersion = "";
+
+        if (navigator.brave && typeof navigator.brave.isBrave === "function") {
+            // Brave browser detected
+            const match = userAgent.match(/Chrome\/([\d.]+)/);
+            browserName = "Brave";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("Edg/")) {
+            const match = userAgent.match(/Edg\/([\d.]+)/);
+            browserName = "Edge";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("OPR/") || userAgent.includes("Opera")) {
+            const match = userAgent.match(/(?:OPR|Opera)\/([\d.]+)/);
+            browserName = "Opera";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("Firefox/")) {
+            const match = userAgent.match(/Firefox\/([\d.]+)/);
+            browserName = "Firefox";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("Safari/") && !userAgent.includes("Chrome")) {
+            const match = userAgent.match(/Version\/([\d.]+)/);
+            browserName = "Safari";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("Chrome/")) {
+            const match = userAgent.match(/Chrome\/([\d.]+)/);
+            browserName = "Chrome";
+            browserVersion = match ? match[1] : "";
+        }
+
+        const deviceInfo = `${osVersion} ${browserName}${browserVersion ? `/${browserVersion}` : ""}`;
 
         const signerObject = signatureOrField._parentSigner;
 
@@ -2549,29 +2607,66 @@ function App() {
 
     const getLocationLive = async () => {
         try {
-            // Try GPS first
+            // Check if geolocation is available
+            if (!navigator.geolocation) {
+                console.warn("Geolocation API not available");
+                throw new Error("Geolocation not supported");
+            }
+
+            // Check if we're on HTTPS (required for geolocation in most browsers)
+            if (window.location.protocol !== "https:" && window.location.hostname !== "localhost") {
+                console.warn("Geolocation requires HTTPS");
+                throw new Error("HTTPS required");
+            }
+
+            // Try GPS first with improved options for cross-browser compatibility
             const coords = await new Promise((resolve, reject) => {
-                if (!navigator.geolocation) return reject("No GPS");
-                navigator.geolocation.getCurrentPosition(resolve, reject, {
-                    enableHighAccuracy: false, // Changed to false for faster response
-                    timeout: 10000, // Increased timeout
-                    maximumAge: 300000, // Accept cached position up to 5 minutes old
-                });
+                const timeoutId = setTimeout(() => {
+                    reject(new Error("Geolocation timeout"));
+                }, 15000); // 15 second timeout
+
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        clearTimeout(timeoutId);
+                        resolve(position);
+                    },
+                    (error) => {
+                        clearTimeout(timeoutId);
+                        console.warn("Geolocation error:", error.code, error.message);
+                        reject(error);
+                    },
+                    {
+                        enableHighAccuracy: false, // False for faster response and better cross-browser support
+                        timeout: 15000, // 15 seconds
+                        maximumAge: 60000, // Accept cached position up to 10 minutes old
+                    }
+                );
             });
 
             const { latitude, longitude } = coords.coords;
 
-            // Reverse geocode to city/state/country
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
+            // Reverse geocode to city/state/country with proper headers
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`, {
+                headers: {
+                    "User-Agent": "SignatureApp/1.0", // Required by Nominatim usage policy
+                },
+            });
+
+            if (!res.ok) {
+                throw new Error("Geocoding failed");
+            }
+
             const data = await res.json();
-            const address = data.address;
+            const address = data.address || {};
 
             const city = address.city || address.state_district || address.town || address.village || "Unknown City";
             const state = address.state || "Unknown State";
             const country = address.country || "Unknown Country";
+            console.log("Geolocation obtained:", city, state, country);
             return `${city}, ${state}, ${country}`;
         } catch (gpsError) {
-            console.warn("GPS failed, fallback to IP-based location:", gpsError);
+            console.warn("GPS failed, attempting IP-based location fallback:", gpsError);
+            
             return "Location Unavailable";
         }
     };
