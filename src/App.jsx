@@ -309,6 +309,12 @@ function App() {
             // Check if document is already submitted (Completed or Rejected status)
             if (documentData.Status__c === "Completed" || documentData.Status__c === "Rejected") {
                 setIsSubmitted(true);
+                // Show toast notification based on status
+                if (documentData.Status__c === "Completed") {
+                    setToast({ isVisible: true, message: "This document has already been signed and completed.", type: "info" });
+                } else if (documentData.Status__c === "Rejected") {
+                    setToast({ isVisible: true, message: "This document has been rejected.", type: "error" });
+                }
             }
 
             // Step 2: Fetch PDF from ContentVersion
@@ -730,20 +736,29 @@ function App() {
             const fieldType = (signature.fieldType || signature.type || "").toLowerCase();
             const signerName = signature._parentSigner.name || "";
             const signerEmail = signature._parentSigner.email || "";
+            const maxLength = signature.maxLength ? parseInt(signature.maxLength, 10) : null;
 
+            let autoFilledValue = "";
             if (fieldType === "signature") {
                 // For signature fields, use signer's full name
-                processedSignature.defaultValue = signerName;
+                autoFilledValue = signerName;
             } else if (fieldType === "initials") {
                 // For initials fields, extract first letter of each word
-                processedSignature.defaultValue = signerName
+                autoFilledValue = signerName
                     .split(/\s+/)
                     .map((word) => word.charAt(0).toUpperCase())
                     .join("");
             } else if (fieldType === "email") {
                 // For email fields, use signer's email
-                processedSignature.defaultValue = signerEmail;
+                autoFilledValue = signerEmail;
             }
+
+            // Truncate to maxLength if specified
+            if (maxLength && autoFilledValue.length > maxLength) {
+                autoFilledValue = autoFilledValue.substring(0, maxLength);
+            }
+
+            processedSignature.defaultValue = autoFilledValue;
         }
 
         setCurrentSignature(processedSignature);
@@ -1098,7 +1113,10 @@ function App() {
             return;
         }
         if (fType === "email" && field.defaultValue == "{defaultValue}") {
-            field.value = field._parentSigner ? field._parentSigner.email || "" : "";
+            const emailValue = field._parentSigner ? field._parentSigner.email || "" : "";
+            const maxLength = field.maxLength ? parseInt(field.maxLength, 10) : null;
+            // Truncate to maxLength if specified
+            field.value = maxLength && emailValue.length > maxLength ? emailValue.substring(0, maxLength) : emailValue;
         } else if (fType === "date" && field.defaultValue === "TODAY") {
             const today = new Date();
             const year = today.getFullYear();
