@@ -309,6 +309,12 @@ function App() {
             // Check if document is already submitted (Completed or Rejected status)
             if (documentData.Status__c === "Completed" || documentData.Status__c === "Rejected") {
                 setIsSubmitted(true);
+                // Show toast notification based on status
+                if (documentData.Status__c === "Completed") {
+                    setToast({ isVisible: true, message: "This document has already been signed and completed.", type: "info" });
+                } else if (documentData.Status__c === "Rejected") {
+                    setToast({ isVisible: true, message: "This document has been rejected.", type: "error" });
+                }
             }
 
             // Step 2: Fetch PDF from ContentVersion
@@ -730,20 +736,29 @@ function App() {
             const fieldType = (signature.fieldType || signature.type || "").toLowerCase();
             const signerName = signature._parentSigner.name || "";
             const signerEmail = signature._parentSigner.email || "";
+            const maxLength = signature.maxLength ? parseInt(signature.maxLength, 10) : null;
 
+            let autoFilledValue = "";
             if (fieldType === "signature") {
                 // For signature fields, use signer's full name
-                processedSignature.defaultValue = signerName;
+                autoFilledValue = signerName;
             } else if (fieldType === "initials") {
                 // For initials fields, extract first letter of each word
-                processedSignature.defaultValue = signerName
+                autoFilledValue = signerName
                     .split(/\s+/)
                     .map((word) => word.charAt(0).toUpperCase())
                     .join("");
             } else if (fieldType === "email") {
                 // For email fields, use signer's email
-                processedSignature.defaultValue = signerEmail;
+                autoFilledValue = signerEmail;
             }
+
+            // Truncate to maxLength if specified
+            if (maxLength && autoFilledValue.length > maxLength) {
+                autoFilledValue = autoFilledValue.substring(0, maxLength);
+            }
+
+            processedSignature.defaultValue = autoFilledValue;
         }
 
         setCurrentSignature(processedSignature);
@@ -790,10 +805,38 @@ function App() {
         const osMatch = userAgent.match(/\(([^;]+);/);
         const osVersion = osMatch ? osMatch[1].trim() : "Unknown OS";
 
-        const chromeMatch = userAgent.match(/Chrome\/([\d.]+)/);
-        const chromeVersion = chromeMatch ? chromeMatch[1] : "Unknown Chrome Version";
+        // Detect browser name and version (check specific browsers first, then fall back to generic)
+        let browserName = "Unknown Browser";
+        let browserVersion = "";
 
-        const deviceInfo = `${osVersion} Chrome/${chromeVersion}`;
+        if (navigator.brave && typeof navigator.brave.isBrave === "function") {
+            // Brave browser detected
+            const match = userAgent.match(/Chrome\/([\d.]+)/);
+            browserName = "Brave";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("Edg/")) {
+            const match = userAgent.match(/Edg\/([\d.]+)/);
+            browserName = "Edge";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("OPR/") || userAgent.includes("Opera")) {
+            const match = userAgent.match(/(?:OPR|Opera)\/([\d.]+)/);
+            browserName = "Opera";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("Firefox/")) {
+            const match = userAgent.match(/Firefox\/([\d.]+)/);
+            browserName = "Firefox";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("Safari/") && !userAgent.includes("Chrome")) {
+            const match = userAgent.match(/Version\/([\d.]+)/);
+            browserName = "Safari";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("Chrome/")) {
+            const match = userAgent.match(/Chrome\/([\d.]+)/);
+            browserName = "Chrome";
+            browserVersion = match ? match[1] : "";
+        }
+
+        const deviceInfo = `${osVersion} ${browserName}${browserVersion ? `/${browserVersion}` : ""}`;
 
         const signerObject = signature._parentSigner;
 
@@ -882,9 +925,39 @@ function App() {
         const userAgent = navigator.userAgent || "Unknown Device";
         const osMatch = userAgent.match(/\(([^;]+);/);
         const osVersion = osMatch ? osMatch[1].trim() : "Unknown OS";
-        const chromeMatch = userAgent.match(/Chrome\/([\d.]+)/);
-        const chromeVersion = chromeMatch ? chromeMatch[1] : "Unknown Chrome Version";
-        const deviceInfo = `${osVersion} Chrome/${chromeVersion}`;
+        
+        // Detect browser name and version (check specific browsers first, then fall back to generic)
+        let browserName = "Unknown Browser";
+        let browserVersion = "";
+
+        if (navigator.brave && typeof navigator.brave.isBrave === "function") {
+            // Brave browser detected
+            const match = userAgent.match(/Chrome\/([\d.]+)/);
+            browserName = "Brave";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("Edg/")) {
+            const match = userAgent.match(/Edg\/([\d.]+)/);
+            browserName = "Edge";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("OPR/") || userAgent.includes("Opera")) {
+            const match = userAgent.match(/(?:OPR|Opera)\/([\d.]+)/);
+            browserName = "Opera";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("Firefox/")) {
+            const match = userAgent.match(/Firefox\/([\d.]+)/);
+            browserName = "Firefox";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("Safari/") && !userAgent.includes("Chrome")) {
+            const match = userAgent.match(/Version\/([\d.]+)/);
+            browserName = "Safari";
+            browserVersion = match ? match[1] : "";
+        } else if (userAgent.includes("Chrome/")) {
+            const match = userAgent.match(/Chrome\/([\d.]+)/);
+            browserName = "Chrome";
+            browserVersion = match ? match[1] : "";
+        }
+
+        const deviceInfo = `${osVersion} ${browserName}${browserVersion ? `/${browserVersion}` : ""}`;
 
         const signerObject = signatureOrField._parentSigner;
 
@@ -1098,7 +1171,10 @@ function App() {
             return;
         }
         if (fType === "email" && field.defaultValue == "{defaultValue}") {
-            field.value = field._parentSigner ? field._parentSigner.email || "" : "";
+            const emailValue = field._parentSigner ? field._parentSigner.email || "" : "";
+            const maxLength = field.maxLength ? parseInt(field.maxLength, 10) : null;
+            // Truncate to maxLength if specified
+            field.value = maxLength && emailValue.length > maxLength ? emailValue.substring(0, maxLength) : emailValue;
         } else if (fType === "date" && field.defaultValue === "TODAY") {
             const today = new Date();
             const year = today.getFullYear();
@@ -1524,6 +1600,30 @@ function App() {
             const maxPriority = allPriorities.length > 0 ? Math.max(...allPriorities) : null;
             const isFinalPriority = maxPriority !== null && urlPriority == maxPriority;
 
+            // Check if we're in simultaneous signing mode
+            const isSimultaneousMode = documentRecord?.Send_Emails_Simultaneously__c === true;
+
+            // Helper function to check if all signers have completed their signatures
+            const areAllSignersComplete = () => {
+                // Check if ALL signers (across all priorities) have completed their signatures
+                return signatureData.every((signer) => {
+                    const signerFields = signer.fields || [];
+                    // Check if signer has at least one signature/initial field
+                    const signatureFields = signerFields.filter((f) => {
+                        const fType = (f.type || f.fieldType || "").toLowerCase();
+                        return fType === "signature" || fType === "initials";
+                    });
+
+                    // If no signature fields, consider signer complete
+                    if (signatureFields.length === 0) return true;
+
+                    // Check if all required signature fields are filled
+                    return signatureFields.every((f) => f.filled === true);
+                });
+            };
+
+            const allSignersComplete = areAllSignersComplete();
+
             // Check audit report behavior setting
             const auditBehavior = adminProperties?.Audit_Report_Behaviour__c || "attached";
             const auditOnEverySignature = adminProperties?.Audit_Report_On_Every_Signature__c || false;
@@ -1532,9 +1632,9 @@ function App() {
 
             if (auditBehavior === "separate") {
                 // Separate mode: Generate audit as separate file
-                if (auditOnEverySignature || isFinalPriority) {
-                    // Generate audit on every signature if checkbox is enabled, or only on final priority
-                    const showCompletedOnly = auditOnEverySignature && !isFinalPriority;
+                if (auditOnEverySignature || allSignersComplete) {
+                    // Generate audit on every signature if checkbox is enabled, or only when all signers complete
+                    const showCompletedOnly = auditOnEverySignature && !allSignersComplete;
                     try {
                         await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat, showCompletedOnly);
                         auditPdfBytes = await convertAuditHTMLToPDF(pdfPageFormat);
@@ -1547,9 +1647,9 @@ function App() {
                 pdfBytes = await pdfDoc.save();
             } else {
                 // Attached mode: Merge audit into PDF
-                if (auditOnEverySignature || isFinalPriority) {
-                    // Generate audit on every signature if checkbox is enabled, or only on final priority
-                    const showCompletedOnly = auditOnEverySignature && !isFinalPriority;
+                if (auditOnEverySignature || allSignersComplete) {
+                    // Generate audit on every signature if checkbox is enabled, or only when all signers complete
+                    const showCompletedOnly = auditOnEverySignature && !allSignersComplete;
                     try {
                         await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat, showCompletedOnly);
                     } catch (e) {
@@ -1565,7 +1665,7 @@ function App() {
 
                     pdfBytes = await finalDoc.save();
                 } else {
-                    // No audit generation for intermediate priorities when checkbox is disabled
+                    // No audit generation for intermediate steps when checkbox is disabled
                     pdfBytes = await pdfDoc.save();
                 }
             }
@@ -1581,9 +1681,9 @@ function App() {
                 let newContentVersionId = null;
                 let temporaryContentVersionId = null;
 
-                if (isFinalPriority) {
-                    // Final priority - upload as final document
-                    newContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c);
+                if (allSignersComplete) {
+                    // All signers complete - upload as final document
+                    newContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, "Signed");
                     
                     // If Store_On_Parent_Record__c is true and Record_ID__c exists, create ContentDocumentLink
                     if (documentRecord?.Store_On_Parent_Record__c === true && documentRecord?.Record_ID__c) {
@@ -1595,15 +1695,15 @@ function App() {
                         }
                     }
                 } else {
-                    // Not final priority - upload as temporary document
+                    // Not all signers complete - upload as temporary document with priority number
                     temporaryContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, `Temporary - ${urlPriority}`);
                 }
 
                 // Upload separate audit report if configured
                 if (auditPdfBytes && auditBehavior === "separate") {
                     try {
-                        // Determine audit report title based on priority
-                        const auditTitle = isFinalPriority ? "Audit Report" : `Temporary Audit Report - Priority ${urlPriority}`;
+                        // Determine audit report title based on completion
+                        const auditTitle = allSignersComplete ? "Audit Report" : `Temporary Audit Report - ${urlPriority}`;
                         await uploadSignedPdfToSalesforce(auditPdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, auditTitle);
                     } catch (error) {
                         console.error("Failed to upload separate audit report:", error);
@@ -2507,29 +2607,66 @@ function App() {
 
     const getLocationLive = async () => {
         try {
-            // Try GPS first
+            // Check if geolocation is available
+            if (!navigator.geolocation) {
+                console.warn("Geolocation API not available");
+                throw new Error("Geolocation not supported");
+            }
+
+            // Check if we're on HTTPS (required for geolocation in most browsers)
+            if (window.location.protocol !== "https:" && window.location.hostname !== "localhost") {
+                console.warn("Geolocation requires HTTPS");
+                throw new Error("HTTPS required");
+            }
+
+            // Try GPS first with improved options for cross-browser compatibility
             const coords = await new Promise((resolve, reject) => {
-                if (!navigator.geolocation) return reject("No GPS");
-                navigator.geolocation.getCurrentPosition(resolve, reject, {
-                    enableHighAccuracy: false, // Changed to false for faster response
-                    timeout: 10000, // Increased timeout
-                    maximumAge: 300000, // Accept cached position up to 5 minutes old
-                });
+                const timeoutId = setTimeout(() => {
+                    reject(new Error("Geolocation timeout"));
+                }, 15000); // 15 second timeout
+
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        clearTimeout(timeoutId);
+                        resolve(position);
+                    },
+                    (error) => {
+                        clearTimeout(timeoutId);
+                        console.warn("Geolocation error:", error.code, error.message);
+                        reject(error);
+                    },
+                    {
+                        enableHighAccuracy: false, // False for faster response and better cross-browser support
+                        timeout: 15000, // 15 seconds
+                        maximumAge: 60000, // Accept cached position up to 10 minutes old
+                    }
+                );
             });
 
             const { latitude, longitude } = coords.coords;
 
-            // Reverse geocode to city/state/country
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
+            // Reverse geocode to city/state/country with proper headers
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`, {
+                headers: {
+                    "User-Agent": "SignatureApp/1.0", // Required by Nominatim usage policy
+                },
+            });
+
+            if (!res.ok) {
+                throw new Error("Geocoding failed");
+            }
+
             const data = await res.json();
-            const address = data.address;
+            const address = data.address || {};
 
             const city = address.city || address.state_district || address.town || address.village || "Unknown City";
             const state = address.state || "Unknown State";
             const country = address.country || "Unknown Country";
+            console.log("Geolocation obtained:", city, state, country);
             return `${city}, ${state}, ${country}`;
         } catch (gpsError) {
-            console.warn("GPS failed, fallback to IP-based location:", gpsError);
+            console.warn("GPS failed, attempting IP-based location fallback:", gpsError);
+            
             return "Location Unavailable";
         }
     };

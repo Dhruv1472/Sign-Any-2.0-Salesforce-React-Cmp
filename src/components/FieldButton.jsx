@@ -303,7 +303,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
         // Checkbox is checked if it's filled and value is true
         const isChecked = filled && (value === true || value === "true" || value === "True");
         return (
-            <div className="checkbox-wrapper" onClick={handleFieldClick}>
+            <div className="checkbox-wrapper" onClick={isDisabled ? undefined : handleFieldClick} style={{ cursor: isDisabled ? 'not-allowed' : 'pointer' }}>
                 <input type="checkbox" checked={isChecked} disabled={isDisabled} readOnly data-key={key} />
             </div>
         );

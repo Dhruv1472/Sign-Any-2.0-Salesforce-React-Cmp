@@ -69,6 +69,27 @@ export const generateAuditHTML = async (doc, sigData, orgId, totalPages, pageFor
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
+
+            /* Prevent page breaks inside signature rows */
+            #audit-html .signature-row {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+
+            /* Add some spacing before rows to help with page breaks */
+            #audit-html .signature-row:not(:first-child) {
+                page-break-before: auto;
+            }
+
+            /* Add margin to top of each page */
+            @page {
+                margin-top: 24px;
+            }
+
+            /* Add extra top padding for signature rows that might start a new page */
+            #audit-html .signature-row {
+                margin-top: 4px;
+            }
         </style>
 
         <div style="background:#FFFFFF;padding:0 24px 24px 24px;width:100%; font-family:'Manrope', sans-serif;">
@@ -215,7 +236,7 @@ export const generateAuditHTML = async (doc, sigData, orgId, totalPages, pageFor
                         ${displayFields
                             .map(
                                 (f) => `
-                        <tr style="border-top:1px solid #E2E8F0;">
+                        <tr class="signature-row" style="border-top:1px solid #E2E8F0; page-break-inside: avoid; break-inside: avoid;">
                             <td style="padding:8px 0 8px 18px; text-align:center;">
                                 ${
                                     f.imageUrl

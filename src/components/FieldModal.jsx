@@ -53,20 +53,32 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
         const pad2 = (n) => String(n).padStart(2, "0");
         const monthsShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
         const monthsLong = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        
+        const date = dateObj.getDate();
+        const month = dateObj.getMonth();
+        const year = dateObj.getFullYear();
+        
         const map = {
-            YYYY: String(dateObj.getFullYear()),
-            MM: pad2(dateObj.getMonth() + 1),
-            DD: pad2(dateObj.getDate()),
-            MMM: monthsShort[dateObj.getMonth()],
-            MMMM: monthsLong[dateObj.getMonth()],
+            YYYY: String(year),
+            YY: String(year).slice(-2),
+            MMMM: monthsLong[month],
+            MMM: monthsShort[month],
+            MM: pad2(month + 1),
+            M: String(month + 1),
+            DD: pad2(date),
+            D: String(date),
         };
+        
         let out = pattern || "MMM DD YYYY";
-        // Replace longer tokens first
-        out = out.replace(/MMMM/g, map.MMMM);
-        out = out.replace(/MMM/g, map.MMM);
-        out = out.replace(/YYYY/g, map.YYYY);
-        out = out.replace(/MM/g, map.MM);
-        out = out.replace(/DD/g, map.DD);
+        // Replace longer tokens first to avoid conflicts
+        out = out.replace(/MMMM/gi, map.MMMM);
+        out = out.replace(/MMM/gi, map.MMM);
+        out = out.replace(/YYYY/gi, map.YYYY);
+        out = out.replace(/YY/gi, map.YY);
+        out = out.replace(/DD/gi, map.DD);
+        out = out.replace(/D/gi, map.D);
+        out = out.replace(/MM/gi, map.MM);
+        out = out.replace(/M/gi, map.M);
         return out;
     };
 
