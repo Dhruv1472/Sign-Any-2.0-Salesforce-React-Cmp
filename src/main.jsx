@@ -5,6 +5,7 @@ import "./index.css";
 import App from "./App.jsx";
 import ThankYou from "./pages/ThankYou.jsx";
 import Rejected from "./pages/Rejected.jsx";
+import NotFound from "./pages/NotFound.jsx";
 
 createRoot(document.getElementById("root")).render(
     <StrictMode>
@@ -13,6 +14,8 @@ createRoot(document.getElementById("root")).render(
                 <Route path="/" element={<App />} />
                 <Route path="/thank-you" element={<ThankYou />} />
                 <Route path="/rejected" element={<Rejected />} />
+                {/* Catch-all route - redirects to root with preserved parameters */}
+                <Route path="*" element={<NotFound />} />
             </Routes>
         </BrowserRouter>
     </StrictMode>
