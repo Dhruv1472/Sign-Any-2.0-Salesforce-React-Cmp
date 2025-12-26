@@ -50,6 +50,8 @@ function App() {
     const [originalPdfBytes, setOriginalPdfBytes] = useState(null);
     const [initialSignatureData, setInitialSignatureData] = useState([]);
     const [orgIdState, setOrgIdState] = useState(null);
+    const [localeKey, setLocaleKey] = useState(null);
+    const [timeZoneKey, setTimeZoneKey] = useState(null);
     const [userIpAddress, setUserIpAddress] = useState(null);
     const [userLocation, setUserLocation] = useState(null);
     const [userDeviceUniqueKey, setUserDeviceUniqueKey] = useState(null);
@@ -646,7 +648,7 @@ function App() {
     const fetchOrganizationId = async (accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
-            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent("SELECT Id FROM Organization LIMIT 1")}`;
+            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent("SELECT Id, DefaultLocaleSidKey, TimeZoneSidKey FROM Organization LIMIT 1")}`;
 
             let response = await fetch(apiUrl, {
                 method: "GET",
@@ -673,7 +675,14 @@ function App() {
             }
 
             const data = await response.json();
+
+            const locale = data?.records?.[0]?.DefaultLocaleSidKey || 'en_US';
+            setLocaleKey(locale.replace('_', '-')); // Convert to standard locale format
+            const timeZone = data?.records?.[0]?.TimeZoneSidKey || null;
+            setTimeZoneKey(timeZone);
+
             const id = data?.records?.[0]?.Id || null;
+            
             return id;
         } catch (e) {
             console.warn("Unable to fetch Organization Id:", e);
@@ -1636,7 +1645,7 @@ function App() {
                     // Generate audit on every signature if checkbox is enabled, or only when all signers complete
                     const showCompletedOnly = auditOnEverySignature && !allSignersComplete;
                     try {
-                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat, showCompletedOnly);
+                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat, showCompletedOnly, localeKey, timeZoneKey);
                         auditPdfBytes = await convertAuditHTMLToPDF(pdfPageFormat);
                     } catch (e) {
                         console.warn("Failed to generate separate audit report:", e);
@@ -1651,7 +1660,7 @@ function App() {
                     // Generate audit on every signature if checkbox is enabled, or only when all signers complete
                     const showCompletedOnly = auditOnEverySignature && !allSignersComplete;
                     try {
-                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat, showCompletedOnly);
+                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat, showCompletedOnly, localeKey, timeZoneKey);
                     } catch (e) {
                         console.warn("Failed to append audit report page:", e);
                     }

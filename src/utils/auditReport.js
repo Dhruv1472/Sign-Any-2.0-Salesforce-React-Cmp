@@ -37,7 +37,7 @@ const formatTimestamp = (timestamp) => {
  * @param {boolean} showCompletedOnly - Whether to show only completed signatures
  * @returns {Promise<void>}
  */
-export const generateAuditHTML = async (doc, sigData, orgId, totalPages, pageFormat, showCompletedOnly = false) => {
+export const generateAuditHTML = async (doc, sigData, orgId, totalPages, pageFormat, showCompletedOnly = false, localeKey = 'en-US', timeZone = 'UTC') => {
     // Only include signature fields (those with type="signature"), exclude other field types
     const allFields = sigData.flatMap((s) =>
         (s.fields || [])
@@ -120,7 +120,7 @@ export const generateAuditHTML = async (doc, sigData, orgId, totalPages, pageFor
                 <table style="width:100%; font-size:13px; border-collapse:collapse;">
                     <tr>
                         <td style="color:gray; padding-right:18px;">Sent Date:</td>
-                        <td style="text-align:right;color:black; padding-right:18px;">${new Date(doc.CreatedDate).toLocaleString()}</td>
+                        <td style="text-align:right;color:black; padding-right:18px;">${new Date(doc.CreatedDate).toLocaleString(localeKey, { timeZone })}</td>
                         
                         <td style="color:gray; padding-right:18px;">Document ID:</td>
                         <td style="text-align:right;color:black; padding-left:18px;">${doc.Id || ""}</td>
