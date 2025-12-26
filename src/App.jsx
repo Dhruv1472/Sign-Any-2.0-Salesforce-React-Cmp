@@ -2768,7 +2768,7 @@ function App() {
                 </div>
             )}
 
-            {isRejectedSimultaneous && (
+            {(isRejectedSimultaneous || isInactive) && (
                 <div className="expired-card">
                     <div className="expired-icon" style={{ color: "#d32f2f" }}>
                         <svg className="expired-svg" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -2792,7 +2792,7 @@ function App() {
                 </div>
             )}
 
-            {isInactive && <SomethingWentWrong />}
+            {/* {isInactive && <SomethingWentWrong />} */}
 
             {pdfFile && !isExpired && !isRejectedSimultaneous && !isInactive && (
                 <>
