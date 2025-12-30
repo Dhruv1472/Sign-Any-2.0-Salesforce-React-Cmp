@@ -22,18 +22,33 @@ import "./SignatureOverlay.css";
  * @param {Object} storedSignature - Stored signature data { signBase64, arrStored }
  * @param {Object} storedInitials - Stored initials data { signBase64, arrStored }
  * @param {Function} onReuseSignature - Callback when reusing stored signature
+ * @param {boolean} sendEmailsSimultaneously - Whether emails are sent simultaneously (affects visibility rules)
  */
-const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onFieldClick, onFieldSave, onDelete, onFieldDelete, isSubmitted, sessionSignedKeys, sessionFilledKeys, canvasScale = 1, storedSignature, storedInitials, onReuseSignature }) => {
+const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onFieldClick, onFieldSave, onDelete, onFieldDelete, isSubmitted, sessionSignedKeys, sessionFilledKeys, canvasScale = 1, storedSignature, storedInitials, onReuseSignature, sendEmailsSimultaneously = false }) => {
     // Filter signatures for this page
     // Show: 1. Current priority fields (editable), 2. Lower priority filled fields (read-only, already signed)
+    // When sendEmailsSimultaneously is true: Show ALL filled fields from any priority
     const pageSignatures = signatures
         .filter((sig) => {
             // Show current priority fields OR lower priority fields that are already filled
             const isCurrentPriority = sig.priority == priority;
             const isLowerPriority = sig.priority < priority;
+            const isHigherPriority = sig.priority > priority;
 
+            // If simultaneous emails mode: show all priorities' filled fields
+            if (sendEmailsSimultaneously) {
+                return sig?.fields?.some((field) => {
+                    if (field.pageNumber !== pageNumber) return false;
+                    // Show current priority fields (all)
+                    if (isCurrentPriority) return true;
+                    // Show other priorities' filled fields only
+                    return (isLowerPriority || isHigherPriority) && field.filled;
+                });
+            }
+
+            // Sequential mode: don't show higher priority fields
             if (!isCurrentPriority && !isLowerPriority) {
-                return false; // Don't show higher priority fields
+                return false;
             }
 
             return sig?.fields?.some((field) => {
@@ -53,13 +68,19 @@ const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onFieldCli
                     if (f.pageNumber !== pageNumber) return false;
                     // Current priority: include all fields
                     if (isCurrentPriority) return true;
-                    // Lower priority: only include filled fields
-                    return f.filled;
+                    
+                    // If simultaneous mode: show all filled fields from any priority
+                    if (sendEmailsSimultaneously) {
+                        return f.filled;
+                    }
+                    
+                    // Sequential mode: only show lower priority filled fields
+                    return sig.priority < priority && f.filled;
                 })
                 .map((f) => ({
                     ...f,
                     _parentSigner: sig,
-                    // Mark lower priority fields as disabled (read-only)
+                    // Mark non-current priority fields as disabled (read-only)
                     disabled: !isCurrentPriority || isSubmitted,
                 }));
             return [...arr, ...fields];

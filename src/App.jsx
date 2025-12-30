@@ -26,41 +26,60 @@ const A4_HEIGHT = 842;
 
 function App() {
     const navigate = useNavigate();
-    const [pdfFile, setPdfFile] = useState(null);
-    const [totalPages, setTotalPages] = useState(0);
+
+    // App State
+    const [showSpinner, setShowSpinner] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [toast, setToast] = useState({ isVisible: false, message: "", type: "success" });
+
+    // Document Status Flags
+    const [isInactive, setIsInactive] = useState(false);
     const [isExpired, setIsExpired] = useState(false);
     const [isRejectedSimultaneous, setIsRejectedSimultaneous] = useState(false);
-    const [isInactive, setIsInactive] = useState(false);
-    const [initialAccepted, setInitialAccepted] = useState(false);
-    const [signatureData, setSignatureData] = useState([]);
-    const [fieldData, setFieldData] = useState([]);
-    const [documentRecord, setDocumentRecord] = useState(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isFieldModalOpen, setIsFieldModalOpen] = useState(false);
-    const [currentSignature, setCurrentSignature] = useState(null);
-    const [currentField, setCurrentField] = useState(null);
-    const [toast, setToast] = useState({ isVisible: false, message: "", type: "success" });
-    const [salesforceConfig, setSalesforceConfig] = useState(null);
-    const [urlPriority, setUrlPriority] = useState(null);
     const [isSubmitted, setIsSubmitted] = useState(false);
-    const [sessionSignedKeys, setSessionSignedKeys] = useState(new Set());
-    const [sessionFilledKeys, setSessionFilledKeys] = useState(new Set());
+
+    // URL Parameters
+    const [urlPriority, setUrlPriority] = useState(null);
+
+    // PDF Properties
+    const [pdfFile, setPdfFile] = useState(null);
     const [originalPdfBytes, setOriginalPdfBytes] = useState(null);
-    const [initialSignatureData, setInitialSignatureData] = useState([]);
+    const [totalPages, setTotalPages] = useState(0);
+    const [pdfPageFormat, setPdfPageFormat] = useState({ width: A4_WIDTH, height: A4_HEIGHT, orientation: "portrait" });
+    const [canvasScale, setCanvasScale] = useState(1);
+
+    // Document Properties
+    const [salesforceConfig, setSalesforceConfig] = useState(null);
+    const [adminProperties, setAdminProperties] = useState(null);
+    const [documentRecord, setDocumentRecord] = useState(null);
     const [orgIdState, setOrgIdState] = useState(null);
     const [localeKey, setLocaleKey] = useState(null);
     const [timeZoneKey, setTimeZoneKey] = useState(null);
+
+    // Field and Signature Properties
+    const [signatureData, setSignatureData] = useState([]);
+    const [initialSignatureData, setInitialSignatureData] = useState([]);
+    const [fieldData, setFieldData] = useState([]);
+    const [initialAccepted, setInitialAccepted] = useState(false);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isFieldModalOpen, setIsFieldModalOpen] = useState(false);
+
+    const [currentSignature, setCurrentSignature] = useState(null);
+    const [currentField, setCurrentField] = useState(null);
+
+    const [sessionSignedKeys, setSessionSignedKeys] = useState(new Set());
+    const [sessionFilledKeys, setSessionFilledKeys] = useState(new Set());
+
+    // User Info
     const [userIpAddress, setUserIpAddress] = useState(null);
     const [userLocation, setUserLocation] = useState(null);
     const [userDeviceUniqueKey, setUserDeviceUniqueKey] = useState(null);
-    const [adminProperties, setAdminProperties] = useState(null);
-    const [showSpinner, setShowSpinner] = useState(false);
-    const [canvasScale, setCanvasScale] = useState(1);
-    const [pdfPageFormat, setPdfPageFormat] = useState({ width: A4_WIDTH, height: A4_HEIGHT, orientation: "portrait" });
+
+    // Reject Modal State
     const [showRejectConfirm, setShowRejectConfirm] = useState(false);
     const [rejectReason, setRejectReason] = useState("");
+
     const canvasRefsArray = useRef([]);
     const pdfDocRef = useRef(null);
     const resizeTimeoutRef = useRef(null);
@@ -72,26 +91,18 @@ function App() {
 
     // Setup BroadcastChannel for cross-tab communication
     useEffect(() => {
-        // Get the current URL (which uniquely identifies the document)
         const currentUrl = window.location.href;
 
         // Create a unique channel name based on the document URL
-        // This ensures only tabs with the same document URL will communicate
         const channelName = `document-sync-${btoa(currentUrl).replace(/=/g, "")}`;
 
         // Create the broadcast channel
         if (typeof BroadcastChannel !== "undefined") {
             broadcastChannelRef.current = new BroadcastChannel(channelName);
 
-            // Listen for messages from other tabs
             broadcastChannelRef.current.onmessage = (event) => {
                 if (event.data.type === "DOCUMENT_SUBMITTED") {
-                    // Show a toast before reloading
-                    setToast({
-                        isVisible: true,
-                        message: "Document was submitted in another tab. Refreshing...",
-                        type: "success",
-                    });
+                    setToast({ isVisible: true, message: "Document was submitted in another tab. Refreshing...", type: "success" });
 
                     // Reload the page after a short delay to show the toast
                     setTimeout(() => {
@@ -111,15 +122,27 @@ function App() {
         };
     }, []);
 
+    // Warn user before leaving if there are unsaved changes
+    useEffect(() => {
+        const handleBeforeUnload = (event) => {
+            event.preventDefault();
+            event.returnValue = ""; // Required for Chrome
+        };
+
+        window.addEventListener("beforeunload", handleBeforeUnload);
+
+        return () => {
+            window.removeEventListener("beforeunload", handleBeforeUnload);
+        };
+    }, []);
+
+    // Parse URL parameters on initial load
     useEffect(() => {
         const parseUrlParams = async () => {
-            const urlParams = new URLSearchParams(window.location.search);
-
             let accessToken, recordId, instanceUrl, clientId, clientSecret, priority;
 
-            // Check if URL is encrypted (has 'q' parameter)
+            const urlParams = new URLSearchParams(window.location.search);
             const encryptedQuery = urlParams.get("q");
-
             if (encryptedQuery) {
                 try {
                     // Decrypt the query string
@@ -153,15 +176,9 @@ function App() {
 
             if (recordId && instanceUrl) {
                 setSalesforceConfig({ accessToken, recordId, instanceUrl, clientId, clientSecret });
+                fetchAdminProperties(accessToken, instanceUrl, clientId, clientSecret);
+                fetchOrganizationId(accessToken, instanceUrl, clientId, clientSecret);
                 fetchDocumentAndPdf(recordId, accessToken, instanceUrl, clientId, clientSecret);
-
-                fetchOrganizationId(accessToken, instanceUrl, clientId, clientSecret)
-                    .then((id) => setOrgIdState(id))
-                    .catch(() => setOrgIdState(null));
-
-                fetchAdminProperties(accessToken, instanceUrl, clientId, clientSecret)
-                    .then((properties) => setAdminProperties(properties))
-                    .catch(() => setAdminProperties(null));
             }
         };
 
@@ -240,73 +257,28 @@ function App() {
         }
     }, [isModalOpen, isFieldModalOpen, showRejectConfirm]);
 
-    useEffect(() => {
-        const handleBeforeUnload = (event) => {
-            event.preventDefault();
-            event.returnValue = ""; // Required for Chrome
-        };
-
-        window.addEventListener("beforeunload", handleBeforeUnload);
-
-        return () => {
-            window.removeEventListener("beforeunload", handleBeforeUnload);
-        };
-    }, []);
-
     // Main function to fetch Document and then PDF
     const fetchDocumentAndPdf = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         setLoading(true);
-        setError(null);
-        setIsExpired(false);
-        setIsRejectedSimultaneous(false);
-        setIsInactive(false);
 
         try {
             // Step 1: Fetch Document__c record to get ContentVersion ID and signature/field data
-            const { contentVersionId, currentToken, documentData, signatureData: sigData, fieldData: fieldDataFromRecord, isExpired: documentExpired, isRejectedSimultaneous: docRejectedSimultaneous, isInactive: documentInactive } = await fetchDocumentRecord(documentId, accessToken, instanceUrl, clientId, clientSecret);
+            const { contentVersionId, currentToken, documentData, signatureData, fieldData, isExpired, isRejectedSimultaneous, isInactive } = await fetchDocumentRecord(documentId, accessToken, instanceUrl, clientId, clientSecret);
 
-            // Check if document is inactive
-            if (documentInactive) {
-                setIsInactive(true);
-                if (documentData) setDocumentRecord(documentData);
-                setPdfFile(null);
-                setTotalPages(0);
-                pdfDocRef.current = null;
-                canvasRefsArray.current = [];
+            if (documentData) {
+                setDocumentRecord(documentData);
+            }
+
+            if (isInactive || isRejectedSimultaneous || isExpired) {
                 setLoading(false);
                 return;
             }
 
-            // Check if document is rejected with simultaneous emails
-            if (docRejectedSimultaneous) {
-                setIsRejectedSimultaneous(true);
-                if (documentData) setDocumentRecord(documentData);
-                setPdfFile(null);
-                setTotalPages(0);
-                pdfDocRef.current = null;
-                canvasRefsArray.current = [];
-                setLoading(false);
-                return;
-            }
-
-            // Check if document is expired
-            if (documentExpired) {
-                setIsExpired(true);
-                if (documentData) setDocumentRecord(documentData);
-                setPdfFile(null);
-                setTotalPages(0);
-                pdfDocRef.current = null;
-                canvasRefsArray.current = [];
-                setLoading(false);
-                return;
-            }
-
-            setDocumentRecord(documentData);
-            const signatures = Array.isArray(sigData) ? sigData : [];
-            const fields = Array.isArray(fieldDataFromRecord) ? fieldDataFromRecord : [];
+            const signatures = Array.isArray(signatureData) ? signatureData : [];
             setSignatureData(signatures);
-            setFieldData(fields);
             setInitialSignatureData(JSON.parse(JSON.stringify(signatures)));
+            const fields = Array.isArray(fieldData) ? fieldData : [];
+            setFieldData(fields);
 
             // Check if document is already submitted (Completed or Rejected status)
             if (documentData.Status__c === "Completed" || documentData.Status__c === "Rejected") {
@@ -365,7 +337,6 @@ function App() {
 
             const data = await response.json();
             const documentData = data.records[0];
-            console.log("documentData==> ", documentData);
 
             // Check if document is inactive
             if (documentData.Active__c === false) {
@@ -400,64 +371,62 @@ function App() {
             }
 
             const contentVersionId = documentData.Uploaded_Document_Id__c;
-            const signatureDataJson = documentData.Signing_Details__c;
-
             if (!contentVersionId) {
                 throw new Error("Document not found. Please contact the sender for a new link.");
+            }
+
+            const signatureDataJson = documentData.Signing_Details__c;
+            if (!signatureDataJson) {
+                throw new Error("No signature data found for this document.");
             }
 
             // Parse signature and field data if available
             let parsedSignatureData = [];
             let parsedFieldData = [];
-            if (signatureDataJson) {
-                try {
-                    const parsedData = JSON.parse(signatureDataJson);
-                    if (Array.isArray(parsedData)) {
-                        parsedData.forEach((entry) => {
-                            // Check if entry has nested fields (new structure)
-                            if (entry.fields && Array.isArray(entry.fields)) {
-                                // Check if any field in this entry is a signature type
-                                const hasSignatureFields = entry.fields.some((field) => {
-                                    const typeLower = typeof field.type === "string" ? field.type.toLowerCase() : "";
-                                    const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(typeLower);
-                                    const isSignatureType = ["signature"].includes(typeLower) || (!isFieldType && !field.fieldType);
-                                    return isSignatureType;
+            try {
+                const parsedData = JSON.parse(signatureDataJson);
+                if (Array.isArray(parsedData)) {
+                    parsedData.forEach((entry) => {
+                        // Check if entry has nested fields (new structure)
+                        if (entry.fields && Array.isArray(entry.fields)) {
+                            // Check if any field in this entry is a signature type
+                            const hasSignatureFields = entry.fields.some((field) => {
+                                const typeLower = typeof field.type === "string" ? field.type.toLowerCase() : "";
+                                const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(typeLower);
+                                const isSignatureType = ["signature"].includes(typeLower) || (!isFieldType && !field.fieldType);
+                                return isSignatureType;
+                            });
+
+                            // If this entry has signature fields, add the entire entry once
+                            // All fields (signature + text/date/etc) stay together in nested structure
+                            if (hasSignatureFields) {
+                                parsedSignatureData.push({
+                                    ...entry,
+                                    signed: Boolean(entry.signed),
                                 });
-
-                                // If this entry has signature fields, add the entire entry once
-                                // All fields (signature + text/date/etc) stay together in nested structure
-                                if (hasSignatureFields) {
-                                    parsedSignatureData.push({
-                                        ...entry,
-                                        signed: Boolean(entry.signed),
-                                    });
-                                }
-
-                                // DO NOT extract text fields from nested structure to fieldData
-                                // They will be rendered by SignatureOverlay along with signature fields
-                            } else {
-                                // Old flat structure (backward compatibility)
-                                const typeLower = typeof entry.type === "string" ? entry.type.toLowerCase() : "";
-                                const isFieldType = ["text", "date", "number", "email", "checkbox"].includes(typeLower);
-                                const isSignatureType = ["signature", "initials"].includes(typeLower) || (!isFieldType && !entry.fieldType);
-                                if (isFieldType) {
-                                    parsedFieldData.push({
-                                        ...entry,
-                                        fieldType: typeLower,
-                                        filled: Boolean(entry.filled),
-                                    });
-                                } else if (isSignatureType) {
-                                    parsedSignatureData.push({
-                                        ...entry,
-                                        signed: Boolean(entry.signed),
-                                    });
-                                }
                             }
-                        });
-                    }
-                } catch (parseError) {
-                    console.warn("Failed to parse Signing_Details__c:", parseError);
+                        } else {
+                            // Old flat structure (backward compatibility)
+                            const typeLower = typeof entry.type === "string" ? entry.type.toLowerCase() : "";
+                            const isFieldType = ["text", "date", "number", "email", "checkbox"].includes(typeLower);
+                            const isSignatureType = ["signature", "initials"].includes(typeLower) || (!isFieldType && !entry.fieldType);
+                            if (isFieldType) {
+                                parsedFieldData.push({
+                                    ...entry,
+                                    fieldType: typeLower,
+                                    filled: Boolean(entry.filled),
+                                });
+                            } else if (isSignatureType) {
+                                parsedSignatureData.push({
+                                    ...entry,
+                                    signed: Boolean(entry.signed),
+                                });
+                            }
+                        }
+                    });
                 }
+            } catch (parseError) {
+                console.warn("Failed to parse Signing_Details__c:", parseError);
             }
 
             // Fetch Signature__c records to get imageUrl data
@@ -675,18 +644,19 @@ function App() {
             }
 
             const data = await response.json();
+            if (data && data.records && data.records.length > 0) {
+                const firstRecord = data.records[0];
+                const locale = firstRecord.DefaultLocaleSidKey || "en_US";
+                setLocaleKey(locale.replace("_", "-"));
 
-            const locale = data?.records?.[0]?.DefaultLocaleSidKey || 'en_US';
-            setLocaleKey(locale.replace('_', '-')); // Convert to standard locale format
-            const timeZone = data?.records?.[0]?.TimeZoneSidKey || null;
-            setTimeZoneKey(timeZone);
+                const timeZone = firstRecord.TimeZoneSidKey || null;
+                setTimeZoneKey(timeZone);
 
-            const id = data?.records?.[0]?.Id || null;
-            
-            return id;
+                const id = firstRecord.Id || null;
+                setOrgIdState(id);
+            }
         } catch (e) {
             console.warn("Unable to fetch Organization Id:", e);
-            return null;
         }
     };
 
@@ -723,10 +693,9 @@ function App() {
 
             const data = await response.json();
             const properties = data?.records?.[0] || null;
-            return properties;
+            setAdminProperties(properties);
         } catch (e) {
             console.warn("Unable to fetch Admin Properties:", e);
-            return null;
         }
     };
 
@@ -879,7 +848,7 @@ function App() {
             setStoredInitials((prev) => {
                 // If no initials stored yet, store this one
                 if (!prev.signBase64) {
-                    return { signBase64: imageData, arrStored: [signature.index], signatureType: signatureType};
+                    return { signBase64: imageData, arrStored: [signature.index], signatureType: signatureType };
                 }
                 return prev;
             });
@@ -934,7 +903,7 @@ function App() {
         const userAgent = navigator.userAgent || "Unknown Device";
         const osMatch = userAgent.match(/\(([^;]+);/);
         const osVersion = osMatch ? osMatch[1].trim() : "Unknown OS";
-        
+
         // Detect browser name and version (check specific browsers first, then fall back to generic)
         let browserName = "Unknown Browser";
         let browserVersion = "";
@@ -1187,8 +1156,8 @@ function App() {
         } else if (fType === "date" && field.defaultValue === "TODAY") {
             const today = new Date();
             const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, '0');
-            const day = String(today.getDate()).padStart(2, '0');
+            const month = String(today.getMonth() + 1).padStart(2, "0");
+            const day = String(today.getDate()).padStart(2, "0");
             field.value = `${year}-${month}-${day}`;
         }
         // Otherwise open modal
@@ -1289,10 +1258,14 @@ function App() {
             const pages = pdfDoc.getPages();
 
             // Get all filled signature and initials fields across all signatures
-            const filledFieldsNew = signatureData.flatMap((s) => (s.fields || []).filter((f) => {
-                const fieldType = f.type.toLowerCase();
-                return fieldType === "signature" || fieldType === "initials";
-            }).map((f) => ({ ...f, signerName: s.name || "--", signerEmail: s.email || "--" })));
+            const filledFieldsNew = signatureData.flatMap((s) =>
+                (s.fields || [])
+                    .filter((f) => {
+                        const fieldType = f.type.toLowerCase();
+                        return fieldType === "signature" || fieldType === "initials";
+                    })
+                    .map((f) => ({ ...f, signerName: s.name || "--", signerEmail: s.email || "--" }))
+            );
 
             for (const field of filledFieldsNew) {
                 try {
@@ -1423,12 +1396,12 @@ function App() {
             // Get all filled fields from both flat fieldData and nested signatureData structures
             const flatFilledFields = fieldData.filter((field) => {
                 const fieldType = (field.fieldType || field.type || "").toLowerCase();
-                
+
                 // Always include checkboxes regardless of their value (checked or unchecked)
                 if (fieldType === "checkbox") {
                     return true;
                 }
-                
+
                 // For other fields, check if they have a value
                 const hasValue = field.value !== null && field.value !== undefined && field.value !== "";
                 return (field.filled || hasValue) && hasValue;
@@ -1447,7 +1420,7 @@ function App() {
                     if (fieldType === "checkbox") {
                         return true;
                     }
-                    
+
                     // For other fields, check if they have a value
                     const hasValue = field.value !== null && field.value !== undefined && field.value !== "";
                     return (field.filled || hasValue) && hasValue;
@@ -1458,7 +1431,6 @@ function App() {
             const filledFields = [...flatFilledFields, ...nestedFilledFields];
 
             // Embed font for text rendering
-            // const manrope = await fetch("https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap").then((res) => res.arrayBuffer());
             const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
             // Process each form field
@@ -1604,14 +1576,6 @@ function App() {
                 }
             }
 
-            // Check if this is the final priority (highest priority number)
-            const allPriorities = signatureData.map((sig) => sig.priority).filter((p) => p !== undefined && p !== null);
-            const maxPriority = allPriorities.length > 0 ? Math.max(...allPriorities) : null;
-            const isFinalPriority = maxPriority !== null && urlPriority == maxPriority;
-
-            // Check if we're in simultaneous signing mode
-            const isSimultaneousMode = documentRecord?.Send_Emails_Simultaneously__c === true;
-
             // Helper function to check if all signers have completed their signatures
             const areAllSignersComplete = () => {
                 // Check if ALL signers (across all priorities) have completed their signatures
@@ -1693,7 +1657,7 @@ function App() {
                 if (allSignersComplete) {
                     // All signers complete - upload as final document
                     newContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, "Signed");
-                    
+
                     // If Store_On_Parent_Record__c is true and Record_ID__c exists, create ContentDocumentLink
                     if (documentRecord?.Store_On_Parent_Record__c === true && documentRecord?.Record_ID__c) {
                         try {
@@ -1857,7 +1821,7 @@ function App() {
 
             // First, get the ContentDocumentId from ContentVersionId
             const queryUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(`SELECT ContentDocumentId FROM ContentVersion WHERE Id='${contentVersionId}' LIMIT 1`)}`;
-            
+
             let queryResponse = await fetch(queryUrl, {
                 method: "GET",
                 headers: {
@@ -2286,23 +2250,17 @@ function App() {
     };
 
     const handleReject = () => {
-        // Show confirmation modal instead of rejecting directly
-        setRejectReason(""); // Clear previous reason
+        setRejectReason("");
         setShowRejectConfirm(true);
     };
 
     const handleConfirmReject = async () => {
         // Validate that reason is provided
         if (!rejectReason.trim()) {
-            setToast({
-                isVisible: true,
-                message: "Please provide a reason for rejection",
-                type: "error",
-            });
+            setToast({ isVisible: true, message: "Please provide a reason for rejection", type: "error" });
             return;
         }
-
-        // Close the confirmation modal
+        
         setShowRejectConfirm(false);
 
         if (!salesforceConfig) return;
@@ -2314,6 +2272,15 @@ function App() {
             setShowSpinner(true);
             const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/Document__c/${recordId}`;
 
+            const currentUser = signatureData.find((sig) => sig.priority == urlPriority);
+            const rejectorDetails = {
+                name: currentUser?.name,
+                email: currentUser?.email,
+                priority: currentUser?.priority,
+                rejectionDate: new Date().toISOString(),
+                rejectionReason: rejectReason.trim(),
+            }
+
             let response = await fetch(apiUrl, {
                 method: "PATCH",
                 headers: {
@@ -2322,7 +2289,7 @@ function App() {
                 },
                 body: JSON.stringify({
                     Status__c: "Rejected",
-                    Rejection_Reason__c: rejectReason.trim(),
+                    Rejector_Details__c: JSON.stringify(rejectorDetails),
                 }),
             });
 
@@ -2338,7 +2305,7 @@ function App() {
                     },
                     body: JSON.stringify({
                         Status__c: "Rejected",
-                        Rejection_Reason__c: rejectReason.trim(),
+                        Rejector_Details__c: JSON.stringify(rejectorDetails),
                     }),
                 });
             }
@@ -2363,8 +2330,7 @@ function App() {
     };
 
     const handleCancelReject = () => {
-        // Close the confirmation modal without rejecting
-        setRejectReason(""); // Clear reason
+        setRejectReason("");
         setShowRejectConfirm(false);
     };
 
@@ -2416,25 +2382,17 @@ function App() {
             if (encryptedQuery) {
                 // URL is encrypted - decrypt, update token, re-encrypt
                 try {
-                    // Decrypt the current URL
                     const decryptedString = await decryptUrlParams(encryptedQuery);
                     const params = parseQueryString(decryptedString);
-
-                    // Update the access token
                     params.act = token;
 
-                    // Rebuild query string
                     const updatedQueryString = buildQueryString(params);
-
-                    // Re-encrypt
                     const newEncryptedQuery = await encryptUrlParams(updatedQueryString);
 
-                    // Update URL with new encrypted parameter
                     url.searchParams.set("q", newEncryptedQuery);
                     window.history.replaceState({}, document.title, url.toString());
                 } catch (error) {
                     console.error("Failed to update encrypted URL:", error);
-                    // Fall back to updating state only
                 }
             } else {
                 // URL is not encrypted - update plaintext parameter
@@ -2675,7 +2633,7 @@ function App() {
             return `${city}, ${state}, ${country}`;
         } catch (gpsError) {
             console.warn("GPS failed, attempting IP-based location fallback:", gpsError);
-            
+
             return "Location Unavailable";
         }
     };
@@ -2862,8 +2820,8 @@ function App() {
                                             {/* <div className="page-number">Page {pageNumber}</div> */}
                                             <div className="canvas-wrapper">
                                                 <canvas ref={(el) => (canvasRefsArray.current[index] = el)}></canvas>
-                                                {signatureData.length > 0 && <SignatureOverlay key={`sig-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedSignature={storedSignature} storedInitials={storedInitials} onReuseSignature={handleReuseSignature} />}
-                                                {fieldData.length > 0 && <FieldOverlay key={`field-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedInitials={storedInitials} onReuseInitials={handleReuseSignature} />}
+                                                {signatureData.length > 0 && <SignatureOverlay key={`sig-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedSignature={storedSignature} storedInitials={storedInitials} onReuseSignature={handleReuseSignature} sendEmailsSimultaneously={documentRecord?.Send_Emails_Simultaneously__c} />}
+                                                {fieldData.length > 0 && <FieldOverlay key={`field-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedInitials={storedInitials} onReuseInitials={handleReuseSignature} sendEmailsSimultaneously={documentRecord?.Send_Emails_Simultaneously__c} />}
                                             </div>
                                         </div>
                                     );

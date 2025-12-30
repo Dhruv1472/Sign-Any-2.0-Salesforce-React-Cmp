@@ -17,10 +17,12 @@ import "./FieldOverlay.css";
  * @param {number} canvasScale - Scale factor for responsive sizing
  * @param {Object} storedInitials - Stored initials data { signBase64, arrStored }
  * @param {Function} onReuseInitials - Callback when reusing stored initials
+ * @param {boolean} sendEmailsSimultaneously - Whether emails are sent simultaneously (affects visibility rules)
  */
-const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave, onDelete, isSubmitted, sessionFilledKeys, canvasScale = 1, storedInitials, onReuseInitials }) => {
+const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave, onDelete, isSubmitted, sessionFilledKeys, canvasScale = 1, storedInitials, onReuseInitials, sendEmailsSimultaneously = false }) => {
     // Filter fields for this page
     // Show: 1. Current priority fields (editable), 2. Lower priority filled fields (read-only)
+    // When sendEmailsSimultaneously is true: Show ALL filled fields from any priority
     const pageFields = fields
         .filter((field) => {
             if (!field.fieldType) return false; // Ensure it's a field, not a signature
@@ -29,8 +31,17 @@ const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave,
             const fieldPriority = field.signerPriority ?? field.priority;
             const isCurrentPriority = fieldPriority == priority;
             const isLowerPriority = fieldPriority < priority;
+            const isHigherPriority = fieldPriority > priority;
 
-            // Don't show higher priority fields
+            // If simultaneous emails mode: show all priorities' filled fields
+            if (sendEmailsSimultaneously) {
+                // Show current priority fields (all)
+                if (isCurrentPriority) return true;
+                // Show other priorities' filled fields only
+                return (isLowerPriority || isHigherPriority) && field.filled;
+            }
+
+            // Sequential mode: don't show higher priority fields
             if (!isCurrentPriority && !isLowerPriority) {
                 return false;
             }
@@ -45,7 +56,7 @@ const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave,
             const fieldPriority = field.signerPriority ?? field.priority;
             const isCurrentPriority = fieldPriority == priority;
 
-            // Mark lower priority fields as disabled (read-only)
+            // Mark non-current priority fields as disabled (read-only)
             return {
                 ...field,
                 disabled: !isCurrentPriority || isSubmitted,
