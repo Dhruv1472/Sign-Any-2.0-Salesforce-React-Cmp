@@ -11,7 +11,6 @@ import SignatureModal from "./components/SignatureModal";
 import FieldOverlay from "./components/FieldOverlay";
 import FieldModal from "./components/FieldModal";
 import Toast from "./components/Toast";
-import SomethingWentWrong from "./pages/SomethingWentWrong";
 
 import { updateSignatureWithImage, deleteSignatureImage, updateFieldWithValue, deleteFieldValue, updateNestedFieldValue, deleteNestedFieldValue } from "./utils/signatureUtils";
 import { decryptUrlParams, parseQueryString, encryptUrlParams, buildQueryString } from "./utils/encryption";
@@ -1187,7 +1186,7 @@ function App() {
 
                 try {
                     // Fetch current document status and check if it's already been updated
-                    const query = `SELECT Id, Status__c, Document_Hash_Key__c, Signing_Details__c FROM Document__c WHERE Id = '${recordId}' LIMIT 1`;
+                    const query = `SELECT Id, Status__c, Document_Hash_Key__c, Signing_Details__c, Active__c FROM Document__c WHERE Id = '${recordId}' LIMIT 1`;
                     const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
 
                     let response = await fetch(apiUrl, {
@@ -1241,6 +1240,16 @@ function App() {
                             } catch (parseError) {
                                 console.warn("Could not parse Signing_Details__c:", parseError);
                             }
+                        }
+                        if (currentDoc && currentDoc.Active__c === false) {
+                            setShowSpinner(false);
+                            setToast({ isVisible: true, message: "Something went wrong. Refreshing...", type: "error" });
+                            
+                            // Reload after short delay
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 1500);
+                            return;
                         }
                     }
                 } catch (checkError) {
@@ -2191,7 +2200,7 @@ function App() {
                 }
 
                 // If Store_Sign__c is enabled and this field has an imageUrl, upload it as ContentVersion
-                if (storeSignatures && fieldsWithImages[index]?.imageUrl) {
+                if (storeSignatures && fieldsWithImages[index]?.imageUrl && !isUpdate) {
                     await uploadSignatureImage(signatureRecordId, fieldsWithImages[index].imageUrl, record.Field_Index__c, currentToken, instanceUrl, clientId, clientSecret);
                 }
 

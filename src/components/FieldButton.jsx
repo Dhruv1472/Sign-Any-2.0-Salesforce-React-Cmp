@@ -259,9 +259,8 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
                             <span
                                 className={`checkbox-icon ${value ? "checked" : ""}`}
                                 style={{
-                                    width: `${16 * canvasScale}px`,
-                                    height: `${16 * canvasScale}px`,
-                                    fontSize: `${12 * canvasScale}px`,
+                                    padding: 0,
+                                    fontSize: `${15.16 * canvasScale - 1.55}px`,
                                     borderWidth: `${1 * canvasScale}px`,
                                 }}>
                                 {value ? "✓" : ""}
@@ -304,7 +303,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
         const isChecked = filled && (value === true || value === "true" || value === "True");
         return (
             <div className="checkbox-wrapper" onClick={isDisabled ? undefined : handleFieldClick} style={{ cursor: isDisabled ? 'not-allowed' : 'pointer' }}>
-                <input type="checkbox" checked={isChecked} disabled={isDisabled} readOnly data-key={key} />
+                <input type="checkbox" checked={isChecked} disabled={isDisabled} readOnly data-key={key} style={{width: `${-36.42 * canvasScale - 5.39}px`, height: `${-36.42 * canvasScale - 5.39}px`}} />
             </div>
         );
     }

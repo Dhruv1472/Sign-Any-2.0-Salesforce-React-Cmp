@@ -120,6 +120,18 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
         img.src = history[step];
     };
 
+    const handleSizeChange = (e) => {
+        if (tool === "pen") {
+            if (e.target.value >= minBrushSize && e.target.value <= maxBrushSize) {
+                setPenSize(parseInt(e.target.value));
+            }
+        } else {
+            if (e.target.value >= minBrushSize && e.target.value <= maxBrushSize) {
+                setEraseSize(parseInt(e.target.value));
+            }
+        }
+    };
+
     const handleUndo = () => {
         if (historyStep > 0) {
             const newStep = historyStep - 1;
@@ -369,10 +381,10 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
 
                 {!hideBrushSize && (
                     <div className="draw-signature-toolbar-bottom">
-                        <span>Brush Size</span>
+                        <span>{tool === "pen" ? "Brush Size" : "Eraser Size"}</span>
                         <div className="draw-toolbar-range-container">
-                            <input className="draw-toolbar-range" type="range" min={minBrushSize} max={maxBrushSize} value={tool === "pen" ? penSize : eraseSize} onChange={(e) => (tool === "pen" ? setPenSize(parseInt(e.target.value)) : setEraseSize(parseInt(e.target.value)))} />
-                            <input className="draw-toolbar-range-val" type="number" min={minBrushSize} max={maxBrushSize} step={1} value={tool === "pen" ? penSize : eraseSize} onChange={(e) => (tool === "pen" ? setPenSize(parseInt(e.target.value)) : setEraseSize(parseInt(e.target.value)))} />
+                            <input className="draw-toolbar-range" type="range" min={minBrushSize} max={maxBrushSize} value={tool === "pen" ? penSize : eraseSize} onChange={handleSizeChange} />
+                            <input className="draw-toolbar-range-val" type="number" min={minBrushSize} max={maxBrushSize} step={1} value={tool === "pen" ? penSize : eraseSize} onChange={handleSizeChange} />
                         </div>
                     </div>
                 )}

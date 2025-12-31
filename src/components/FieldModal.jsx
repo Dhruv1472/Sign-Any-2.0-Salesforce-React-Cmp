@@ -70,15 +70,10 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
         };
         
         let out = pattern || "MMM DD YYYY";
-        // Replace longer tokens first to avoid conflicts
-        out = out.replace(/MMMM/gi, map.MMMM);
-        out = out.replace(/MMM/gi, map.MMM);
-        out = out.replace(/YYYY/gi, map.YYYY);
-        out = out.replace(/YY/gi, map.YY);
-        out = out.replace(/DD/gi, map.DD);
-        out = out.replace(/D/gi, map.D);
-        out = out.replace(/MM/gi, map.MM);
-        out = out.replace(/M/gi, map.M);
+        // Replace all tokens in one pass, matching longest first
+        out = out.replace(/YYYY|MMMM|MMM|MM|YY|DD|M|D/g, (match) => {
+            return map[match] || match;
+        });
         return out;
     };
 

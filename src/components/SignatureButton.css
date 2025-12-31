@@ -1,7 +1,7 @@
 .signature-button {
     background-color: transparent;
     color: rgb(0, 174, 255);
-    padding: 8px 16px;
+    padding: 0;
     border: 2px dashed rgb(0, 174, 255);
     border-radius: 4px;
     cursor: pointer;
