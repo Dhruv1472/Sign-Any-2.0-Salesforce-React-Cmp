@@ -123,10 +123,6 @@
     transform: translateX(calc(100% + 4px));
 }
 
-.signature-tabs-slider-indicator[data-active="upload"] {
-    transform: translateX(calc(200% + 8px));
-}
-
 .signature-modal-content {
     flex: 1;
     padding: 12px;

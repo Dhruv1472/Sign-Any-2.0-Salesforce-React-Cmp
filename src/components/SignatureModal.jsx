@@ -6,7 +6,6 @@ import "./SignatureModal.css";
 const TABS = {
     DRAW: "draw",
     TYPE: "type",
-    UPLOAD: "upload",
 };
 
 /**

@@ -16,11 +16,10 @@ import "./DrawSignature.css";
  * @param {number} defaultEraseSize - Default eraser size (1-10)
  * @param {number} minBrushSize - Minimum brush size
  * @param {number} maxBrushSize - Maximum brush size
- * @param {number} aspectRatio - Canvas aspect ratio (width/height)
  * @param {number} canvasWidth - Canvas width in pixels
  * @param {number} canvasHeight - Canvas height in pixels
  */
-const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = false, hideUndo = false, hideRedo = false, hideBrushSize = false, defaultPenSize = 2, defaultEraseSize = 10, minBrushSize = 1, maxBrushSize = 10, aspectRatio = 4, canvasWidth = 547, canvasHeight = 274 }) => {
+const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = false, hideUndo = false, hideRedo = false, hideBrushSize = false, defaultPenSize = 2, defaultEraseSize = 10, minBrushSize = 1, maxBrushSize = 10, canvasWidth = 547, canvasHeight = 274 }) => {
     const canvasRef = useRef(null);
     const [isDrawing, setIsDrawing] = useState(false);
     const [isEmpty, setIsEmpty] = useState(true);
@@ -41,12 +40,6 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
         // Set canvas size
         canvas.width = canvas.offsetWidth;
         canvas.height = canvas.offsetHeight;
-
-        // Set drawing styles
-        ctx.strokeStyle = "#000000";
-        ctx.lineWidth = 2;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
 
         // Clear canvas with transparent background
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -243,8 +236,7 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
             if (!canvas) return;
 
             const ctx = canvas.getContext("2d");
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             setIsEmpty(true);
 
@@ -274,7 +266,7 @@ const DrawSignature = ({ onChange, clearTrigger, hidePen = false, hideEraser = f
             ctx.lineWidth = penSize;
         } else {
             ctx.strokeStyle = "#ffffff";
-            ctx.lineWidth = eraseSize * 5; // Multiply eraser size by 2x for better erasing
+            ctx.lineWidth = eraseSize * 5;
         }
         ctx.lineCap = "round";
         ctx.lineJoin = "round";

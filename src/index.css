@@ -102,11 +102,6 @@ button:focus-visible {
     outline: none;
 }
 
-/* button:hover:not(:disabled) {
-    background-color: #f0f0f0;
-    border-color: #999;
-} */
-
 button:disabled {
     opacity: 0.5;
     cursor: not-allowed;

@@ -27,37 +27,6 @@
     background-color: rgba(33, 150, 243, 0.1);
 }
 
-/* Field type specific colors */
-.field-button-text {
-    border-color: #2196f3;
-    color: #2196f3;
-    background-color: transparent;
-}
-
-.field-button-date {
-    border-color: #2196f3;
-    color: #2196f3;
-    background-color: transparent;
-}
-
-.field-button-number {
-    border-color: #2196f3;
-    color: #2196f3;
-    background-color: transparent;
-}
-
-.field-button-email {
-    border-color: #2196f3;
-    color: #2196f3;
-    background-color: transparent;
-}
-
-.field-button-checkbox {
-    border-color: #2196f3;
-    color: #2196f3;
-    background-color: transparent;
-}
-
 .checkbox-wrapper {
     width: 100%;
     height: 100%;
@@ -356,7 +325,6 @@
     width: 100%;
     height: 100%;
     gap: 0;
-    /* overflow: hidden; */
     box-sizing: border-box;
 }
 

@@ -1,14 +1,7 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
 import "./ThankYou.css";
 
 const ThankYou = () => {
-    const navigate = useNavigate();
-
-    const handleClose = () => {
-        // For manually opened windows/tabs, show a friendly message
-        // alert('You can now close this tab. Thank you!');
-    };
 
     return (
         <div className="thankyou-container">
@@ -45,12 +38,6 @@ const ThankYou = () => {
                 </div>
 
                 <p className="thankyou-note">A confirmation email has been sent to your email address with a copy of the signed document.</p>
-
-                {/* <div className="thankyou-actions">
-                    <button className="close-btn" onClick={handleClose}>
-                        Close Tab
-                    </button>
-                </div> */}
 
                 <div className="thankyou-footer">
                     <p>If you have any questions, please contact the document sender.</p>

@@ -96,11 +96,6 @@
     accent-color: #4caf50;
 }
 
-.checkbox-label-text {
-    user-select: none;
-    color: #333;
-}
-
 .field-error {
     color: #e74c3c;
     font-size: 14px;

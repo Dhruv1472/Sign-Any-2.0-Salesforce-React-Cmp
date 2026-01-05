@@ -7,7 +7,6 @@ import "./TypeSignature.css";
  *
  * @param {Function} onChange - Callback when signature is typed (receives base64 image)
  * @param {number} clearTrigger - Trigger to clear the text
- * @param {string} signatureType - Type of signature: signature, text, or initials
  * @param {boolean} hideBold - If true, hide bold button
  * @param {boolean} hideItalic - If true, hide italic button
  * @param {boolean} hideFontStyle - If true, hide font family selector
@@ -22,7 +21,7 @@ import "./TypeSignature.css";
  * @param {number} canvasWidth - Canvas width in pixels
  * @param {number} canvasHeight - Canvas height in pixels
  */
-const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = false, hideItalic = false, hideFontStyle = false, hideFontSize = false, availableFonts = ["Artecallya", "Maytra", "Mr Dafoe", "Mr DeHaviland", "The signature", "Monsieur La Doulaise", "Mrs Saint Delafield", "Barokah", "Bettina", "High Summit"], defaultFontStyle = "Artecallya", defaultFontSize = 48, minFontSize = 2, maxFontSize = 100, fontSizeStep = 2, maxTextLength = 50, aspectRatio = 4, canvasWidth = 547, canvasHeight = 274 }) => {
+const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = false, hideItalic = false, hideFontStyle = false, hideFontSize = false, availableFonts = ["Artecallya", "Maytra", "Mr Dafoe", "Mr DeHaviland", "The signature", "Monsieur La Doulaise", "Mrs Saint Delafield", "Barokah", "Bettina", "High Summit"], defaultFontStyle = "Artecallya", defaultFontSize = 48, minFontSize = 2, maxFontSize = 100, fontSizeStep = 2, maxTextLength = 50, canvasWidth = 547, canvasHeight = 274 }) => {
     const [text, setText] = useState(defaultValue || "");
     const [selectedFont, setSelectedFont] = useState(defaultFontStyle);
     const [isBold, setIsBold] = useState(false);
@@ -90,8 +89,7 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
                         await new Promise(resolve => setTimeout(resolve, 50));
                     }
                 }
-            } catch (error) {
-                console.warn("Font loading check failed:", error);
+            } catch {
                 // Continue anyway after small delay
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
@@ -159,7 +157,7 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
                 onChange(canvas.toDataURL("image/png"));
             }
         });
-    }, [text, selectedFont, isBold, isItalic, fontSize, onChange, aspectRatio, fontsLoaded]);
+    }, [text, selectedFont, isBold, isItalic, fontSize, onChange, fontsLoaded]);
 
     const adjustedFontSize = (selectedFont, fontSize) => {
         switch (selectedFont) {
@@ -253,7 +251,7 @@ const TypeSignature = ({ onChange, clearTrigger, defaultValue = "", hideBold = f
                         <span
                             className="type-signature-preview-text"
                             style={{
-                                fontFamily: `"${selectedFont}", ${hideFontStyle ? "sans-serif" : "cursive"}`,
+                                fontFamily: `"${selectedFont}", cursive`,
                                 fontWeight: isBold ? "bold" : "normal",
                                 fontStyle: isItalic ? "italic" : "normal",
                                 fontSize: `${adjustedFontSize(selectedFont, fontSize)}px`,

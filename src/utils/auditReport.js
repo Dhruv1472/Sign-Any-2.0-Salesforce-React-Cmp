@@ -33,11 +33,10 @@ const formatTimestamp = (timestamp) => {
  * @param {Array} sigData - Signature data array
  * @param {string} orgId - Salesforce organization ID
  * @param {number} totalPages - Total number of pages in document
- * @param {Object} pageFormat - PDF page format {width, height, orientation}
  * @param {boolean} showCompletedOnly - Whether to show only completed signatures
  * @returns {Promise<void>}
  */
-export const generateAuditHTML = async (doc, sigData, orgId, totalPages, pageFormat, showCompletedOnly = false, localeKey = 'en-US', timeZone = 'UTC') => {
+export const generateAuditHTML = async (doc, sigData, orgId, totalPages, showCompletedOnly = false, localeKey = 'en-US', timeZone = 'UTC') => {
     // Only include signature fields (those with type="signature"), exclude other field types
     const allFields = sigData.flatMap((s) =>
         (s.fields || [])
