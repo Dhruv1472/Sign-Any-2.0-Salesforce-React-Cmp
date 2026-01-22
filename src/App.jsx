@@ -78,6 +78,7 @@ function App() {
     // Reject Modal State
     const [showRejectConfirm, setShowRejectConfirm] = useState(false);
     const [rejectReason, setRejectReason] = useState("");
+    const [showInstructions, setShowInstructions] = useState(true);
 
     const canvasRefsArray = useRef([]);
     const pdfDocRef = useRef(null);
@@ -2711,6 +2712,10 @@ function App() {
         }
     };
 
+    const toggleInstructions = () => {
+        setShowInstructions((prev) => !prev);
+    };
+
     return (
         <div className="app">
             {isExpired && (
@@ -2766,6 +2771,21 @@ function App() {
                     <div className="pdf-container">
                         <div className="heading">
                             <h1 className="document-header">Review & Sign Document : {documentRecord?.Document_Name__c || ""}</h1>
+                            <div className={`reject-parent ${showInstructions ? "is-open" : "is-closed"}`}>
+                                <button type="button" className="slider" onClick={toggleInstructions} aria-expanded={showInstructions} aria-label={showInstructions ? "Hide reject controls" : "Show reject controls"}>
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d={showInstructions ? "M19.1642 12L12.9571 5.79291L11.5429 7.20712L16.3358 12L11.5429 16.7929L12.9571 18.2071L19.1642 12ZM13.5143 12L7.30722 5.79291L5.89301 7.20712L10.6859 12L5.89301 16.7929L7.30722 18.2071L13.5143 12Z"
+                                                    : "M4.83578 12L11.0429 18.2071L12.4571 16.7929L7.66421 12L12.4571 7.20712L11.0429 5.79291L4.83578 12ZM10.4857 12L16.6928 18.2071L18.107 16.7929L13.3141 12L18.107 7.20712L16.6928 5.79291L10.4857 12Z"
+                                            }
+                                        />
+                                    </svg>
+                                </button>
+                                {showInstructions && (
+                                    <button type="button" className="header-reject-btn" onClick={handleReject}>
+                                        Void
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <div className="content-section">
                             <div className="preview-section">
@@ -2782,34 +2802,6 @@ function App() {
                                         );
                                     })}
                                 </div>
-
-                                {shouldShowSaveButton() && (
-                                    <div className="bottom-bar">
-                                        <div className="bottom-bar-left">
-                                            <input type="checkbox" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px" }} />
-                                            <span>
-                                                {" "}
-                                                I accept the{" "}
-                                                <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">
-                                                    t & c ↗
-                                                </a>
-                                            </span>
-                                        </div>
-                                        <div className="bottom-bar-right">
-                                            <div className="action-btns">
-                                                <button className="reject-btn" onClick={handleReject}>
-                                                    Reject
-                                                </button>
-                                                <button className="save-submit-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted}>
-                                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                        <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white" />
-                                                    </svg>
-                                                    Submit
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                             <div className="canvas-container">
                                 <div className="pdf-header">
@@ -2884,9 +2876,9 @@ function App() {
                                 </div>
                                 <div className="bottom-bar-right">
                                     <div className="action-btns">
-                                        <button className="reject-btn" onClick={handleReject}>
+                                        {/* <button className="reject-btn" onClick={handleReject}>
                                             Reject
-                                        </button>
+                                        </button> */}
                                         <button className="save-submit-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted}>
                                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white" />
@@ -2923,20 +2915,20 @@ function App() {
                                 <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 13C11.45 13 11 12.55 11 12V8C11 7.45 11.45 7 12 7C12.55 7 13 7.45 13 8V12C13 12.55 12.55 13 12 13ZM13 17H11V15H13V17Z" fill="#d32f2f" />
                             </svg>
                         </div>
-                        <h3 className="reject-confirm-title">Reject Document?</h3>
-                        <p className="reject-confirm-message">Are you sure you want to reject this document? This action cannot be undone.</p>
+                        <h3 className="reject-confirm-title">Void Document?</h3>
+                        <p className="reject-confirm-message">Are you sure you want to void this document? This action cannot be undone.</p>
                         <div className="reject-reason-field">
                             <label htmlFor="reject-reason">
-                                Reason for Rejection <span style={{ color: "#d32f2f" }}>*</span>
+                                Reason for Voiding <span style={{ color: "#d32f2f" }}>*</span>
                             </label>
-                            <textarea id="reject-reason" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Please provide a reason for rejecting this document..." rows="4" style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #ddd", fontSize: "14px", fontFamily: "inherit", resize: "vertical", minHeight: "80px" }} />
+                            <textarea id="reject-reason" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Please provide a reason for voiding this document..." rows="4" style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #ddd", fontSize: "14px", fontFamily: "inherit", resize: "vertical", minHeight: "80px" }} />
                         </div>
                         <div className="reject-confirm-actions">
                             <button className="reject-cancel-btn" onClick={handleCancelReject}>
                                 Cancel
                             </button>
                             <button className="reject-confirm-btn" onClick={handleConfirmReject} disabled={!rejectReason.trim()} style={{ opacity: !rejectReason.trim() ? 0.5 : 1, cursor: !rejectReason.trim() ? "not-allowed" : "pointer" }}>
-                                Yes, Reject
+                                Yes, Void
                             </button>
                         </div>
                     </div>
