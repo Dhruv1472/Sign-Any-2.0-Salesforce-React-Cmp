@@ -246,6 +246,75 @@
     border-radius: 8px;
     background: white;
     box-shadow: 0px 0px 2px 0px #00000040;
+    flex: 1;
+    margin: 0;
+}
+
+.reject-parent {
+    position: fixed;
+    top: 23%;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background-color: #b71c1c;
+    border-radius: 6px 0 0 6px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+    height: 40px;
+    width: 40px;
+    overflow: hidden;
+    transition: width 0.35s ease, box-shadow 0.35s ease;
+}
+
+.reject-parent.is-open {
+    /* transform: translateX(0); */
+    width: 85px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.slider {
+    padding: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    line-height: 0;
+}
+
+.slider svg {
+    width: 24px;
+    height: 24px;
+    fill: white;
+}
+
+.header-reject-btn {
+    background-color: transparent !important;
+    color: white;
+    padding: 10px;
+    border: none;
+    border-radius: 0 6px 6px 0;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+    opacity: 0;
+    max-width: 0;
+    overflow: hidden;
+}
+
+.header-reject-btn:hover {
+    box-shadow: 0 2px 8px rgba(211, 47, 47, 0.3);
+}
+
+.reject-parent.is-open .header-reject-btn {
+    opacity: 1;
+    max-width: 160px;
+    padding: 10px;
 }
 
 .pdf-header {
@@ -435,7 +504,7 @@
     transform: translateY(100%);
     transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 999;
-    width: calc(100% - 19rem);
+    width: 98%;
     margin: auto 1rem 1rem auto;
     border-radius: 8px;
     height: 5rem;
@@ -767,7 +836,7 @@
 
     .bottom-bar-right {
         justify-content: center;
-        width: 100%;
+        /* width: 100%; */
     }
 
     .save-submit-btn {
@@ -790,7 +859,7 @@
 
     .footer {
         display: flex;
-        flex-direction: column;
+        /* flex-direction: column; */
         gap: 0.5rem;
     }
 
@@ -800,6 +869,28 @@
 
     .heading {
         padding-bottom: 0.5rem;
+    }
+
+    .bottom-bar-left{
+        gap: 4px;
+    }
+
+    .reject-parent{
+        height: 30px;
+        width: 30px;
+    }
+
+    .reject-parent.is-open .header-reject-btn{
+        padding: 5px;
+    }
+
+    .slider svg{
+        width: 20px;
+        height: 20px;
+    }
+
+    .reject-parent.is-open{
+        width: 75px;
     }
 }
 
