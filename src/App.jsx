@@ -616,7 +616,7 @@ function App() {
     const fetchOrganizationId = async (accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
-            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent("SELECT Id, DefaultLocaleSidKey, TimeZoneSidKey FROM Organization LIMIT 1")}`;
+            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent("SELECT Id, LocaleSidKey, TimeZoneSidKey FROM User WHERE name = 'SignAny Integration User' LIMIT 1")}`;
 
             let response = await fetch(apiUrl, {
                 method: "GET",
@@ -645,7 +645,7 @@ function App() {
             const data = await response.json();
             if (data && data.records && data.records.length > 0) {
                 const firstRecord = data.records[0];
-                const locale = firstRecord.DefaultLocaleSidKey || "en_US";
+                const locale = firstRecord.LocaleSidKey || "en_US";
                 setLocaleKey(locale.replace("_", "-"));
 
                 const timeZone = firstRecord.TimeZoneSidKey || null;
