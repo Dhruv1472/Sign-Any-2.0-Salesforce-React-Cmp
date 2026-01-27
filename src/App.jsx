@@ -1619,7 +1619,7 @@ function App() {
                     // Generate audit on every signature if checkbox is enabled, or only when all signers complete
                     const showCompletedOnly = auditOnEverySignature && !allSignersComplete;
                     try {
-                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat, showCompletedOnly, localeKey, timeZoneKey);
+                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, showCompletedOnly, localeKey, timeZoneKey);
                         auditPdfBytes = await convertAuditHTMLToPDF(pdfPageFormat);
                     } catch (e) {
                         console.warn("Failed to generate separate audit report:", e);
@@ -1634,7 +1634,7 @@ function App() {
                     // Generate audit on every signature if checkbox is enabled, or only when all signers complete
                     const showCompletedOnly = auditOnEverySignature && !allSignersComplete;
                     try {
-                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, pdfPageFormat, showCompletedOnly, localeKey, timeZoneKey);
+                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, showCompletedOnly, localeKey, timeZoneKey);
                     } catch (e) {
                         console.warn("Failed to append audit report page:", e);
                     }
