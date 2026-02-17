@@ -23,8 +23,9 @@ import "./SignatureOverlay.css";
  * @param {Object} storedInitials - Stored initials data { signBase64, arrStored }
  * @param {Function} onReuseSignature - Callback when reusing stored signature
  * @param {boolean} sendEmailsSimultaneously - Whether emails are sent simultaneously (affects visibility rules)
+ * @param {string} highlightedFieldKey - Key of field to highlight
  */
-const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onFieldClick, onFieldSave, onDelete, onFieldDelete, isSubmitted, sessionSignedKeys, sessionFilledKeys, canvasScale = 1, storedSignature, storedInitials, onReuseSignature, sendEmailsSimultaneously = false }) => {
+const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onFieldClick, onFieldSave, onDelete, onFieldDelete, isSubmitted, sessionSignedKeys, sessionFilledKeys, canvasScale = 1, storedSignature, storedInitials, onReuseSignature, sendEmailsSimultaneously = false, highlightedFieldKey = null }) => {
     // Filter signatures for this page
     // Show: 1. Current priority fields (editable), 2. Lower priority filled fields (read-only, already signed)
     // When sendEmailsSimultaneously is true: Show ALL filled fields from any priority
@@ -112,8 +113,11 @@ const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onFieldCli
                 const hasStoredSignature = storedData?.signBase64 && isSignatureField && !field.filled;
                 field.buttonName = fieldType === "signature" ? "Sign Here" : "Enter Initials";
 
+                // Check if this field should be highlighted
+                const isHighlighted = highlightedFieldKey === uniqueKey;
+
                 return (
-                    <div key={uniqueKey} className={isSignatureField ? "signature-position" : "field-position"} style={{ position: "absolute", left: `${field.xPercent}%`, top: `${field.yPercent}%`, width: `${field.widthPercent}%`, height: `${field.heightPercent}%` }}>
+                    <div key={uniqueKey} className={`${isSignatureField ? "signature-position" : "field-position"}${isHighlighted ? " field-highlighted" : ""}`} style={{ position: "absolute", left: `${field.xPercent}%`, top: `${field.yPercent}%`, width: `${field.widthPercent}%`, height: `${field.heightPercent}%` }} data-field-key={uniqueKey}>
                         {isSignatureField ? <SignatureButton signature={{ ...field, disabled: field.disabled }} onSign={onSign} onDelete={onDelete} canDelete={canDelete} canvasScale={canvasScale} hasStoredSignature={hasStoredSignature} onReuseSignature={onReuseSignature} /> : isTextField ? <FieldButton field={{ ...field, fieldType: fieldType }} onFieldClick={onFieldClick} onSave={onFieldSave} onDelete={onFieldDelete} canDelete={canDelete} disabled={field.disabled} canvasScale={canvasScale} storedInitials={storedInitials} onReuseInitials={onReuseSignature} /> : null}
                     </div>
                 );

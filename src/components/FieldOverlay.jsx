@@ -18,8 +18,9 @@ import "./FieldOverlay.css";
  * @param {Object} storedInitials - Stored initials data { signBase64, arrStored }
  * @param {Function} onReuseInitials - Callback when reusing stored initials
  * @param {boolean} sendEmailsSimultaneously - Whether emails are sent simultaneously (affects visibility rules)
+ * @param {string} highlightedFieldKey - Key of field to highlight
  */
-const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave, onDelete, isSubmitted, sessionFilledKeys, canvasScale = 1, storedInitials, onReuseInitials, sendEmailsSimultaneously = false }) => {
+const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave, onDelete, isSubmitted, sessionFilledKeys, canvasScale = 1, storedInitials, onReuseInitials, sendEmailsSimultaneously = false, highlightedFieldKey = null }) => {
     // Filter fields for this page
     // Show: 1. Current priority fields (editable), 2. Lower priority filled fields (read-only)
     // When sendEmailsSimultaneously is true: Show ALL filled fields from any priority
@@ -75,8 +76,13 @@ const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave,
                 const isCurrentPriorityField = fieldPriority == priority;
                 const canDelete = !isSubmitted && isCurrentPriorityField && sessionFilledKeys.has(field.index);
 
+                // Create unique key for flat fields
+                const fieldType = (field.fieldType || field.type || "").toLowerCase();
+                const uniqueKey = `flat-${field.index}-${fieldType}`;
+                const isHighlighted = highlightedFieldKey === uniqueKey;
+
                 return (
-                    <div key={field.index} className="field-position" style={{ position: "absolute", left: `${field.xPercent}%`, top: `${field.yPercent}%`, width: `${field.widthPercent}%`, height: `${field.heightPercent}%` }}>
+                    <div key={field.index} className={`field-position${isHighlighted ? " field-highlighted" : ""}`} style={{ position: "absolute", left: `${field.xPercent}%`, top: `${field.yPercent}%`, width: `${field.widthPercent}%`, height: `${field.heightPercent}%` }} data-field-key={uniqueKey}>
                         <FieldButton field={field} onFieldClick={onFieldClick} onSave={onFieldSave} onDelete={onDelete} canDelete={canDelete} disabled={field.disabled} canvasScale={canvasScale} storedInitials={storedInitials} onReuseInitials={onReuseInitials} />
                     </div>
                 );

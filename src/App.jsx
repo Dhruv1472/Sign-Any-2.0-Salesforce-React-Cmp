@@ -89,6 +89,9 @@ function App() {
     const [storedSignature, setStoredSignature] = useState({ signBase64: null, arrStored: [], signatureType: "" });
     const [storedInitials, setStoredInitials] = useState({ signBase64: null, arrStored: [], signatureType: "" });
 
+    // State for next field navigation
+    const [highlightedFieldKey, setHighlightedFieldKey] = useState(null);
+
     // Setup BroadcastChannel for cross-tab communication
     useEffect(() => {
         const currentUrl = window.location.href;
@@ -617,7 +620,7 @@ function App() {
     const fetchOrganizationId = async (accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
-            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent("SELECT Id, LocaleSidKey, TimeZoneSidKey FROM User WHERE name = 'SignAny Integration User' LIMIT 1")}`;
+            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent("SELECT Id, DefaultLocaleSidKey, TimeZoneSidKey FROM Organization LIMIT 1")}`;
 
             let response = await fetch(apiUrl, {
                 method: "GET",
@@ -638,6 +641,28 @@ function App() {
                 });
             }
 
+            if (response.status === 400) {
+                const userApiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent("SELECT Id, LocaleSidKey, TimeZoneSidKey FROM User WHERE name = 'SignAny Integration User' LIMIT 1")}`;
+                response = await fetch(userApiUrl, {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                        "Content-Type": "application/json",
+                    },
+                });
+
+                if (response.status === 401 && clientId && clientSecret) {
+                    currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
+                    response = await fetch(apiUrl, {
+                        method: "GET",
+                        headers: {
+                            Authorization: `Bearer ${currentToken}`,
+                            "Content-Type": "application/json",
+                        },
+                    });
+                }
+            }
+
             if (!response.ok) {
                 console.error(`Organization ID fetch error: ${response.status} ${response.statusText}`);
                 throw new Error("Unable to verify your organization. Please contact support.");
@@ -646,7 +671,8 @@ function App() {
             const data = await response.json();
             if (data && data.records && data.records.length > 0) {
                 const firstRecord = data.records[0];
-                const locale = firstRecord.LocaleSidKey || "en_US";
+                // const locale = firstRecord.LocaleSidKey || "en_US"; // Using Organization's DefaultLocaleSidKey instead
+                const locale = firstRecord.LocaleSidKey || firstRecord.DefaultLocaleSidKey || "en_US";
                 setLocaleKey(locale.replace("_", "-"));
 
                 const timeZone = firstRecord.TimeZoneSidKey || null;
@@ -1180,6 +1206,7 @@ function App() {
 
         try {
             setShowSpinner(true);
+            let latestSignatureData;
 
             // STEP 1: Check if document was already submitted by this user in another window/browser
             if (salesforceConfig) {
@@ -1225,6 +1252,11 @@ function App() {
                                             return entry.fields.every((field) => field.filled);
                                         }
                                         return entry.filled === true;
+                                    });
+
+                                    latestSignatureData = signatureData.map((sig) => {
+                                        if (sig.priority == urlPriority) return sig;
+                                        return parsedDetails.find((entry) => entry.priority == sig.priority) || sig;
                                     });
 
                                     if (allFieldsFilled) {
@@ -1694,7 +1726,7 @@ function App() {
                 }
 
                 // Update Document record with signature, field data, PDF hash, and ContentVersion ID(s)
-                await updateDocumentRecord(salesforceConfig.recordId, signatureData, fieldData, pdfHash, newContentVersionId, temporaryContentVersionId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
+                await updateDocumentRecord(salesforceConfig.recordId, latestSignatureData, fieldData, pdfHash, newContentVersionId, temporaryContentVersionId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
 
                 // Mark as submitted
                 setIsSubmitted(true);
@@ -2716,6 +2748,104 @@ function App() {
         setShowInstructions((prev) => !prev);
     };
 
+    // Get all unfilled fields for current priority, sorted by page and position
+    const getUnfilledFieldsForCurrentPriority = () => {
+        const unfilledFields = [];
+
+        // Get fields from nested structure (signatureData)
+        signatureData
+            .filter((sig) => sig.priority == urlPriority)
+            .forEach((sig) => {
+                (sig.fields || []).forEach((field) => {
+                    if (!field.filled) {
+                        unfilledFields.push({
+                            ...field,
+                            _parentSigner: sig,
+                            pageNumber: field.pageNumber || 1,
+                            yPercent: field.yPercent || 0,
+                            xPercent: field.xPercent || 0,
+                            uniqueKey: `${sig.priority}-${field.index}-${field.type || field.fieldType}`,
+                        });
+                    }
+                });
+            });
+
+        // Get fields from flat structure (fieldData)
+        fieldData.forEach((field) => {
+            if (field.priority == urlPriority && !field.filled) {
+                unfilledFields.push({
+                    ...field,
+                    pageNumber: field.pageNumber || 1,
+                    yPercent: field.yPercent || 0,
+                    xPercent: field.xPercent || 0,
+                    uniqueKey: `flat-${field.index}-${field.fieldType || field.type}`,
+                });
+            }
+        });
+
+        // Sort by page number, then Y position (top to bottom)
+        return unfilledFields.sort((a, b) => {
+            if (a.pageNumber !== b.pageNumber) {
+                return a.pageNumber - b.pageNumber;
+            }
+            return a.yPercent - b.yPercent;
+        });
+    };
+
+    // Check if element is in viewport
+    const isElementInViewport = (element) => {
+        if (!element) return false;
+        const rect = element.getBoundingClientRect();
+        return (
+            rect.top >= 0 &&
+            rect.left >= 0 &&
+            rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+            rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+        );
+    };
+
+    // Scroll to next unfilled field
+    const handleScrollToNextField = () => {
+        const unfilledFields = getUnfilledFieldsForCurrentPriority();
+
+        if (unfilledFields.length === 0) {
+            setToast({ isVisible: true, message: "All fields completed!", type: "success" });
+            return;
+        }
+
+        // Find first unfilled field that's not in viewport
+        let targetField = null;
+        for (const field of unfilledFields) {
+            const fieldElement = document.querySelector(`[data-field-key="${field.uniqueKey}"]`);
+            if (fieldElement && !isElementInViewport(fieldElement)) {
+                targetField = { field, element: fieldElement };
+                break;
+            }
+        }
+
+        // If all fields are in viewport, go to first unfilled field
+        if (!targetField && unfilledFields.length > 0) {
+            const field = unfilledFields[0];
+            const fieldElement = document.querySelector(`[data-field-key="${field.uniqueKey}"]`);
+            if (fieldElement) {
+                targetField = { field, element: fieldElement };
+            }
+        }
+
+        if (targetField) {
+            // Smooth scroll to field with offset for header
+            targetField.element.scrollIntoView({ behavior: "smooth", block: "center" });
+
+            // Highlight the field
+            setHighlightedFieldKey(targetField.field.uniqueKey);
+
+            // Remove highlight after animation completes
+            setTimeout(() => {
+                setHighlightedFieldKey(null);
+            }, 800);
+        }
+    };
+
     return (
         <div className="app">
             {isExpired && (
@@ -2821,14 +2951,24 @@ function App() {
                                             {/* <div className="page-number">Page {pageNumber}</div> */}
                                             <div className="canvas-wrapper">
                                                 <canvas ref={(el) => (canvasRefsArray.current[index] = el)}></canvas>
-                                                {signatureData.length > 0 && <SignatureOverlay key={`sig-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedSignature={storedSignature} storedInitials={storedInitials} onReuseSignature={handleReuseSignature} sendEmailsSimultaneously={documentRecord?.Send_Emails_Simultaneously__c} />}
-                                                {fieldData.length > 0 && <FieldOverlay key={`field-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedInitials={storedInitials} onReuseInitials={handleReuseSignature} sendEmailsSimultaneously={documentRecord?.Send_Emails_Simultaneously__c} />}
+                                                {signatureData.length > 0 && <SignatureOverlay key={`sig-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedSignature={storedSignature} storedInitials={storedInitials} onReuseSignature={handleReuseSignature} sendEmailsSimultaneously={documentRecord?.Send_Emails_Simultaneously__c} highlightedFieldKey={highlightedFieldKey} />}
+                                                {fieldData.length > 0 && <FieldOverlay key={`field-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedInitials={storedInitials} onReuseInitials={handleReuseSignature} sendEmailsSimultaneously={documentRecord?.Send_Emails_Simultaneously__c} highlightedFieldKey={highlightedFieldKey} />}
                                             </div>
                                         </div>
                                     );
                                 })}
                             </div>
                         </div>
+
+                        {/* Floating Next Field Button */}
+                        {shouldShowSaveButton() && !areAllSignaturesCompleted() && (
+                            <button className="next-field-btn" onClick={handleScrollToNextField} title="Go to next field">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 4L10.59 5.41L16.17 11H4V13H16.17L10.59 18.59L12 20L20 12L12 4Z" fill="white" />
+                                </svg>
+                                <span>Next Field ({getUnfilledFieldsForCurrentPriority().length})</span>
+                            </button>
+                        )}
 
                         {shouldShowSaveButton() && areAllSignaturesCompleted() && (
                             <div className={`completion-footer ${areAllSignaturesCompleted() ? "show" : ""}`}>
@@ -2851,7 +2991,7 @@ function App() {
                                                 terms & conditions ↗
                                             </a>
                                         </label>
-                                        <button className="submit-final-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted}>
+                                        <button className="submit-final-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted} style={{ backgroundColor: initialAccepted ? '#2863eb' : '#626262' }}>
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white" />
                                             </svg>
@@ -2879,7 +3019,7 @@ function App() {
                                         {/* <button className="reject-btn" onClick={handleReject}>
                                             Reject
                                         </button> */}
-                                        <button className="save-submit-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted}>
+                                        <button className="save-submit-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted} style={{ backgroundColor: initialAccepted ? '#2863eb' : '#626262' }}>
                                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white" />
                                             </svg>
