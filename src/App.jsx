@@ -55,6 +55,9 @@ function App() {
     const [orgIdState, setOrgIdState] = useState(null);
     const [localeKey, setLocaleKey] = useState(null);
     const [timeZoneKey, setTimeZoneKey] = useState(null);
+    // Terms & Conditions (rich text) fetched from Salesforce
+    const [termAndConditionHtml, setTermAndConditionHtml] = useState("");
+    const [showTermsModal, setShowTermsModal] = useState(false);
 
     // Field and Signature Properties
     const [signatureData, setSignatureData] = useState([]);
@@ -182,6 +185,7 @@ function App() {
                 fetchAdminProperties(accessToken, instanceUrl, clientId, clientSecret);
                 fetchOrganizationId(accessToken, instanceUrl, clientId, clientSecret);
                 fetchDocumentAndPdf(recordId, accessToken, instanceUrl, clientId, clientSecret);
+                fetchSignatrueAdmin(accessToken, instanceUrl, clientId, clientSecret);
             }
         };
 
@@ -722,6 +726,46 @@ function App() {
             setAdminProperties(properties);
         } catch (e) {
             console.warn("Unable to fetch Admin Properties:", e);
+        }
+    };
+
+    const fetchSignatrueAdmin = async (accessToken, instanceUrl, clientId = null, clientSecret = null) => {
+        try {
+            console.log('fetch sign admin');
+            let currentToken = accessToken;
+            const query = "SELECT Id, Terms_And_Condition__c FROM Signature_Admin__c LIMIT 1";
+            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
+
+            let response = await fetch(apiUrl, {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${currentToken}`,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (response.status === 401 && clientId && clientSecret) {
+                currentToken = await refreshAccessToken(instanceUrl, clientId, clientSecret);
+                response = await fetch(apiUrl, {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                        "Content-Type": "application/json",
+                    },
+                });
+            }
+
+            if (!response.ok) {
+                console.error(`Siganture Admin fetch error: ${response.status} ${response.statusToken}`);
+                throw new Error("Unable to load Signature admin settings. Please contact support.");
+            }
+
+            const data = await response.json();
+            const properties = data?.records?.[0] || null;
+            console.log('properties', properties)
+            setTermAndConditionHtml(properties.Terms_And_Condition__c);
+        } catch (e) {
+            console.warn("Unable to fetch Signature Admin Properties:", e);
         }
     };
 
@@ -2846,6 +2890,11 @@ function App() {
         }
     };
 
+    const handleTermAccept = () => {
+        setInitialAccepted(true);
+        setShowTermsModal(false);
+    }
+
     return (
         <div className="app">
             {isExpired && (
@@ -2987,7 +3036,7 @@ function App() {
                                         <input type="checkbox" id="accept-terms" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px", accentColor: "#2863eb" }} />
                                         <label htmlFor="accept-terms" style={{ cursor: "pointer", marginLeft: "8px" }}>
                                             I accept the{" "}
-                                            <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">
+                                            <a href="#" className="termAndConditionLink" onClick={(e) => setShowTermsModal(true)}>
                                                 terms & conditions ↗
                                             </a>
                                         </label>
@@ -3002,15 +3051,15 @@ function App() {
                             </div>
                         )}
 
-                        {shouldShowSaveButton() && (
-                            <div className="footer">
+                        {shouldShowSaveButton() && areAllSignaturesCompleted() && (
+                            <div className={`footer ${areAllSignaturesCompleted() ? "show" : ""}`}>
                                 <div className="bottom-bar-left">
                                     <input type="checkbox" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px" }} />
-                                    <span>
+                                    <span className="footer-accept">
                                         {" "}
                                         I accept the{" "}
-                                        <a target="_blank" href="https://mvclouds.com/products/signature-anywhere" className="termAndConditionLink">
-                                            t & c ↗
+                                        <a href="#" className="termAndConditionLink" onClick={(e) => setShowTermsModal(true)}>
+                                            Terms & Condition ↗
                                         </a>
                                     </span>
                                 </div>
@@ -3044,6 +3093,40 @@ function App() {
             <SignatureModal isOpen={isModalOpen} onClose={handleModalClose} onSave={handleSignatureSave} signature={currentSignature} title={currentSignature?.type === "initials" ? "Create Initials" : "Create Signature"} adminProperties={adminProperties} pdfPageFormat={pdfPageFormat} />
             <FieldModal isOpen={isFieldModalOpen} onClose={handleFieldModalClose} onSave={handleFieldSave} field={currentField} />
             <Toast isVisible={toast.isVisible} message={toast.message} type={toast.type} onClose={handleCloseToast} />
+            {/* Terms & Conditions modal (rich text from Salesforce) */}
+            {showTermsModal && (
+                <div className="terms-modal-overlay" onClick={() => setShowTermsModal(false)}>
+                    <div className="terms-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="terms-modal-header">
+                            <h3>Terms & Conditions</h3>
+                        </div>
+                        <div className="terms-modal-body" dangerouslySetInnerHTML={{ __html: termAndConditionHtml || '<p>No terms available.</p>' }} />
+                        <div className="terms-modal-footer">
+                            {/* <div className="terms-checkbox">
+                                <input type="checkbox" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px" }} /> I Accept The Terms & Conditions
+                            </div> */}
+                            <div className="btn-group">
+                                <button className="terms-save close-btn" onClick={() => setShowTermsModal(false)} aria-label="Close">
+                                    <svg id="Close--Streamline-Carbon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" height="24" width="24">
+                                        <path d="M8.70705 8 12 4.70705 11.29295 4 8 7.29295 4.70715 4 4 4.70705 7.29295 8 4 11.29295 4.70715 12 8 8.70705 11.29295 12 12 11.29295 8.70705 8z" fill="#ffffff" stroke-width="0.5"></path>
+                                        <g id="_Transparent_Rectangle_">
+                                            <path d="M0 0h16v16H0Z" fill="none" stroke-width="0.5"></path>
+                                        </g>
+                                    </svg>
+                                    Close
+                                </button>
+                                <button className="terms-save" onClick={handleTermAccept} aria-label="Close">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" id="Done-All--Streamline-Sharp-Material" height="24" width="24">
+                                        <path fill="white" d="M7.35 17.95 1.75 12.35l1.075 -1.075 4.525 4.525 1.075 1.075 -1.075 1.075Zm4.25 0L6 12.35l1.075 -1.075 4.525 4.525 9.6 -9.6 1.075 1.075L11.6 17.95Zm0 -4.25 -1.075 -1.075L16.95 6.2l1.075 1.075L11.6 13.7Z" stroke-width="0.5">
+                                        </path>
+                                    </svg>
+                                    Agree to Terms
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
             <div id="audit-html" style={{ position: "absolute", top: "-9999px", left: "-9999px" }}></div>
 
             {/* Rejection Confirmation Modal */}
