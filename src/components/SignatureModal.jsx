@@ -21,7 +21,7 @@ const TABS = {
  * @param {Object} pdfPageFormat - PDF page dimensions {width, height}
  */
 const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Signature", adminProperties = null, pdfPageFormat = { width: 595, height: 842 } }) => {
-    const [activeTab, setActiveTab] = useState(TABS.TYPE);
+    const [activeTab, setActiveTab] = useState(TABS.DRAW);
     const [signatureData, setSignatureData] = useState(null);
     const [clearTrigger, setClearTrigger] = useState(0);
 
@@ -39,15 +39,15 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
     const defaultFontStyle = adminProperties?.Default_Font_Style__c || "Artecallya";
     const availableFonts = adminProperties?.Available_Fonts__c
         ? adminProperties.Available_Fonts__c.split(",")
-              .map((f) => f.trim())
-              .filter((f) => f.length > 0)
+            .map((f) => f.trim())
+            .filter((f) => f.length > 0)
         : ["Artecallya", "Maytra", "Mr Dafoe", "Mr DeHaviland", "The signature", "Monsieur La Doulaise", "Mrs Saint Delafield", "Barokah", "Bettina", "High Summit"];
 
     // Calculate aspect ratio from signature dimensions (width / height)
     // widthPercent and heightPercent are relative to page dimensions, so we need to account for page aspect ratio
     // Formula: (widthPercent/100 * pageWidth) / (heightPercent/100 * pageHeight) = (widthPercent * pageWidth) / (heightPercent * pageHeight)
     const pageAspectRatio = pdfPageFormat.width / pdfPageFormat.height;
-    const signatureAspectRatio = signature?.widthPercent && signature?.heightPercent 
+    const signatureAspectRatio = signature?.widthPercent && signature?.heightPercent
         ? (signature.widthPercent / signature.heightPercent) * pageAspectRatio
         : 1.65;
 
@@ -57,7 +57,7 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
     const THRESHOLD_RATIO = 1.6594202899;
     const MAX_WIDTH = 453;
     const MAX_HEIGHT = 274;
-    
+
     let canvasWidth, canvasHeight;
     if (signatureAspectRatio > THRESHOLD_RATIO) {
         // Wide box: fix width, calculate height
@@ -80,7 +80,7 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
 
     const handleClose = () => {
         setSignatureData(null);
-        setActiveTab(TABS.TYPE);
+        setActiveTab(TABS.DRAW);
         setClearTrigger(0);
         if (onClose) onClose();
     };
