@@ -949,7 +949,7 @@
 }
 
 .close-btn {
-    background-color: rgb(162, 161, 161);
+    background-color: rgb(97, 95, 95);
 }
 
 .close-btn:hover {
@@ -1209,7 +1209,7 @@
 
     .terms-modal {
         max-width: 95%;
-        max-height: 90vh;
+        max-height: 75vh;
 }
 
     .terms-modal-header {

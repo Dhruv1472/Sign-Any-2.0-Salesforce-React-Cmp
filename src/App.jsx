@@ -255,14 +255,15 @@ function App() {
                 if (showRejectConfirm) handleCancelReject();
                 else if (isModalOpen) handleModalClose();
                 else if (isFieldModalOpen) handleFieldModalClose();
+                else if (showTermsModal) setShowTermsModal(false);
             }
         };
 
-        if (isModalOpen || isFieldModalOpen || showRejectConfirm) {
+        if (isModalOpen || isFieldModalOpen || showRejectConfirm || showTermsModal) {
             document.addEventListener("keydown", handleEscKey);
             return () => document.removeEventListener("keydown", handleEscKey);
         }
-    }, [isModalOpen, isFieldModalOpen, showRejectConfirm]);
+    }, [isModalOpen, isFieldModalOpen, showRejectConfirm, showTermsModal]);
 
     // Main function to fetch Document and then PDF
     const fetchDocumentAndPdf = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
@@ -1321,7 +1322,7 @@ function App() {
                         if (currentDoc && currentDoc.Active__c === false) {
                             setShowSpinner(false);
                             setToast({ isVisible: true, message: "Something went wrong. Refreshing...", type: "error" });
-                            
+
                             // Reload after short delay
                             setTimeout(() => {
                                 window.location.reload();
@@ -2346,7 +2347,7 @@ function App() {
             setToast({ isVisible: true, message: "Please provide a reason for rejection", type: "error" });
             return;
         }
-        
+
         setShowRejectConfirm(false);
 
         if (!salesforceConfig) return;
@@ -2893,6 +2894,12 @@ function App() {
     const handleTermAccept = () => {
         setInitialAccepted(true);
         setShowTermsModal(false);
+        document.body.style.overflow = 'unset';
+    }
+
+    const handleCloseTerms = () =>{
+        setShowTermsModal(false);
+        document.body.style.overflow = 'unset';
     }
 
     return (
@@ -3036,7 +3043,11 @@ function App() {
                                         <input type="checkbox" id="accept-terms" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px", accentColor: "#2863eb" }} />
                                         <label htmlFor="accept-terms" style={{ cursor: "pointer", marginLeft: "8px" }}>
                                             I accept the{" "}
-                                            <a href="#" className="termAndConditionLink" onClick={(e) => setShowTermsModal(true)}>
+                                            <a href="#" className="termAndConditionLink" onClick={(e) => {
+                                                e.preventDefault();
+                                                setShowTermsModal(true);
+                                                document.body.style.overflow = 'hidden';
+                                            }}>
                                                 terms & conditions ↗
                                             </a>
                                         </label>
@@ -3058,7 +3069,11 @@ function App() {
                                     <span className="footer-accept">
                                         {" "}
                                         I accept the{" "}
-                                        <a href="#" className="termAndConditionLink" onClick={(e) => setShowTermsModal(true)}>
+                                        <a href="#" className="termAndConditionLink" onClick={(e) => {
+                                            e.preventDefault();
+                                            setShowTermsModal(true);
+                                            document.body.style.overflow = 'hidden';
+                                        }}>
                                             Terms & Condition ↗
                                         </a>
                                     </span>
@@ -3095,7 +3110,7 @@ function App() {
             <Toast isVisible={toast.isVisible} message={toast.message} type={toast.type} onClose={handleCloseToast} />
             {/* Terms & Conditions modal (rich text from Salesforce) */}
             {showTermsModal && (
-                <div className="terms-modal-overlay" onClick={() => setShowTermsModal(false)}>
+                <div className="terms-modal-overlay" onClick={handleCloseTerms}>
                     <div className="terms-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="terms-modal-header">
                             <h3>Terms & Conditions</h3>
@@ -3106,7 +3121,7 @@ function App() {
                                 <input type="checkbox" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px" }} /> I Accept The Terms & Conditions
                             </div> */}
                             <div className="btn-group">
-                                <button className="terms-save close-btn" onClick={() => setShowTermsModal(false)} aria-label="Close">
+                                <button className="terms-save close-btn" onClick={handleCloseTerms} aria-label="Close">
                                     <svg id="Close--Streamline-Carbon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" height="24" width="24">
                                         <path d="M8.70705 8 12 4.70705 11.29295 4 8 7.29295 4.70715 4 4 4.70705 7.29295 8 4 11.29295 4.70715 12 8 8.70705 11.29295 12 12 11.29295 8.70705 8z" fill="#ffffff" stroke-width="0.5"></path>
                                         <g id="_Transparent_Rectangle_">
