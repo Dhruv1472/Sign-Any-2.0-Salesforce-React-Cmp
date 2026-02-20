@@ -851,8 +851,68 @@ function App() {
 
         const userAgent = navigator.userAgent || "Unknown Device";
 
-        const osMatch = userAgent.match(/\(([^;]+);/);
-        const osVersion = osMatch ? osMatch[1].trim() : "Unknown OS";
+        let osVersion = "Unknown OS";
+
+        // Detect OS with mobile device support
+        if (userAgent.includes("Android")) {
+            const androidMatch = userAgent.match(/Android\s+([\d.]+)/);
+            osVersion = androidMatch ? `Android ${androidMatch[1]}` : "Android";
+        } else if (userAgent.includes("iPhone")) {
+            const iosMatch = userAgent.match(/iPhone OS\s+([\d_]+)|OS\s+([\d_]+)/);
+            if (iosMatch) {
+                const version = (iosMatch[1] || iosMatch[2]).replace(/_/g, ".");
+                osVersion = `iOS ${version}`;
+            } else {
+                osVersion = "iOS";
+            }
+        } else if (userAgent.includes("iPad")) {
+            const iosMatch = userAgent.match(/OS\s+([\d_]+)/);
+            if (iosMatch) {
+                const version = iosMatch[1].replace(/_/g, ".");
+                osVersion = `iPadOS ${version}`;
+            } else {
+                osVersion = "iPadOS";
+            }
+        } else if (userAgent.includes("iPod")) {
+            const iosMatch = userAgent.match(/OS\s+([\d_]+)/);
+            if (iosMatch) {
+                const version = iosMatch[1].replace(/_/g, ".");
+                osVersion = `iOS ${version}`;
+            } else {
+                osVersion = "iOS";
+            }
+        } else if (userAgent.includes("Windows") || userAgent.includes("Win")) {
+            const winMatch = userAgent.match(/Windows NT\s+([\d.]+)/);
+            let version = "";
+            if (winMatch) {
+                const ntVersion = winMatch[1];
+                if (ntVersion === "10.0") {
+                    version = "Windows 10/11";
+                } else if (ntVersion === "6.3") {
+                    version = "Windows 8.1";
+                } else if (ntVersion === "6.2") {
+                    version = "Windows 8";
+                } else if (ntVersion === "6.1") {
+                    version = "Windows 7";
+                } else {
+                    version = "Windows";
+                }
+            } else {
+                version = "Windows";
+            }
+            osVersion = version;
+        } else if (userAgent.includes("Macintosh") || userAgent.includes("Mac OS X")) {
+            const macMatch = userAgent.match(/Mac OS X\s+([\d_]+)/);
+            if (macMatch) {
+                const version = macMatch[1].replace(/_/g, ".");
+                osVersion = `macOS ${version}`;
+            } else {
+                osVersion = "macOS";
+            }
+        } else {
+            const osMatch = userAgent.match(/\(([^;]+);/);
+            osVersion = osMatch ? osMatch[1].trim() : "Unknown OS";
+        }
 
         // Detect browser name and version (check specific browsers first, then fall back to generic)
         let browserName = "Unknown Browser";
@@ -972,8 +1032,69 @@ function App() {
         const timeStamp = `${month} ${day} ${year}, ${timeString} ${timeZone}`;
 
         const userAgent = navigator.userAgent || "Unknown Device";
-        const osMatch = userAgent.match(/\(([^;]+);/);
-        const osVersion = osMatch ? osMatch[1].trim() : "Unknown OS";
+
+        let osVersion = "Unknown OS";
+
+        // Detect OS with mobile device support
+        if (userAgent.includes("Android")) {
+            const androidMatch = userAgent.match(/Android\s+([\d.]+)/);
+            osVersion = androidMatch ? `Android ${androidMatch[1]}` : "Android";
+        } else if (userAgent.includes("iPhone")) {
+            const iosMatch = userAgent.match(/iPhone OS\s+([\d_]+)|OS\s+([\d_]+)/);
+            if (iosMatch) {
+                const version = (iosMatch[1] || iosMatch[2]).replace(/_/g, ".");
+                osVersion = `iOS ${version}`;
+            } else {
+                osVersion = "iOS";
+            }
+        } else if (userAgent.includes("iPad")) {
+            const iosMatch = userAgent.match(/OS\s+([\d_]+)/);
+            if (iosMatch) {
+                const version = iosMatch[1].replace(/_/g, ".");
+                osVersion = `iPadOS ${version}`;
+            } else {
+                osVersion = "iPadOS";
+            }
+        } else if (userAgent.includes("iPod")) {
+            const iosMatch = userAgent.match(/OS\s+([\d_]+)/);
+            if (iosMatch) {
+                const version = iosMatch[1].replace(/_/g, ".");
+                osVersion = `iOS ${version}`;
+            } else {
+                osVersion = "iOS";
+            }
+        } else if (userAgent.includes("Windows") || userAgent.includes("Win")) {
+            const winMatch = userAgent.match(/Windows NT\s+([\d.]+)/);
+            let version = "";
+            if (winMatch) {
+                const ntVersion = winMatch[1];
+                if (ntVersion === "10.0") {
+                    version = "Windows 10/11";
+                } else if (ntVersion === "6.3") {
+                    version = "Windows 8.1";
+                } else if (ntVersion === "6.2") {
+                    version = "Windows 8";
+                } else if (ntVersion === "6.1") {
+                    version = "Windows 7";
+                } else {
+                    version = "Windows";
+                }
+            } else {
+                version = "Windows";
+            }
+            osVersion = version;
+        } else if (userAgent.includes("Macintosh") || userAgent.includes("Mac OS X")) {
+            const macMatch = userAgent.match(/Mac OS X\s+([\d_]+)/);
+            if (macMatch) {
+                const version = macMatch[1].replace(/_/g, ".");
+                osVersion = `macOS ${version}`;
+            } else {
+                osVersion = "macOS";
+            }
+        } else {
+            const osMatch = userAgent.match(/\(([^;]+);/);
+            osVersion = osMatch ? osMatch[1].trim() : "Unknown OS";
+        }
 
         // Detect browser name and version (check specific browsers first, then fall back to generic)
         let browserName = "Unknown Browser";
