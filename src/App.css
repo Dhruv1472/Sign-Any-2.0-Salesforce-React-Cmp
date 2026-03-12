@@ -43,6 +43,40 @@
     margin: 0 auto;
 }
 
+.document-section-header {
+    width: 840px;
+    max-width: 100%;
+    min-width: 300px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 1rem auto;
+    padding: 10px 16px;
+    background-color: #f0f4ff;
+    border-radius: 4px;
+    box-sizing: border-box;
+    color: #1a3a8f;
+    font-size: 15px;
+    font-weight: 600;
+    border: 1px solid #066490;
+}
+
+.document-section-header svg {
+    flex-shrink: 0;
+    color: #2863eb;
+}
+
+.document-section-pages {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 500;
+    color: #5574c4;
+    background: #dce6ff;
+    padding: 2px 10px;
+    border-radius: 12px;
+    white-space: nowrap;
+}
+
 .page-number {
     font-size: 14px;
     font-weight: 600;
