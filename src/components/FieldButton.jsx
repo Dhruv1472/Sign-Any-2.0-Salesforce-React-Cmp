@@ -302,8 +302,8 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
         // Checkbox is checked if it's filled and value is true
         const isChecked = filled && (value === true || value === "true" || value === "True");
         return (
-            <div className="checkbox-wrapper" onClick={isDisabled ? undefined : handleFieldClick} style={{ cursor: isDisabled ? 'not-allowed' : 'pointer' }}>
-                <input type="checkbox" checked={isChecked} disabled={isDisabled} readOnly data-key={key} style={{width: `${-36.42 * canvasScale - 5.39}px`, height: `${-36.42 * canvasScale - 5.39}px`}} />
+            <div className="checkbox-wrapper" onClick={isDisabled ? undefined : handleFieldClick} style={{ cursor: isDisabled ? "not-allowed" : "pointer" }}>
+                <input type="checkbox" checked={isChecked} disabled={isDisabled} readOnly data-key={key} style={{ width: `${-36.42 * canvasScale - 5.39}px`, height: `${-36.42 * canvasScale - 5.39}px` }} />
             </div>
         );
     }
@@ -316,7 +316,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
 
         return (
             <div className="field-inline-edit">
-                {fieldType === "text" && field.multiline ? <textarea ref={inputRef} className="field-inline-input" value={editValue} onChange={handleInputChange} onKeyDown={handleKeyDown} onBlur={handleBlur} placeholder="Enter text..." disabled={isDisabled} maxLength={maxLength} rows={field.maxLines ? parseInt(field.maxLines, 10) : 3} style={{ resize: "vertical" }} /> : <input ref={inputRef} type={fieldType} className="field-inline-input" value={editValue} onChange={handleInputChange} onKeyDown={handleKeyDown} onBlur={handleBlur} placeholder={fieldType === "number" ? "Enter number..." : "Enter text..."} disabled={isDisabled} maxLength={maxLength} step={fieldType === "number" && field.decimals !== undefined && field.decimals !== null ? (1 / Math.pow(10, parseInt(field.decimals, 10))).toFixed(parseInt(field.decimals, 10)) : undefined} min={fieldType === "number" ? (field.allowNegative === false ? Math.max(0, field.min || 0) : field.min ?? undefined) : undefined} max={fieldType === "number" ? field.max ?? undefined : undefined} />}
+                {fieldType === "text" && field.multiline ? <textarea ref={inputRef} className="field-inline-input" value={editValue} onChange={handleInputChange} onKeyDown={handleKeyDown} onBlur={handleBlur} placeholder="Enter text..." disabled={isDisabled} maxLength={maxLength} rows={field.maxLines ? parseInt(field.maxLines, 10) : 3} style={{ resize: "vertical" }} /> : <input ref={inputRef} type={fieldType} className="field-inline-input" value={editValue} onChange={handleInputChange} onKeyDown={handleKeyDown} onBlur={handleBlur} placeholder={fieldType === "number" ? "Enter number..." : "Enter text..."} disabled={isDisabled} maxLength={maxLength} step={fieldType === "number" && field.decimals !== undefined && field.decimals !== null ? (1 / Math.pow(10, parseInt(field.decimals, 10))).toFixed(parseInt(field.decimals, 10)) : undefined} min={fieldType === "number" ? (field.allowNegative === false ? Math.max(0, field.min || 0) : (field.min ?? undefined)) : undefined} max={fieldType === "number" ? (field.max ?? undefined) : undefined} />}
                 {showLimitWarning && <div className="field-limit-warning">Max character limit reached ({maxLength})</div>}
                 {!showLimitWarning && isNearLimit && editValue.length > 0 && (
                     <div className={`field-char-counter ${isAtLimit ? "at-limit" : ""}`}>

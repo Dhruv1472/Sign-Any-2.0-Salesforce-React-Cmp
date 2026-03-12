@@ -97,7 +97,7 @@ const SignatureOverlay = ({ pageNumber, priority, signatures, onSign, onFieldCli
                 // Determine if this is a signature or text field
                 const fieldType = (field.type || "").toLowerCase();
                 const isSignatureField = fieldType === "signature" || fieldType === "initials";
-                const isTextField = ["text", "date", "number", "email", "checkbox"].includes(fieldType);
+                const isTextField = ["text", "date", "number", "email", "checkbox", "fullname"].includes(fieldType);
 
                 // Create unique key using priority + field index + field type
                 // This prevents duplicate keys when multiple signers have fields with same index

@@ -28,7 +28,7 @@ function App() {
 
     // App State
     const [showSpinner, setShowSpinner] = useState(false);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [toast, setToast] = useState({ isVisible: false, message: "", type: "success" });
 
@@ -55,6 +55,7 @@ function App() {
     const [orgIdState, setOrgIdState] = useState(null);
     const [localeKey, setLocaleKey] = useState(null);
     const [timeZoneKey, setTimeZoneKey] = useState(null);
+    
     // Terms & Conditions (rich text) fetched from Salesforce
     const [termAndConditionHtml, setTermAndConditionHtml] = useState("");
     const [showTermsModal, setShowTermsModal] = useState(false);
@@ -81,7 +82,7 @@ function App() {
     // Reject Modal State
     const [showRejectConfirm, setShowRejectConfirm] = useState(false);
     const [rejectReason, setRejectReason] = useState("");
-    const [showInstructions, setShowInstructions] = useState(true);
+    // const [showInstructions, setShowInstructions] = useState(true);
 
     const canvasRefsArray = useRef([]);
     const pdfDocRef = useRef(null);
@@ -136,6 +137,10 @@ function App() {
         };
 
         window.addEventListener("beforeunload", handleBeforeUnload);
+
+        setTimeout(() => {
+            setLoading(false);
+        }, 10000);
 
         return () => {
             window.removeEventListener("beforeunload", handleBeforeUnload);
@@ -400,7 +405,7 @@ function App() {
                             // Check if any field in this entry is a signature type
                             const hasSignatureFields = entry.fields.some((field) => {
                                 const typeLower = typeof field.type === "string" ? field.type.toLowerCase() : "";
-                                const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(typeLower);
+                                const isFieldType = ["text", "date", "number", "email", "checkbox", "initials", "fullname"].includes(typeLower);
                                 const isSignatureType = ["signature"].includes(typeLower) || (!isFieldType && !field.fieldType);
                                 return isSignatureType;
                             });
@@ -416,7 +421,7 @@ function App() {
                         } else {
                             // Old flat structure (backward compatibility)
                             const typeLower = typeof entry.type === "string" ? entry.type.toLowerCase() : "";
-                            const isFieldType = ["text", "date", "number", "email", "checkbox"].includes(typeLower);
+                            const isFieldType = ["text", "date", "number", "email", "checkbox", "fullname"].includes(typeLower);
                             const isSignatureType = ["signature", "initials"].includes(typeLower) || (!isFieldType && !entry.fieldType);
                             if (isFieldType) {
                                 parsedFieldData.push({
@@ -475,7 +480,7 @@ function App() {
                                 if (field.defaultValue === "{defaultValue}") {
                                     const fieldType = (field.fieldType || field.type || "").toLowerCase();
 
-                                    if (fieldType === "signature") {
+                                    if (fieldType === "signature" || fieldType === "fullname") {
                                         // For signature fields, use signer's full name
                                         return signerName || "";
                                     } else if (fieldType === "initials") {
@@ -489,7 +494,7 @@ function App() {
                                         // For email fields, use signer's email
                                         return signerEmail || "";
                                     }
-                                }
+                                } 
                                 return field.defaultValue;
                             };
 
@@ -1612,7 +1617,7 @@ function App() {
 
                 // For other fields, check if they have a value
                 const hasValue = field.value !== null && field.value !== undefined && field.value !== "";
-                return (field.filled || hasValue) && hasValue;
+                return hasValue;
             });
 
             // Get filled fields from nested structure (inside signatureData)
@@ -1620,7 +1625,7 @@ function App() {
                 (sig.fields || []).filter((field) => {
                     // Check if it's a field type (not signature)
                     const fieldType = (field.fieldType || field.type || "").toLowerCase();
-                    const isFieldType = ["text", "date", "number", "email", "checkbox", "initials"].includes(fieldType);
+                    const isFieldType = ["text", "date", "number", "email", "checkbox", "initials", "fullname"].includes(fieldType);
 
                     if (!isFieldType) return false;
 
@@ -1631,7 +1636,7 @@ function App() {
 
                     // For other fields, check if they have a value
                     const hasValue = field.value !== null && field.value !== undefined && field.value !== "";
-                    return (field.filled || hasValue) && hasValue;
+                    return hasValue;
                 })
             );
 
@@ -2635,7 +2640,7 @@ function App() {
         }
 
         // Check if all fields are filled
-        const allFilled = currentPriorityFields.every((field) => field.filled);
+        const allFilled = currentPriorityFields.every((field) => field.filled || !field.required);
 
         return allFilled;
     };
@@ -2910,9 +2915,9 @@ function App() {
         }
     };
 
-    const toggleInstructions = () => {
-        setShowInstructions((prev) => !prev);
-    };
+    // const toggleInstructions = () => {
+    //     setShowInstructions((prev) => !prev);
+    // };
 
     // Get all unfilled fields for current priority, sorted by page and position
     const getUnfilledFieldsForCurrentPriority = () => {
