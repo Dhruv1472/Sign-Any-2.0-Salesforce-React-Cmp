@@ -95,6 +95,10 @@ function App() {
     // State for next field navigation
     const [highlightedFieldKey, setHighlightedFieldKey] = useState(null);
 
+    // Document sections: tracks title and first page of each merged document
+    // [ { title: string, startPage: number, pageCount: number }, ... ]
+    const [documentSections, setDocumentSections] = useState([]);
+
     // Setup BroadcastChannel for cross-tab communication
     useEffect(() => {
         const currentUrl = window.location.href;
@@ -554,33 +558,108 @@ function App() {
         }
     };
 
-    // Fetch PDF from Salesforce ContentVersion
+    // Fetch PDF from Salesforce ContentVersion (supports comma-separated multiple IDs)
     const fetchPdfFromContentVersion = async (contentVersionId, accessToken, instanceUrl) => {
         try {
-            // Salesforce REST API endpoint to get ContentVersion
-            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/ContentVersion/${contentVersionId}/VersionData`;
+            // Parse comma-separated IDs and trim whitespace
+            const contentVersionIds = contentVersionId.split(",").map((id) => id.trim()).filter(Boolean);
 
-            const response = await fetch(apiUrl, {
-                method: "GET",
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    "Content-Type": "application/pdf",
-                },
-            });
+            if (contentVersionIds.length === 1) {
+                // Single PDF — original behaviour
+                const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/ContentVersion/${contentVersionIds[0]}/VersionData`;
 
-            if (!response.ok) {
-                console.error(`PDF fetch error: ${response.status} ${response.statusText}`);
-                throw new Error("Unable to load the PDF document. Please refresh and try again.");
+                const response = await fetch(apiUrl, {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                        "Content-Type": "application/pdf",
+                    },
+                });
+
+                if (!response.ok) {
+                    console.error(`PDF fetch error: ${response.status} ${response.statusText}`);
+                    throw new Error("Unable to load the PDF document. Please refresh and try again.");
+                }
+
+                const arrayBuffer = await response.arrayBuffer();
+
+                // Create a copy for pdf-lib before pdfjs consumes the original
+                const arrayBufferCopy = arrayBuffer.slice(0);
+                setOriginalPdfBytes(arrayBufferCopy);
+
+                // Pass original to pdfjs (it will consume/detach this buffer)
+                await loadPdfFromArrayBuffer(arrayBuffer, `Document_${contentVersionIds[0]}.pdf`);
+            } else {
+                // Multiple PDFs — fetch metadata (titles) and binary data in parallel
+                const [metadataResults, arrayBuffers] = await Promise.all([
+                    Promise.all(
+                        contentVersionIds.map(async (id) => {
+                            try {
+                                const metaUrl = `${instanceUrl}/services/data/v65.0/sobjects/ContentVersion/${id}?fields=Title`;
+                                const res = await fetch(metaUrl, {
+                                    method: "GET",
+                                    headers: {
+                                        Authorization: `Bearer ${accessToken}`,
+                                        "Content-Type": "application/json",
+                                    },
+                                });
+                                if (!res.ok) return { Title: `Document ${id}` };
+                                const data = await res.json();
+                                return data;
+                            } catch {
+                                return { Title: `Document ${id}` };
+                            }
+                        })
+                    ),
+                    Promise.all(
+                        contentVersionIds.map(async (id) => {
+                            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/ContentVersion/${id}/VersionData`;
+                            const response = await fetch(apiUrl, {
+                                method: "GET",
+                                headers: {
+                                    Authorization: `Bearer ${accessToken}`,
+                                    "Content-Type": "application/pdf",
+                                },
+                            });
+
+                            if (!response.ok) {
+                                console.error(`PDF fetch error for ${id}: ${response.status} ${response.statusText}`);
+                                throw new Error(`Unable to load PDF document ${id}. Please refresh and try again.`);
+                            }
+
+                            return response.arrayBuffer();
+                        })
+                    ),
+                ]);
+
+                // Merge all PDFs into one using pdf-lib, tracking page counts per document
+                const mergedDoc = await PDFDocument.create();
+                const sections = [];
+                let currentPage = 1;
+
+                for (let i = 0; i < arrayBuffers.length; i++) {
+                    const srcDoc = await PDFDocument.load(arrayBuffers[i], { ignoreEncryption: true });
+                    const pageCount = srcDoc.getPageCount();
+                    sections.push({
+                        title: metadataResults[i]?.Title || `Document ${i + 1}`,
+                        startPage: currentPage,
+                        pageCount,
+                    });
+                    currentPage += pageCount;
+                    const copiedPages = await mergedDoc.copyPages(srcDoc, srcDoc.getPageIndices());
+                    copiedPages.forEach((page) => mergedDoc.addPage(page));
+                }
+
+                setDocumentSections(sections);
+
+                const mergedBytes = await mergedDoc.save();
+
+                // Store merged bytes for pdf-lib (used during submit)
+                setOriginalPdfBytes(mergedBytes);
+
+                // Load merged PDF into pdfjs for display
+                await loadPdfFromArrayBuffer(mergedBytes, `Document_merged.pdf`);
             }
-
-            const arrayBuffer = await response.arrayBuffer();
-
-            // Create a copy for pdf-lib before pdfjs consumes the original
-            const arrayBufferCopy = arrayBuffer.slice(0);
-            setOriginalPdfBytes(arrayBufferCopy);
-
-            // Pass original to pdfjs (it will consume/detach this buffer)
-            await loadPdfFromArrayBuffer(arrayBuffer, `Document_${contentVersionId}.pdf`);
         } catch (error) {
             console.error("Error fetching PDF from ContentVersion:", error);
             throw new Error("Failed to load the document. Please check your connection and try again.");
@@ -3123,13 +3202,27 @@ function App() {
                                 </div>
                                 {Array.from({ length: totalPages }, (_, index) => {
                                     const pageNumber = index + 1;
+                                    const sectionStart = documentSections.length > 1
+                                        ? documentSections.find((s) => s.startPage === pageNumber)
+                                        : null;
                                     return (
-                                        <div key={index} className="page-wrapper" data-page={pageNumber}>
-                                            {/* <div className="page-number">Page {pageNumber}</div> */}
-                                            <div className="canvas-wrapper">
-                                                <canvas ref={(el) => (canvasRefsArray.current[index] = el)}></canvas>
-                                                {signatureData.length > 0 && <SignatureOverlay key={`sig-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedSignature={storedSignature} storedInitials={storedInitials} onReuseSignature={handleReuseSignature} sendEmailsSimultaneously={documentRecord?.Send_Emails_Simultaneously__c} highlightedFieldKey={highlightedFieldKey} />}
-                                                {fieldData.length > 0 && <FieldOverlay key={`field-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedInitials={storedInitials} onReuseInitials={handleReuseSignature} sendEmailsSimultaneously={documentRecord?.Send_Emails_Simultaneously__c} highlightedFieldKey={highlightedFieldKey} />}
+                                        <div key={index}>
+                                            {sectionStart && (
+                                                <div className="document-section-header">
+                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                        <path d="M6 3C4.89688 3 4 3.89688 4 5V19C4 20.1031 4.89688 21 6 21H18C19.1031 21 20 20.1031 20 19V8.32812C20 7.79688 19.7906 7.2875 19.4156 6.9125L16.0844 3.58438C15.7094 3.20938 15.2031 3 14.6719 3H6ZM14 4.82812L18.1719 9H15.25C14.8344 9 14.5 8.66563 14.5 8.25V4.82812H14ZM8 13H16V15H8V13ZM8 17H13V19H8V17Z" fill="currentColor" />
+                                                    </svg>
+                                                    <span>{sectionStart.title}</span>
+                                                    <span className="document-section-pages">{sectionStart.pageCount} {sectionStart.pageCount === 1 ? "page" : "pages"}</span>
+                                                </div>
+                                            )}
+                                            <div className="page-wrapper" data-page={pageNumber}>
+                                                {/* <div className="page-number">Page {pageNumber}</div> */}
+                                                <div className="canvas-wrapper">
+                                                    <canvas ref={(el) => (canvasRefsArray.current[index] = el)}></canvas>
+                                                    {signatureData.length > 0 && <SignatureOverlay key={`sig-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedSignature={storedSignature} storedInitials={storedInitials} onReuseSignature={handleReuseSignature} sendEmailsSimultaneously={documentRecord?.Send_Emails_Simultaneously__c} highlightedFieldKey={highlightedFieldKey} />}
+                                                    {fieldData.length > 0 && <FieldOverlay key={`field-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedInitials={storedInitials} onReuseInitials={handleReuseSignature} sendEmailsSimultaneously={documentRecord?.Send_Emails_Simultaneously__c} highlightedFieldKey={highlightedFieldKey} />}
+                                                </div>
                                             </div>
                                         </div>
                                     );
