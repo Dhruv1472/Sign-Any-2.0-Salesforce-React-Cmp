@@ -502,7 +502,18 @@ function App() {
                                 return field.defaultValue;
                             };
 
-                            // Auto-fill readonly fields with default value if not already filled
+                            // Auto-fill fullname fields with signer name and make them readonly
+                            const fieldType = (field.fieldType || field.type || "").toLowerCase();
+                            if (fieldType === "fullname" && !field.filled) {
+                                return {
+                                    ...field,
+                                    value: sig.name || "",
+                                    filled: true,
+                                    readonly: true,
+                                };
+                            }
+
+                            // Auto-fill other readonly fields with default value if not already filled
                             if (field.readonly === true && !field.filled && field.defaultValue) {
                                 return {
                                     ...field,
@@ -554,6 +565,42 @@ function App() {
                     };
                 }
                 return sig;
+            });
+
+            // Extract fields from nested structure into fieldData array
+            // This allows FieldOverlay to render fields from nested structures
+            parsedSignatureData.forEach((sig) => {
+                if (sig.fields && Array.isArray(sig.fields)) {
+                    sig.fields.forEach((field) => {
+                        const fieldType = (field.fieldType || field.type || "").toLowerCase();
+                        const isFieldType = ["text", "date", "number", "email", "checkbox", "initials", "fullname"].includes(fieldType);
+                        
+                        // Only extract non-signature fields
+                        if (isFieldType) {
+                            // For fullname fields, ensure they have signer name as value and are readonly
+                            let fieldValue = field.value;
+                            let isReadonly = field.readonly;
+                            if (fieldType === "fullname") {
+                                fieldValue = field.value || sig.name || "";
+                                isReadonly = true;
+                            }
+                            
+                            parsedFieldData.push({
+                                ...field,
+                                fieldType: fieldType,
+                                filled: Boolean(field.filled || (fieldType === "fullname" && fieldValue)),
+                                value: fieldValue,
+                                readonly: isReadonly,
+                                // Add signer context for priority-based filtering
+                                signerPriority: sig.priority,
+                                signerName: sig.name,
+                                signerEmail: sig.email,
+                                // Keep reference to parent entry
+                                priority: sig.priority,
+                            });
+                        }
+                    });
+                }
             });
 
             return { contentVersionId, currentToken, documentData, signatureData: parsedSignatureData, fieldData: parsedFieldData, isExpired: false };
@@ -779,7 +826,7 @@ function App() {
     const fetchAdminProperties = async (accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
-            const query = "SELECT Id, Email_Object_Field__c, Email_Address__c, Audit_Report_Behaviour__c, Available_Fonts__c, Default_Brush_Size__c, Default_Font_Size__c, Default_Font_Style__c, Hide_Available_Fonts__c, Hide_Bold_Option__c, Hide_Brush_Size__c, Hide_Font_Size_Option__c, Hide_Italic_Option__c, Hide_Pen_And_Erase__c, Hide_Undo_Redo__c, Send_Sign_Email__c, Store_Sign__c, Audit_Report_On_Every_Signature__c FROM Admin_Properties__c LIMIT 1";
+            const query = "SELECT Id, Email_Object_Field__c, Email_Address__c, Audit_Report_Behaviour__c, Available_Fonts__c, Default_Brush_Size__c, Default_Font_Size__c, Default_Font_Style__c, Hide_Available_Fonts__c, Hide_Bold_Option__c, Hide_Brush_Size__c, Hide_Font_Size_Option__c, Hide_Italic_Option__c, Hide_Pen_And_Erase__c, Hide_Undo_Redo__c, Send_Sign_Email__c, Store_Sign__c, Audit_Report_On_Every_Signature__c, Timezone__c FROM Admin_Properties__c LIMIT 1";
             const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
 
             let response = await fetch(apiUrl, {
@@ -816,7 +863,6 @@ function App() {
 
     const fetchSignatrueAdmin = async (accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
-            console.log('fetch sign admin');
             let currentToken = accessToken;
             const query = "SELECT Id, Terms_And_Condition__c FROM Signature_Admin__c LIMIT 1";
             const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
@@ -847,7 +893,6 @@ function App() {
 
             const data = await response.json();
             const properties = data?.records?.[0] || null;
-            console.log('properties', properties)
             setTermAndConditionHtml(properties.Terms_And_Condition__c);
         } catch (e) {
             console.warn("Unable to fetch Signature Admin Properties:", e);
@@ -920,18 +965,11 @@ function App() {
 
         // Format timestamp as "Nov 21 2025, HH:mm TimeZone" (24-hour format, no seconds)
         const now = new Date();
-        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        const month = monthNames[now.getMonth()];
-        const day = now.getDate();
-        const year = now.getFullYear();
-        const timeString = now.toLocaleTimeString("en-US", {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-        });
+        const dateString = now.toLocaleDateString("en-US", { dateStyle: "long", timeZone: adminProperties.Timezone__c });
+        const timeString = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: adminProperties.Timezone__c });
         // Get timezone abbreviation
-        const timeZone = now.toLocaleTimeString("en-US", { timeZoneName: "short" }).split(" ").pop();
-        const timeStamp = `${month} ${day} ${year}, ${timeString} ${timeZone}`;
+        const timeZone = now.toLocaleTimeString("en-US", { timeZoneName: "short", timeZone: adminProperties.Timezone__c }).split(" ").pop();
+        const timeStamp = `${dateString}, ${timeString} ${timeZone}`;
 
         const userAgent = navigator.userAgent || "Unknown Device";
 
@@ -1112,7 +1150,7 @@ function App() {
             minute: "2-digit",
             hour12: false,
         });
-        const timeZone = now.toLocaleTimeString("en-US", { timeZoneName: "short" }).split(" ").pop();
+        const timeZone = now.toLocaleTimeString("en-US", { timeZoneName: "short", timeZone: adminProperties.Timezone__c }).split(" ").pop();
         const timeStamp = `${month} ${day} ${year}, ${timeString} ${timeZone}`;
 
         const userAgent = navigator.userAgent || "Unknown Device";
@@ -1431,10 +1469,11 @@ function App() {
             field.value = maxLength && emailValue.length > maxLength ? emailValue.substring(0, maxLength) : emailValue;
         } else if (fType === "date" && field.defaultValue === "TODAY") {
             const today = new Date();
-            const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, "0");
-            const day = String(today.getDate()).padStart(2, "0");
-            field.value = `${year}-${month}-${day}`;
+            // const year = today.getFullYear();
+            // const month = String(today.getMonth() + 1).padStart(2, "0");
+            // const day = String(today.getDate()).padStart(2, "0");
+            // field.value = `${year}-${month}-${day}`;
+            field.value = today.toLocaleString("en-CA", { dateStyle: "short", timeZone: adminProperties.Timezone__c });
         }
         // Otherwise open modal
         setCurrentField(field);
@@ -1901,7 +1940,7 @@ function App() {
                     // Generate audit on every signature if checkbox is enabled, or only when all signers complete
                     const showCompletedOnly = auditOnEverySignature && !allSignersComplete;
                     try {
-                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, showCompletedOnly, localeKey, timeZoneKey);
+                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, showCompletedOnly, localeKey, adminProperties.Timezone__c);
                         auditPdfBytes = await convertAuditHTMLToPDF(pdfPageFormat);
                     } catch (e) {
                         console.warn("Failed to generate separate audit report:", e);
@@ -1916,7 +1955,7 @@ function App() {
                     // Generate audit on every signature if checkbox is enabled, or only when all signers complete
                     const showCompletedOnly = auditOnEverySignature && !allSignersComplete;
                     try {
-                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, showCompletedOnly, localeKey, timeZoneKey);
+                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, showCompletedOnly, localeKey, adminProperties.Timezone__c);
                     } catch (e) {
                         console.warn("Failed to append audit report page:", e);
                     }
@@ -2217,7 +2256,7 @@ function App() {
             const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/Document__c/${documentId}`;
 
             // Combine sanitized signature and field data into a single array
-            const combinedData = [...(sanitizedSignatureData || []), ...(fieldData || [])];
+            const combinedData = [...(sanitizedSignatureData || [])];
 
             // Convert combined data to JSON string
             const signatureDataJson = JSON.stringify(combinedData);
@@ -2921,7 +2960,6 @@ function App() {
             const city = address.city || address.state_district || address.town || address.village || "Unknown City";
             const state = address.state || "Unknown State";
             const country = address.country || "Unknown Country";
-            console.log("Geolocation obtained:", city, state, country);
             return `${city}, ${state}, ${country}`;
         } catch (gpsError) {
             console.warn("GPS failed, attempting IP-based location fallback:", gpsError);
@@ -3021,17 +3059,17 @@ function App() {
             });
 
         // Get fields from flat structure (fieldData)
-        fieldData.forEach((field) => {
-            if (field.priority == urlPriority && !field.filled) {
-                unfilledFields.push({
-                    ...field,
-                    pageNumber: field.pageNumber || 1,
-                    yPercent: field.yPercent || 0,
-                    xPercent: field.xPercent || 0,
-                    uniqueKey: `flat-${field.index}-${field.fieldType || field.type}`,
-                });
-            }
-        });
+        // fieldData.forEach((field) => {
+        //     if (field.priority == urlPriority && !field.filled) {
+        //         unfilledFields.push({
+        //             ...field,
+        //             pageNumber: field.pageNumber || 1,
+        //             yPercent: field.yPercent || 0,
+        //             xPercent: field.xPercent || 0,
+        //             uniqueKey: `flat-${field.index}-${field.fieldType || field.type}`,
+        //         });
+        //     }
+        // });
 
         // Sort by page number, then Y position (top to bottom)
         return unfilledFields.sort((a, b) => {
@@ -3226,7 +3264,6 @@ function App() {
                                                 <div className="canvas-wrapper">
                                                     <canvas ref={(el) => (canvasRefsArray.current[index] = el)}></canvas>
                                                     {signatureData.length > 0 && <SignatureOverlay key={`sig-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedSignature={storedSignature} storedInitials={storedInitials} onReuseSignature={handleReuseSignature} sendEmailsSimultaneously={documentRecord?.Send_Emails_Simultaneously__c} highlightedFieldKey={highlightedFieldKey} />}
-                                                    {fieldData.length > 0 && <FieldOverlay key={`field-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} fields={fieldData} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedInitials={storedInitials} onReuseInitials={handleReuseSignature} sendEmailsSimultaneously={documentRecord?.Send_Emails_Simultaneously__c} highlightedFieldKey={highlightedFieldKey} />}
                                                 </div>
                                             </div>
                                         </div>

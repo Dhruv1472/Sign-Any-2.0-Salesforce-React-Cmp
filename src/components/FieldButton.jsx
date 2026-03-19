@@ -47,7 +47,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
 
         // For text and number fields, enable inline editing
         // Email, date, and initials use modal
-        if (["text", "number"].includes(fieldType)) {
+        if (["text", "number", "fullname"].includes(fieldType)) {
             // Prefill with existing value, defaultValue, or empty string
             const initialValue = value || field.defaultValue || "";
             setEditValue(initialValue);
@@ -308,8 +308,8 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
         );
     }
 
-    // If editing inline (text or number only - email uses modal)
-    if (isEditing && ["text", "number"].includes(fieldType)) {
+    // If editing inline (text, number, or fullname - email uses modal)
+    if (isEditing && ["text", "number", "fullname"].includes(fieldType)) {
         const remainingChars = maxLength - editValue.length;
         const isNearLimit = remainingChars <= 10;
         const isAtLimit = remainingChars === 0;
@@ -343,6 +343,8 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
                 return "Enter Email";
             case "checkbox":
                 return "Check";
+            case "fullname":
+                return "Enter Full Name";
             default:
                 return "Fill Field";
         }
