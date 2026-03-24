@@ -126,7 +126,7 @@ export const generateAuditHTML = async (doc, sigData, orgId, totalPages, showCom
                     </tr>
                     <tr>
                         <td style="color:gray; padding-right:18px;">Document Name:</td>
-                        <td style="text-align:right;color:black; padding-right:18px;">${doc.Document_Name__c && doc.Document_Name__c.length > 25 ? doc.Document_Name__c.slice(0, 25) + "..." : doc.Document_Name__c || ""}</td>
+                        <td style="text-align:right;color:black; padding-right:18px;">${doc.MVSA2__Document_Name__c && doc.MVSA2__Document_Name__c.length > 25 ? doc.MVSA2__Document_Name__c.slice(0, 25) + "..." : doc.MVSA2__Document_Name__c || ""}</td>
                         
                         <td style="color:gray; padding-right:18px;">Org ID:</td>
                         <td style="text-align:right;color:black; padding-left:18px;">${orgId || ""}</td>
@@ -137,7 +137,7 @@ export const generateAuditHTML = async (doc, sigData, orgId, totalPages, showCom
                         
                         <td style="color:gray; padding-right:18px;">Document Status:</td>
                         <td style="text-align:right; padding-left:18px;">
-                            <span style="color:#00BD42; font-weight:600;background:#E0FFEB;padding:0px 8px 4px 8px;border-radius:8px;font-size:11px;align-items:center;">${allFields.length > 0 && signedFields.length === allFields.length ? "Completed" : doc.Status__c || ""}</span>
+                            <span style="color:#00BD42; font-weight:600;background:#E0FFEB;padding:0px 8px 4px 8px;border-radius:8px;font-size:11px;align-items:center;">${allFields.length > 0 && signedFields.length === allFields.length ? "Completed" : doc.MVSA2__Status__c || ""}</span>
                         </td>
                     </tr>
                     <tr>
@@ -145,7 +145,7 @@ export const generateAuditHTML = async (doc, sigData, orgId, totalPages, showCom
                         <td style="text-align:right;color:black; padding-right:18px;">${doc.CreatedBy?.Email || ""}</td>
                         
                         <td style="color:gray; padding-right:18px;">Email Subject:</td>
-                        <td style="text-align:right;color:black;">${doc.Email_Subject__c && doc.Email_Subject__c.length > 25 ? doc.Email_Subject__c.slice(0, 25) + "..." : doc.Email_Subject__c || ""}</td>
+                        <td style="text-align:right;color:black;">${doc.MVSA2__Email_Subject__c && doc.MVSA2__Email_Subject__c.length > 25 ? doc.MVSA2__Email_Subject__c.slice(0, 25) + "..." : doc.MVSA2__Email_Subject__c || ""}</td>
                     </tr>
                     <tr>
                         <td style="color:gray; padding-right:18px;">Document Pages:</td>

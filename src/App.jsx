@@ -279,7 +279,7 @@ function App() {
         setLoading(true);
 
         try {
-            // Step 1: Fetch Document__c record to get ContentVersion ID and signature/field data
+            // Step 1: Fetch MVSA2__Document__c record to get ContentVersion ID and signature/field data
             const { contentVersionId, currentToken, documentData, signatureData, fieldData, isExpired, isRejectedSimultaneous, isInactive } = await fetchDocumentRecord(documentId, accessToken, instanceUrl, clientId, clientSecret);
 
             if (documentData) {
@@ -298,12 +298,12 @@ function App() {
             setFieldData(fields);
 
             // Check if document is already submitted (Completed or Rejected status)
-            if (documentData.Status__c === "Completed" || documentData.Status__c === "Rejected") {
+            if (documentData.MVSA2__Status__c === "Completed" || documentData.MVSA2__Status__c === "Rejected") {
                 setIsSubmitted(true);
                 // Show toast notification based on status
-                if (documentData.Status__c === "Completed") {
+                if (documentData.MVSA2__Status__c === "Completed") {
                     setToast({ isVisible: true, message: "This document has already been signed and completed.", type: "info" });
-                } else if (documentData.Status__c === "Rejected") {
+                } else if (documentData.MVSA2__Status__c === "Rejected") {
                     setToast({ isVisible: true, message: "This document has been rejected.", type: "error" });
                 }
             }
@@ -318,12 +318,12 @@ function App() {
         }
     };
 
-    // Fetch Document__c record to get ContentVersion ID
+    // Fetch MVSA2__Document__c record to get ContentVersion ID
     const fetchDocumentRecord = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
-            // Salesforce REST API endpoint to get Document__c record
-            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(`SELECT Id, Uploaded_Document_Id__c, Signing_Details__c, Status__c, CreatedDate, CreatedBy.Name, CreatedBy.Email, Email_Subject__c, Document_Name__c, Expiration_Date__c, Send_Emails_Simultaneously__c, Active__c, Store_On_Parent_Record__c, Record_ID__c FROM Document__c WHERE Id='${documentId}' LIMIT 1`)}`;
+            // Salesforce REST API endpoint to get MVSA2__Document__c record
+            const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(`SELECT Id, MVSA2__Uploaded_Document_Id__c, MVSA2__Signing_Details__c, MVSA2__Status__c, CreatedDate, CreatedBy.Name, CreatedBy.Email, MVSA2__Email_Subject__c, MVSA2__Document_Name__c, MVSA2__Expiration_Date__c, MVSA2__Send_Emails_Simultaneously__c, MVSA2__Active__c, MVSA2__Store_On_Parent_Record__c, MVSA2__Record_ID__c FROM MVSA2__Document__c WHERE Id='${documentId}' LIMIT 1`)}`;
 
             let response = await fetch(apiUrl, {
                 method: "GET",
@@ -356,7 +356,7 @@ function App() {
             const documentData = data.records[0];
 
             // Check if document is inactive
-            if (documentData.Active__c === false) {
+            if (documentData.MVSA2__Active__c === false) {
                 setIsInactive(true);
                 setDocumentRecord(documentData);
                 setError(null);
@@ -364,7 +364,7 @@ function App() {
             }
 
             // Check if document is rejected with simultaneous emails
-            if (documentData.Send_Emails_Simultaneously__c === true && documentData.Status__c === "Rejected") {
+            if (documentData.MVSA2__Send_Emails_Simultaneously__c === true && documentData.MVSA2__Status__c === "Rejected") {
                 setIsRejectedSimultaneous(true);
                 setDocumentRecord(documentData);
                 setError(null);
@@ -372,8 +372,8 @@ function App() {
             }
 
             // Check if document is expired
-            if (documentData.Expiration_Date__c) {
-                const expirationDate = new Date(documentData.Expiration_Date__c);
+            if (documentData.MVSA2__Expiration_Date__c) {
+                const expirationDate = new Date(documentData.MVSA2__Expiration_Date__c);
                 const today = new Date();
                 // Set time to start of day for fair comparison
                 today.setHours(0, 0, 0, 0);
@@ -387,12 +387,12 @@ function App() {
                 }
             }
 
-            const contentVersionId = documentData.Uploaded_Document_Id__c;
+            const contentVersionId = documentData.MVSA2__Uploaded_Document_Id__c;
             if (!contentVersionId) {
                 throw new Error("Document not found. Please contact the sender for a new link.");
             }
 
-            const signatureDataJson = documentData.Signing_Details__c;
+            const signatureDataJson = documentData.MVSA2__Signing_Details__c;
             if (!signatureDataJson) {
                 throw new Error("No signature data found for this document.");
             }
@@ -443,17 +443,17 @@ function App() {
                     });
                 }
             } catch (parseError) {
-                console.warn("Failed to parse Signing_Details__c:", parseError);
+                console.warn("Failed to parse MVSA2__Signing_Details__c:", parseError);
             }
 
-            // Fetch Signature__c records to get imageUrl data
+            // Fetch MVSA2__Signature__c records to get imageUrl data
             const signatureRecords = await fetchSignatureRecords(documentId, currentToken, instanceUrl, clientId, clientSecret);
 
             const signatureMap = new Map();
             signatureRecords.forEach((record) => {
                 try {
-                    const sigDetails = JSON.parse(record.Signing_Details__c);
-                    const fieldIndexStr = String(record.Field_Index__c);
+                    const sigDetails = JSON.parse(record.MVSA2__Signing_Details__c);
+                    const fieldIndexStr = String(record.MVSA2__Field_Index__c);
                     signatureMap.set(fieldIndexStr, sigDetails);
                 } catch (error) {
                     console.warn(`Failed to parse Signature record ${record.Id}:`, error);
@@ -822,11 +822,11 @@ function App() {
         }
     };
 
-    // Fetch Admin_Properties__c custom setting from Salesforce
+    // Fetch MVSA2__Admin_Properties__c custom setting from Salesforce
     const fetchAdminProperties = async (accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
-            const query = "SELECT Id, Email_Object_Field__c, Email_Address__c, Audit_Report_Behaviour__c, Available_Fonts__c, Default_Brush_Size__c, Default_Font_Size__c, Default_Font_Style__c, Hide_Available_Fonts__c, Hide_Bold_Option__c, Hide_Brush_Size__c, Hide_Font_Size_Option__c, Hide_Italic_Option__c, Hide_Pen_And_Erase__c, Hide_Undo_Redo__c, Send_Sign_Email__c, Store_Sign__c, Audit_Report_On_Every_Signature__c, Timezone__c FROM Admin_Properties__c LIMIT 1";
+            const query = "SELECT Id, MVSA2__Email_Object_Field__c, MVSA2__Email_Address__c, MVSA2__Audit_Report_Behaviour__c, MVSA2__Available_Fonts__c, MVSA2__Default_Brush_Size__c, MVSA2__Default_Font_Size__c, MVSA2__Default_Font_Style__c, MVSA2__Hide_Available_Fonts__c, MVSA2__Hide_Bold_Option__c, MVSA2__Hide_Brush_Size__c, MVSA2__Hide_Font_Size_Option__c, MVSA2__Hide_Italic_Option__c, MVSA2__Hide_Pen_And_Erase__c, MVSA2__Hide_Undo_Redo__c, MVSA2__Send_Sign_Email__c, MVSA2__Store_Sign__c, MVSA2__Audit_Report_On_Every_Signature__c, MVSA2__Timezone__c FROM MVSA2__Admin_Properties__c LIMIT 1";
             const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
 
             let response = await fetch(apiUrl, {
@@ -864,7 +864,7 @@ function App() {
     const fetchSignatrueAdmin = async (accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
-            const query = "SELECT Id, Terms_And_Condition__c FROM Signature_Admin__c LIMIT 1";
+            const query = "SELECT Id, MVSA2__Terms_And_Condition__c FROM MVSA2__Signature_Admin__c LIMIT 1";
             const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
 
             let response = await fetch(apiUrl, {
@@ -893,7 +893,7 @@ function App() {
 
             const data = await response.json();
             const properties = data?.records?.[0] || null;
-            setTermAndConditionHtml(properties.Terms_And_Condition__c);
+            setTermAndConditionHtml(properties.MVSA2__Terms_And_Condition__c);
         } catch (e) {
             console.warn("Unable to fetch Signature Admin Properties:", e);
         }
@@ -965,10 +965,10 @@ function App() {
 
         // Format timestamp as "Nov 21 2025, HH:mm TimeZone" (24-hour format, no seconds)
         const now = new Date();
-        const dateString = now.toLocaleDateString("en-US", { dateStyle: "long", timeZone: adminProperties.Timezone__c });
-        const timeString = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: adminProperties.Timezone__c });
+        const dateString = now.toLocaleDateString("en-US", { dateStyle: "long", timeZone: adminProperties.MVSA2__Timezone__c });
+        const timeString = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: adminProperties.MVSA2__Timezone__c });
         // Get timezone abbreviation
-        const timeZone = now.toLocaleTimeString("en-US", { timeZoneName: "short", timeZone: adminProperties.Timezone__c }).split(" ").pop();
+        const timeZone = now.toLocaleTimeString("en-US", { timeZoneName: "short", timeZone: adminProperties.MVSA2__Timezone__c }).split(" ").pop();
         const timeStamp = `${dateString}, ${timeString} ${timeZone}`;
 
         const userAgent = navigator.userAgent || "Unknown Device";
@@ -1150,7 +1150,7 @@ function App() {
             minute: "2-digit",
             hour12: false,
         });
-        const timeZone = now.toLocaleTimeString("en-US", { timeZoneName: "short", timeZone: adminProperties.Timezone__c }).split(" ").pop();
+        const timeZone = now.toLocaleTimeString("en-US", { timeZoneName: "short", timeZone: adminProperties.MVSA2__Timezone__c }).split(" ").pop();
         const timeStamp = `${month} ${day} ${year}, ${timeString} ${timeZone}`;
 
         const userAgent = navigator.userAgent || "Unknown Device";
@@ -1473,7 +1473,7 @@ function App() {
             // const month = String(today.getMonth() + 1).padStart(2, "0");
             // const day = String(today.getDate()).padStart(2, "0");
             // field.value = `${year}-${month}-${day}`;
-            field.value = today.toLocaleString("en-CA", { dateStyle: "short", timeZone: adminProperties.Timezone__c });
+            field.value = today.toLocaleString("en-CA", { dateStyle: "short", timeZone: adminProperties.MVSA2__Timezone__c });
         }
         // Otherwise open modal
         setCurrentField(field);
@@ -1503,7 +1503,7 @@ function App() {
 
                 try {
                     // Fetch current document status and check if it's already been updated
-                    const query = `SELECT Id, Status__c, Document_Hash_Key__c, Signing_Details__c, Active__c FROM Document__c WHERE Id = '${recordId}' LIMIT 1`;
+                    const query = `SELECT Id, MVSA2__Status__c, MVSA2__Document_Hash_Key__c, MVSA2__Signing_Details__c, MVSA2__Active__c FROM MVSA2__Document__c WHERE Id = '${recordId}' LIMIT 1`;
                     const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
 
                     let response = await fetch(apiUrl, {
@@ -1529,9 +1529,9 @@ function App() {
                         const data = await response.json();
                         const currentDoc = data?.records?.[0];
 
-                        if (currentDoc && currentDoc.Signing_Details__c) {
+                        if (currentDoc && currentDoc.MVSA2__Signing_Details__c) {
                             try {
-                                const parsedDetails = JSON.parse(currentDoc.Signing_Details__c);
+                                const parsedDetails = JSON.parse(currentDoc.MVSA2__Signing_Details__c);
                                 const currentPriorityEntries = parsedDetails.filter((entry) => entry.priority == urlPriority);
 
                                 if (currentPriorityEntries.length > 0) {
@@ -1560,10 +1560,10 @@ function App() {
                                     }
                                 }
                             } catch (parseError) {
-                                console.warn("Could not parse Signing_Details__c:", parseError);
+                                console.warn("Could not parse MVSA2__Signing_Details__c:", parseError);
                             }
                         }
-                        if (currentDoc && currentDoc.Active__c === false) {
+                        if (currentDoc && currentDoc.MVSA2__Active__c === false) {
                             setShowSpinner(false);
                             setToast({ isVisible: true, message: "Something went wrong. Refreshing...", type: "error" });
 
@@ -1929,8 +1929,8 @@ function App() {
             const allSignersComplete = areAllSignersComplete();
 
             // Check audit report behavior setting
-            const auditBehavior = adminProperties?.Audit_Report_Behaviour__c || "attached";
-            const auditOnEverySignature = adminProperties?.Audit_Report_On_Every_Signature__c || false;
+            const auditBehavior = adminProperties?.MVSA2__Audit_Report_Behaviour__c || "attached";
+            const auditOnEverySignature = adminProperties?.MVSA2__Audit_Report_On_Every_Signature__c || false;
             let pdfBytes;
             let auditPdfBytes = null;
 
@@ -1940,7 +1940,7 @@ function App() {
                     // Generate audit on every signature if checkbox is enabled, or only when all signers complete
                     const showCompletedOnly = auditOnEverySignature && !allSignersComplete;
                     try {
-                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, showCompletedOnly, localeKey, adminProperties.Timezone__c);
+                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, showCompletedOnly, localeKey, adminProperties.MVSA2__Timezone__c);
                         auditPdfBytes = await convertAuditHTMLToPDF(pdfPageFormat);
                     } catch (e) {
                         console.warn("Failed to generate separate audit report:", e);
@@ -1955,7 +1955,7 @@ function App() {
                     // Generate audit on every signature if checkbox is enabled, or only when all signers complete
                     const showCompletedOnly = auditOnEverySignature && !allSignersComplete;
                     try {
-                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, showCompletedOnly, localeKey, adminProperties.Timezone__c);
+                        await generateAuditHTML(documentRecord, signatureData, orgIdState, totalPages, showCompletedOnly, localeKey, adminProperties.MVSA2__Timezone__c);
                     } catch (e) {
                         console.warn("Failed to append audit report page:", e);
                     }
@@ -1987,12 +1987,12 @@ function App() {
 
                 if (allSignersComplete) {
                     // All signers complete - upload as final document
-                    newContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, "Signed");
+                    newContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.MVSA2__Document_Name__c, "Signed");
 
-                    // If Store_On_Parent_Record__c is true and Record_ID__c exists, create ContentDocumentLink
-                    if (documentRecord?.Store_On_Parent_Record__c === true && documentRecord?.Record_ID__c) {
+                    // If MVSA2__Store_On_Parent_Record__c is true and MVSA2__Record_ID__c exists, create ContentDocumentLink
+                    if (documentRecord?.MVSA2__Store_On_Parent_Record__c === true && documentRecord?.MVSA2__Record_ID__c) {
                         try {
-                            await createContentDocumentLink(newContentVersionId, documentRecord.Record_ID__c, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
+                            await createContentDocumentLink(newContentVersionId, documentRecord.MVSA2__Record_ID__c, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret);
                         } catch (error) {
                             console.error("Failed to create ContentDocumentLink on parent record:", error);
                             // Continue execution even if linking fails
@@ -2000,7 +2000,7 @@ function App() {
                     }
                 } else {
                     // Not all signers complete - upload as temporary document with priority number
-                    temporaryContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, `Temporary - ${urlPriority}`);
+                    temporaryContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.MVSA2__Document_Name__c, `Temporary - ${urlPriority}`);
                 }
 
                 // Upload separate audit report if configured
@@ -2008,7 +2008,7 @@ function App() {
                     try {
                         // Determine audit report title based on completion
                         const auditTitle = allSignersComplete ? "Audit Report" : `Temporary Audit Report - ${urlPriority}`;
-                        await uploadSignedPdfToSalesforce(auditPdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.Document_Name__c, auditTitle);
+                        await uploadSignedPdfToSalesforce(auditPdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.MVSA2__Document_Name__c, auditTitle);
                     } catch (error) {
                         console.error("Failed to upload separate audit report:", error);
                     }
@@ -2227,15 +2227,15 @@ function App() {
         }
     };
 
-    // Update Document__c record with signature and field data
+    // Update MVSA2__Document__c record with signature and field data
     const updateDocumentRecord = async (documentId, signatureData, fieldData, pdfHash, newContentVersionId, temporaryContentVersionId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
 
-            // Step 1: Save imageUrl data to Signature__c records
+            // Step 1: Save imageUrl data to MVSA2__Signature__c records
             await upsertSignatureRecords(documentId, signatureData, currentToken, instanceUrl, clientId, clientSecret);
 
-            // Step 2: Remove imageUrl from signature data before saving to Document__c
+            // Step 2: Remove imageUrl from signature data before saving to MVSA2__Document__c
             const sanitizedSignatureData = signatureData.map((sig) => {
                 if (sig.priority == urlPriority) {
                     sig.signed = true;
@@ -2252,8 +2252,8 @@ function App() {
                 return sig;
             });
 
-            // Salesforce REST API endpoint to update Document__c record
-            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/Document__c/${documentId}`;
+            // Salesforce REST API endpoint to update MVSA2__Document__c record
+            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/MVSA2__Document__c/${documentId}`;
 
             // Combine sanitized signature and field data into a single array
             const combinedData = [...(sanitizedSignatureData || [])];
@@ -2263,18 +2263,18 @@ function App() {
 
             // Prepare update data
             const updateData = {
-                Signing_Details__c: signatureDataJson,
-                Document_Hash_Key__c: pdfHash,
+                MVSA2__Signing_Details__c: signatureDataJson,
+                MVSA2__Document_Hash_Key__c: pdfHash,
             };
 
             // Add ContentVersion ID if provided
             if (newContentVersionId) {
-                updateData.Final_Document_Id__c = newContentVersionId;
+                updateData.MVSA2__Final_Document_Id__c = newContentVersionId;
             }
 
             // Add Temporary ContentVersion ID if provided (intermediate priority)
             if (temporaryContentVersionId) {
-                updateData.Temporary_Content_Version_Id__c = temporaryContentVersionId;
+                updateData.MVSA2__Temporary_Content_Version_Id__c = temporaryContentVersionId;
             }
 
             let response = await fetch(apiUrl, {
@@ -2313,8 +2313,8 @@ function App() {
         }
     };
 
-    // Create or update Signature__c records
-    // Helper function to upload image as ContentVersion linked to Signature__c
+    // Create or update MVSA2__Signature__c records
+    // Helper function to upload image as ContentVersion linked to MVSA2__Signature__c
     const uploadSignatureImage = async (signatureRecordId, imageUrl, fieldIndex, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
@@ -2383,8 +2383,8 @@ function App() {
         try {
             let currentToken = accessToken;
 
-            // Check if Store_Sign__c is enabled in admin properties
-            const storeSignatures = adminProperties?.Store_Sign__c === true;
+            // Check if MVSA2__Store_Sign__c is enabled in admin properties
+            const storeSignatures = adminProperties?.MVSA2__Store_Sign__c === true;
 
             // Extract all fields with imageUrl and nested field values from signatureData
             const fieldsWithImages = [];
@@ -2432,11 +2432,11 @@ function App() {
                 }
             });
 
-            // First, fetch existing Signature__c records to get their IDs
+            // First, fetch existing MVSA2__Signature__c records to get their IDs
             const existingRecords = await fetchSignatureRecords(documentId, currentToken, instanceUrl, clientId, clientSecret);
             const existingMap = new Map();
             existingRecords.forEach((record) => {
-                existingMap.set(record.Field_Index__c, record.Id);
+                existingMap.set(record.MVSA2__Field_Index__c, record.Id);
             });
 
             // Prepare records for upsert (create or update)
@@ -2455,8 +2455,8 @@ function App() {
                 });
 
                 const recordData = {
-                    Field_Index__c: field.fieldIndex,
-                    Signing_Details__c: signingDetails,
+                    MVSA2__Field_Index__c: field.fieldIndex,
+                    MVSA2__Signing_Details__c: signingDetails,
                 };
 
                 // If record exists, add Id for update
@@ -2464,7 +2464,7 @@ function App() {
                 if (existingId) {
                     recordData.Id = existingId;
                 } else {
-                    recordData.Document__c = documentId;
+                    recordData.MVSA2__Document__c = documentId;
                 }
 
                 recordsToUpsert.push(recordData);
@@ -2478,7 +2478,7 @@ function App() {
             const upsertPromises = recordsToUpsert.map(async (record, index) => {
                 const isUpdate = !!record.Id;
                 const method = isUpdate ? "PATCH" : "POST";
-                const apiUrl = isUpdate ? `${instanceUrl}/services/data/v65.0/sobjects/Signature__c/${record.Id}` : `${instanceUrl}/services/data/v65.0/sobjects/Signature__c`;
+                const apiUrl = isUpdate ? `${instanceUrl}/services/data/v65.0/sobjects/MVSA2__Signature__c/${record.Id}` : `${instanceUrl}/services/data/v65.MVSA2__0/sobjects/Signature__c`;
 
                 // Remove Id from body if updating (Id is in URL)
                 const body = isUpdate ? { ...record } : record;
@@ -2512,7 +2512,7 @@ function App() {
 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    throw new Error(`Failed to ${isUpdate ? "update" : "create"} Signature record (Field Index: ${record.Field_Index__c}): ${response.status} ${response.statusText} - ${errorText}`);
+                    throw new Error(`Failed to ${isUpdate ? "update" : "create"} Signature record (Field Index: ${record.MVSA2__Field_Index__c}): ${response.status} ${response.statusText} - ${errorText}`);
                 }
 
                 let signatureRecordId = record.Id;
@@ -2521,9 +2521,9 @@ function App() {
                     signatureRecordId = result.id;
                 }
 
-                // If Store_Sign__c is enabled and this field has an imageUrl, upload it as ContentVersion
+                // If MVSA2__Store_Sign__c is enabled and this field has an imageUrl, upload it as ContentVersion
                 if (storeSignatures && fieldsWithImages[index]?.imageUrl && !isUpdate) {
-                    await uploadSignatureImage(signatureRecordId, fieldsWithImages[index].imageUrl, record.Field_Index__c, currentToken, instanceUrl, clientId, clientSecret);
+                    await uploadSignatureImage(signatureRecordId, fieldsWithImages[index].imageUrl, record.MVSA2__Field_Index__c, currentToken, instanceUrl, clientId, clientSecret);
                 }
 
                 return { success: true, id: signatureRecordId };
@@ -2538,11 +2538,11 @@ function App() {
         }
     };
 
-    // Fetch all Signature__c records for a document
+    // Fetch all MVSA2__Signature__c records for a document
     const fetchSignatureRecords = async (documentId, accessToken, instanceUrl, clientId = null, clientSecret = null) => {
         try {
             let currentToken = accessToken;
-            const query = `SELECT Id, Field_Index__c, Signing_Details__c FROM Signature__c WHERE Document__c = '${documentId}'`;
+            const query = `SELECT Id, MVSA2__Field_Index__c, MVSA2__Signing_Details__c FROM MVSA2__Signature__c WHERE MVSA2__Document__c = '${documentId}'`;
 
             const apiUrl = `${instanceUrl}/services/data/v65.0/query/?q=${encodeURIComponent(query)}`;
 
@@ -2601,7 +2601,7 @@ function App() {
 
         try {
             setShowSpinner(true);
-            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/Document__c/${recordId}`;
+            const apiUrl = `${instanceUrl}/services/data/v65.0/sobjects/MVSA2__Document__c/${recordId}`;
 
             const currentUser = signatureData.find((sig) => sig.priority == urlPriority);
             const rejectorDetails = {
@@ -2619,8 +2619,8 @@ function App() {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    Status__c: "Rejected",
-                    Rejector_Details__c: JSON.stringify(rejectorDetails),
+                    MVSA2__Status__c: "Rejected",
+                    MVSA2__Rejector_Details__c: JSON.stringify(rejectorDetails),
                 }),
             });
 
@@ -2635,8 +2635,8 @@ function App() {
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
-                        Status__c: "Rejected",
-                        Rejector_Details__c: JSON.stringify(rejectorDetails),
+                        MVSA2__Status__c: "Rejected",
+                        MVSA2__Rejector_Details__c: JSON.stringify(rejectorDetails),
                     }),
                 });
             }
@@ -3199,7 +3199,7 @@ function App() {
                 <>
                     <div className="pdf-container">
                         <div className="heading">
-                            <h1 className="document-header">Review & Sign Document : {documentRecord?.Document_Name__c || ""}</h1>
+                            <h1 className="document-header">Review & Sign Document : {documentRecord?.MVSA2__Document_Name__c || ""}</h1>
                             {/* <div className={`reject-parent ${showInstructions ? "is-open" : "is-closed"}`}>
                                 <button type="button" className="slider" onClick={toggleInstructions} aria-expanded={showInstructions} aria-label={showInstructions ? "Hide reject controls" : "Show reject controls"}>
                                     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -3240,7 +3240,7 @@ function App() {
                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                             <path d="M6 3C4.89688 3 4 3.89688 4 5V17C4 18.1031 4.89688 19 6 19H8.5V15.5C8.5 14.3969 9.39687 13.5 10.5 13.5H16V8.32812C16 7.79688 15.7906 7.2875 15.4156 6.9125L12.0844 3.58438C11.7094 3.20938 11.2031 3 10.6719 3H6ZM14.1719 8.5H11.25C10.8344 8.5 10.5 8.16563 10.5 7.75V4.82812L14.1719 8.5ZM10.5 14.875C10.1562 14.875 9.875 15.1562 9.875 15.5V19.5C9.875 19.8438 10.1562 20.125 10.5 20.125C10.8438 20.125 11.125 19.8438 11.125 19.5V18.625H11.5C12.5344 18.625 13.375 17.7844 13.375 16.75C13.375 15.7156 12.5344 14.875 11.5 14.875H10.5ZM11.5 17.375H11.125V16.125H11.5C11.8438 16.125 12.125 16.4062 12.125 16.75C12.125 17.0938 11.8438 17.375 11.5 17.375ZM14.5 14.875C14.1562 14.875 13.875 15.1562 13.875 15.5V19.5C13.875 19.8438 14.1562 20.125 14.5 20.125H15.5C16.3969 20.125 17.125 19.3969 17.125 18.5V16.5C17.125 15.6031 16.3969 14.875 15.5 14.875H14.5ZM15.125 18.875V16.125H15.5C15.7063 16.125 15.875 16.2937 15.875 16.5V18.5C15.875 18.7063 15.7063 18.875 15.5 18.875H15.125ZM17.875 15.5V19.5C17.875 19.8438 18.1562 20.125 18.5 20.125C18.8438 20.125 19.125 19.8438 19.125 19.5V18.125H20C20.3438 18.125 20.625 17.8438 20.625 17.5C20.625 17.1562 20.3438 16.875 20 16.875H19.125V16.125H20C20.3438 16.125 20.625 15.8438 20.625 15.5C20.625 15.1562 20.3438 14.875 20 14.875H18.5C18.1562 14.875 17.875 15.1562 17.875 15.5Z" fill="#FF8282" />
                                         </svg>
-                                        <span>{documentRecord?.Document_Name__c || "document"}</span>
+                                        <span>{documentRecord?.MVSA2__Document_Name__c || "document"}</span>
                                     </div>
                                 </div>
                                 {Array.from({ length: totalPages }, (_, index) => {
@@ -3263,7 +3263,7 @@ function App() {
                                                 {/* <div className="page-number">Page {pageNumber}</div> */}
                                                 <div className="canvas-wrapper">
                                                     <canvas ref={(el) => (canvasRefsArray.current[index] = el)}></canvas>
-                                                    {signatureData.length > 0 && <SignatureOverlay key={`sig-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedSignature={storedSignature} storedInitials={storedInitials} onReuseSignature={handleReuseSignature} sendEmailsSimultaneously={documentRecord?.Send_Emails_Simultaneously__c} highlightedFieldKey={highlightedFieldKey} />}
+                                                    {signatureData.length > 0 && <SignatureOverlay key={`sig-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedSignature={storedSignature} storedInitials={storedInitials} onReuseSignature={handleReuseSignature} sendEmailsSimultaneously={documentRecord?.MVSA2__Send_Emails_Simultaneously__c} highlightedFieldKey={highlightedFieldKey} />}
                                                 </div>
                                             </div>
                                         </div>

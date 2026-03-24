@@ -26,19 +26,19 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
     const [clearTrigger, setClearTrigger] = useState(0);
 
     // Parse admin properties
-    const hidePenAndErase = adminProperties?.Hide_Pen_And_Erase__c || false;
-    const hideUndoRedo = adminProperties?.Hide_Undo_Redo__c || false;
-    const hideBrushSize = adminProperties?.Hide_Brush_Size__c || false;
-    const defaultBrushSize = adminProperties?.Default_Brush_Size__c ? adminProperties?.Default_Brush_Size__c : 2;
+    const hidePenAndErase = adminProperties?.MVSA2__Hide_Pen_And_Erase__c || false;
+    const hideUndoRedo = adminProperties?.MVSA2__Hide_Undo_Redo__c || false;
+    const hideBrushSize = adminProperties?.MVSA2__Hide_Brush_Size__c || false;
+    const defaultBrushSize = adminProperties?.MVSA2__Default_Brush_Size__c ? adminProperties?.MVSA2__Default_Brush_Size__c : 2;
 
-    const hideAvailableFonts = adminProperties?.Hide_Available_Fonts__c || false;
-    const hideBoldOption = adminProperties?.Hide_Bold_Option__c || false;
-    const hideItalicOption = adminProperties?.Hide_Italic_Option__c || false;
-    const hideFontSizeOption = adminProperties?.Hide_Font_Size_Option__c || false;
-    const defaultFontSize = adminProperties?.Default_Font_Size__c ? adminProperties?.Default_Font_Size__c : 48;
-    const defaultFontStyle = adminProperties?.Default_Font_Style__c || "Artecallya";
-    const availableFonts = adminProperties?.Available_Fonts__c
-        ? adminProperties.Available_Fonts__c.split(",")
+    const hideAvailableFonts = adminProperties?.MVSA2__Hide_Available_Fonts__c || false;
+    const hideBoldOption = adminProperties?.MVSA2__Hide_Bold_Option__c || false;
+    const hideItalicOption = adminProperties?.MVSA2__Hide_Italic_Option__c || false;
+    const hideFontSizeOption = adminProperties?.MVSA2__Hide_Font_Size_Option__c || false;
+    const defaultFontSize = adminProperties?.MVSA2__Default_Font_Size__c ? adminProperties?.MVSA2__Default_Font_Size__c : 48;
+    const defaultFontStyle = adminProperties?.MVSA2__Default_Font_Style__c || "Artecallya";
+    const availableFonts = adminProperties?.MVSA2__Available_Fonts__c
+        ? adminProperties.MVSA2__Available_Fonts__c.split(",")
             .map((f) => f.trim())
             .filter((f) => f.length > 0)
         : ["Artecallya", "Maytra", "Mr Dafoe", "Mr DeHaviland", "The signature", "Monsieur La Doulaise", "Mrs Saint Delafield", "Barokah", "Bettina", "High Summit"];
