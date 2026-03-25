@@ -481,9 +481,36 @@ function App() {
 
                             // Helper function to generate default value based on field type
                             const getDefaultValueForField = (field, signerName, signerEmail) => {
-                                if (field.defaultValue === "{defaultValue}") {
-                                    const fieldType = (field.fieldType || field.type || "").toLowerCase();
+                                const fieldType = (field.fieldType || field.type || "").toLowerCase();
+                                const defaultValue = typeof field.defaultValue === "string" ? field.defaultValue.trim() : field.defaultValue;
 
+                                // Resolve TODAY token for date defaults (supports Today/TODAY)
+                                if (fieldType === "date" && typeof defaultValue === "string" && defaultValue.toUpperCase() === "TODAY") {
+                                    const now = new Date();
+                                    const pad2 = (n) => String(n).padStart(2, "0");
+                                    const monthsShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                                    const monthsLong = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                                    const pattern = field.customDateFormat || field.dateFormat || "MMM DD YYYY";
+
+                                    const date = now.getDate();
+                                    const month = now.getMonth();
+                                    const year = now.getFullYear();
+
+                                    const tokenMap = {
+                                        YYYY: String(year),
+                                        YY: String(year).slice(-2),
+                                        MMMM: monthsLong[month],
+                                        MMM: monthsShort[month],
+                                        MM: pad2(month + 1),
+                                        M: String(month + 1),
+                                        DD: pad2(date),
+                                        D: String(date),
+                                    };
+
+                                    return pattern.replace(/YYYY|MMMM|MMM|MM|YY|DD|M|D/g, (match) => tokenMap[match] || match);
+                                }
+
+                                if (field.defaultValue === "{defaultValue}") {
                                     if (fieldType === "signature" || fieldType === "fullname") {
                                         // For signature fields, use signer's full name
                                         return signerName || "";
@@ -499,7 +526,7 @@ function App() {
                                         return signerEmail || "";
                                     }
                                 }
-                                return field.defaultValue;
+                                return defaultValue;
                             };
 
                             // Auto-fill fullname fields with signer name and make them readonly
@@ -1467,7 +1494,7 @@ function App() {
             const maxLength = field.maxLength ? parseInt(field.maxLength, 10) : null;
             // Truncate to maxLength if specified
             field.value = maxLength && emailValue.length > maxLength ? emailValue.substring(0, maxLength) : emailValue;
-        } else if (fType === "date" && field.defaultValue === "TODAY") {
+        } else if (fType === "date" && typeof field.defaultValue === "string" && field.defaultValue.trim().toUpperCase() === "TODAY") {
             const today = new Date();
             // const year = today.getFullYear();
             // const month = String(today.getMonth() + 1).padStart(2, "0");
@@ -3200,8 +3227,8 @@ function App() {
                     <div className="pdf-container">
                         <div className="heading">
                             <h1 className="document-header">
-                                <img src="./src/assets/Sign Any Horizontal Logo.png" alt="Logo" className="document-header-logo" />
                                 <span className="document-header-text">Review & Sign Document : {documentRecord?.MVSA2__Document_Name__c || ""}</span>
+                                <img src="./src/assets/Sign Any Horizontal Logo.png" alt="Logo" className="document-header-logo" />
                             </h1>            
                             { <div className={`reject-parent ${showInstructions ? "is-open" : "is-closed"}`}>
                                 <button type="button" className="slider" onClick={toggleInstructions} aria-expanded={showInstructions} aria-label={showInstructions ? "Hide reject controls" : "Show reject controls"}>
@@ -3382,7 +3409,7 @@ function App() {
                             <div className="btn-group">
                                 <button className="terms-save close-btn" onClick={handleCloseTerms} aria-label="Close">
                                     <svg id="Close--Streamline-Carbon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" height="24" width="24">
-                                        <path d="M8.70705 8 12 4.70705 11.29295 4 8 7.29295 4.70715 4 4 4.70705 7.29295 8 4 11.29295 4.70715 12 8 8.70705 11.29295 12 12 11.29295 8.70705 8z" fill="#ffffff" stroke-width="0.5"></path>
+                                        <path d="M8.70705 8 12 4.70705 11.29295 4 8 7.29295 4.70715 4 4 4.70705 7.29295 8 4 11.29295 4.70715 12 8 8.70705 11.29295 12 12 11.29295 8.70705 8z" fill="#9485f2" stroke-width="0.5"></path>
                                         <g id="_Transparent_Rectangle_">
                                             <path d="M0 0h16v16H0Z" fill="none" stroke-width="0.5"></path>
                                         </g>
