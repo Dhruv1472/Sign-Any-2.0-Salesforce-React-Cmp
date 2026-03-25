@@ -131,15 +131,20 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
             }
         }
 
+        const parseLocalDate = (str) => {
+            const [year, month, day] = str.split("-").map(Number);
+            return new Date(year, month - 1, day); // local midnight, no UTC shift
+        };
+
         // Date validation with min/max
         if (fieldType === "date" && value) {
-            const selectedDate = new Date(value);
+            const selectedDate = parseLocalDate(value);
 
             const minStr = field.minDate || field.min;
             const maxStr = field.maxDate || field.max;
 
             if (minStr) {
-                const minDate = new Date(minStr);
+                const minDate = parseLocalDate(minStr);
                 if (selectedDate < minDate) {
                     setError(`Date must be on or after ${minStr}`);
                     return;
@@ -147,7 +152,7 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
             }
 
             if (maxStr) {
-                const maxDate = new Date(maxStr);
+                const maxDate = parseLocalDate(maxStr);
                 if (selectedDate > maxDate) {
                     setError(`Date must be on or before ${maxStr}`);
                     return;
@@ -166,7 +171,7 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
 
         // Format date based on dateFormat/customDateFormat (fallback to "MMM DD YYYY")
         if (fieldType === "date" && value) {
-            const dateObj = new Date(value);
+            const dateObj = parseLocalDate(value);
             const pattern = field.customDateFormat || field.dateFormat || "MMM DD YYYY";
             normalizedValue = formatDateByPattern(dateObj, pattern);
         }
