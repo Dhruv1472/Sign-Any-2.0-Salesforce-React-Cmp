@@ -384,7 +384,7 @@
 }
 
 .pdf-file-info {
-    height: 24px;
+    height: 26px;
     display: flex;
     align-items: end;
     gap: 4px;
@@ -1036,7 +1036,7 @@
 }
 
 .terms-save {
-    background-color: #806cf0;
+    background-color: #9485f2;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -1047,16 +1047,18 @@
 }
 
 .terms-save:hover {
-    background-color: #6b54d4;
+    background-color: #6e62b6;
     cursor: pointer;
 }
 
 .close-btn {
-    background-color: rgb(97, 95, 95);
+    background-color: white;
+    border: 1px solid #9485f2;
+    color: #9485f2;
 }
 
 .close-btn:hover {
-    background-color: #555;
+    background-color: white;
 }
 
 .terms-checkbox {
