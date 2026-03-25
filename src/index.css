@@ -68,8 +68,8 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    --primary-color: #2863eb;
-    --secondary-color: #f5f8ff;
+    --primary-color: #806cf0;
+    --secondary-color: #f3f0ff;
     text-wrap: balance;
     user-select: none;
 }
