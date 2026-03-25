@@ -15,6 +15,8 @@ import Toast from "./components/Toast";
 import { updateSignatureWithImage, deleteSignatureImage, updateFieldWithValue, deleteFieldValue, updateNestedFieldValue, deleteNestedFieldValue } from "./utils/signatureUtils";
 import { decryptUrlParams, parseQueryString, encryptUrlParams, buildQueryString } from "./utils/encryption";
 import { generateAuditHTML, convertAuditHTMLToPDF } from "./utils/auditReport";
+import headerLogo from "./assets/Sign Any Horizontal Logo.png";
+import spinnerLogo from "./assets/Sign Any Spinner Logo.png";
 
 import "./App.css";
 
@@ -3228,7 +3230,7 @@ function App() {
                         <div className="heading">
                             <h1 className="document-header">
                                 <span className="document-header-text">Review & Sign Document : {documentRecord?.MVSA2__Document_Name__c || ""}</span>
-                                <img src="./src/assets/Sign Any Horizontal Logo.png" alt="Logo" className="document-header-logo" />
+                                <img src={headerLogo} alt="Logo" className="document-header-logo" />
                             </h1>            
                             { <div className={`reject-parent ${showInstructions ? "is-open" : "is-closed"}`}>
                                 <button type="button" className="slider" onClick={toggleInstructions} aria-expanded={showInstructions} aria-label={showInstructions ? "Hide reject controls" : "Show reject controls"}>
@@ -3462,7 +3464,7 @@ function App() {
             {/* Spinner Overlay */}
             {(showSpinner || loading) && (
                 <div className="spinner-overlay">
-                    <img src="./src/assets/Sign Any Spinner Logo.png" alt="Loading..." />
+                    {/* <img src={spinnerLogo} alt="Loading..." /> */}
                     <div className="spinner"></div>
                 </div>
             )}

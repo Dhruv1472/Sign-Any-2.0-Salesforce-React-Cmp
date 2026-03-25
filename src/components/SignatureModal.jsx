@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import DrawSignature from "./signature-tabs/DrawSignature";
 import TypeSignature from "./signature-tabs/TypeSignature";
 import "./SignatureModal.css";
+import modalLogo from "../assets/Sign Any Favicon.png";
 
 const TABS = {
     DRAW: "draw",
@@ -99,7 +100,7 @@ const SignatureModal = ({ isOpen, onClose, onSave, signature, title = "Create Si
             <div className="signature-modal-container" onClick={(e) => e.stopPropagation()}>
                 <div className="signature-modal-header">
                     <div className="signature-modal-header-content">
-                        <img src="./src/assets/Sign Any Favicon.png" alt="Sign Any Logo" className="signature-modal-logo" />
+                        <img src={modalLogo} alt="Sign Any Logo" className="signature-modal-logo" />
                         <div className="signature-modal-header-text">
                             <h2>{title}</h2>
                         </div>
