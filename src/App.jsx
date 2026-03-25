@@ -2505,7 +2505,7 @@ function App() {
             const upsertPromises = recordsToUpsert.map(async (record, index) => {
                 const isUpdate = !!record.Id;
                 const method = isUpdate ? "PATCH" : "POST";
-                const apiUrl = isUpdate ? `${instanceUrl}/services/data/v65.0/sobjects/MVSA2__Signature__c/${record.Id}` : `${instanceUrl}/services/data/v65.MVSA2__0/sobjects/Signature__c`;
+                const apiUrl = isUpdate ? `${instanceUrl}/services/data/v65.0/sobjects/MVSA2__Signature__c/${record.Id}` : `${instanceUrl}/services/data/v65.0/sobjects/MVSA2__Signature__c`;
 
                 // Remove Id from body if updating (Id is in URL)
                 const body = isUpdate ? { ...record } : record;
