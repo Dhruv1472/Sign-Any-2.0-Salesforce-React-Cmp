@@ -30,8 +30,11 @@
     scrollbar-width: none;
 }
 
+.page-wrapper-parent{
+    padding-inline: 0.5rem;
+}
+
 .page-wrapper {
-    width: 840px;
     max-width: 100%;
     min-width: 300px;
     display: flex;
@@ -912,7 +915,7 @@
     }
 
     50% {
-        box-shadow: 0 0 0 8px rgba(128, 108, 240, 0.5), 0 0 30px rgba(128, 108, 240, 0.4);
+        box-shadow: 0 0 2px 4px rgba(128, 108, 240, 0.5), 0 0 2px 8px rgba(128, 108, 240, 0.4);
     }
 
     100% {
