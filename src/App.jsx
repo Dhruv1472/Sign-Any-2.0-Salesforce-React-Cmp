@@ -55,7 +55,7 @@ function App() {
     const [orgIdState, setOrgIdState] = useState(null);
     const [localeKey, setLocaleKey] = useState(null);
     const [timeZoneKey, setTimeZoneKey] = useState(null);
-    
+
     // Terms & Conditions (rich text) fetched from Salesforce
     const [termAndConditionHtml, setTermAndConditionHtml] = useState("");
     const [showTermsModal, setShowTermsModal] = useState(false);
@@ -498,7 +498,7 @@ function App() {
                                         // For email fields, use signer's email
                                         return signerEmail || "";
                                     }
-                                } 
+                                }
                                 return field.defaultValue;
                             };
 
@@ -574,7 +574,7 @@ function App() {
                     sig.fields.forEach((field) => {
                         const fieldType = (field.fieldType || field.type || "").toLowerCase();
                         const isFieldType = ["text", "date", "number", "email", "checkbox", "initials", "fullname"].includes(fieldType);
-                        
+
                         // Only extract non-signature fields
                         if (isFieldType) {
                             // For fullname fields, ensure they have signer name as value and are readonly
@@ -584,7 +584,7 @@ function App() {
                                 fieldValue = field.value || sig.name || "";
                                 isReadonly = true;
                             }
-                            
+
                             parsedFieldData.push({
                                 ...field,
                                 fieldType: fieldType,
@@ -3199,7 +3199,10 @@ function App() {
                 <>
                     <div className="pdf-container">
                         <div className="heading">
-                            <h1 className="document-header">Review & Sign Document : {documentRecord?.MVSA2__Document_Name__c || ""}</h1>
+                            <h1 className="document-header">
+                                <img src="./src/assets/Sign Any Horizontal Logo.png" alt="Logo" className="document-header-logo" />
+                                <span className="document-header-text">Review & Sign Document : {documentRecord?.MVSA2__Document_Name__c || ""}</span>
+                            </h1>
                             {/* <div className={`reject-parent ${showInstructions ? "is-open" : "is-closed"}`}>
                                 <button type="button" className="slider" onClick={toggleInstructions} aria-expanded={showInstructions} aria-label={showInstructions ? "Hide reject controls" : "Show reject controls"}>
                                     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -3296,7 +3299,7 @@ function App() {
                                         <p>You have successfully signed all required fields in this document.</p>
                                     </div>
                                     <div className="completion-actions">
-                                        <input type="checkbox" id="accept-terms" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px", accentColor: "#2863eb" }} />
+                                        <input type="checkbox" id="accept-terms" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px", accentColor: "#806cf0" }} />
                                         <label htmlFor="accept-terms" style={{ cursor: "pointer", marginLeft: "8px" }}>
                                             I accept the{" "}
                                             <a href="#" className="termAndConditionLink" onClick={(e) => {
@@ -3307,7 +3310,7 @@ function App() {
                                                 terms & conditions ↗
                                             </a>
                                         </label>
-                                        <button className="submit-final-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted} style={{ backgroundColor: initialAccepted ? '#2863eb' : '#626262' }}>
+                                        <button className="submit-final-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted} style={{ backgroundColor: initialAccepted ? '#806cf0' : '#626262' }}>
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white" />
                                             </svg>
@@ -3339,7 +3342,7 @@ function App() {
                                         {/* <button className="reject-btn" onClick={handleReject}>
                                             Reject
                                         </button> */}
-                                        <button className="save-submit-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted} style={{ backgroundColor: initialAccepted ? '#2863eb' : '#626262' }}>
+                                        <button className="save-submit-btn" onClick={handleSaveAndSubmit} disabled={!initialAccepted} style={{ backgroundColor: initialAccepted ? '#806cf0' : '#626262' }}>
                                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white" />
                                             </svg>
@@ -3432,6 +3435,7 @@ function App() {
             {/* Spinner Overlay */}
             {(showSpinner || loading) && (
                 <div className="spinner-overlay">
+                    <img src="./src/assets/Sign Any Spinner Logo.png" alt="Loading..." />
                     <div className="spinner"></div>
                 </div>
             )}

@@ -18,7 +18,7 @@
     border: 1px solid #ddd;
     padding: 16px;
     border-radius: 12px;
-    margin-top: 48px;
+    /* margin-top: 48px; */
 }
 
 .left-section {
@@ -184,7 +184,7 @@
 
 .type-signature-size-select:focus {
     outline: none;
-    border-color: #2863eb;
+    border-color: #806cf0;
 }
 
 .type-signature-preview {
