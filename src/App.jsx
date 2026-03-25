@@ -3200,8 +3200,8 @@ function App() {
                     <div className="pdf-container">
                         <div className="heading">
                             <h1 className="document-header">
-                                <img src="./src/assets/Sign Any Horizontal Logo.png" alt="Logo" className="document-header-logo" />
                                 <span className="document-header-text">Review & Sign Document : {documentRecord?.MVSA2__Document_Name__c || ""}</span>
+                                <img src="./src/assets/Sign Any Horizontal Logo.png" alt="Logo" className="document-header-logo" />
                             </h1>            
                             { <div className={`reject-parent ${showInstructions ? "is-open" : "is-closed"}`}>
                                 <button type="button" className="slider" onClick={toggleInstructions} aria-expanded={showInstructions} aria-label={showInstructions ? "Hide reject controls" : "Show reject controls"}>
