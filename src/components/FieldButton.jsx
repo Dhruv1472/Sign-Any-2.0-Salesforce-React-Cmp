@@ -77,8 +77,8 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, onError, canDelete
 
         // Email validation
         if (fieldType === "email" && editValue && editValue.trim() !== "") {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(editValue)) {
+            const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+            if (!emailRegex.test(editValue.trim())) {
                 showValidationError("Please enter a valid email address");
                 return;
             }

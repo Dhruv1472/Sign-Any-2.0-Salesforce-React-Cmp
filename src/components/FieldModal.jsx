@@ -90,8 +90,8 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
 
         // Type-specific validation
         if (fieldType === "email" && value) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            const emailValue = typeof value === "string" ? value.trim() : String(value);
+            const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+            const emailValue = typeof value === "string" ? value.trim() : String(value).trim();
             if (!emailRegex.test(emailValue)) {
                 setError("Please enter a valid email address");
                 return;

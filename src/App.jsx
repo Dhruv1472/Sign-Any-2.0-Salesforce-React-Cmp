@@ -2844,6 +2844,21 @@ function App() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [totalPages]);
 
+    const syncCanvasScaleFromRenderedCanvas = () => {
+        const firstCanvas = canvasRefsArray.current[0];
+        if (!firstCanvas) return;
+
+        const renderedWidth = firstCanvas.getBoundingClientRect().width;
+        const intrinsicWidth = firstCanvas.width;
+
+        if (!renderedWidth || !intrinsicWidth) return;
+
+        const nextScale = renderedWidth / intrinsicWidth;
+        if (Number.isFinite(nextScale) && nextScale > 0) {
+            setCanvasScale(nextScale);
+        }
+    };
+
     const renderAllPages = async (pdf) => {
         const numPages = pdf.numPages;
         const dimensions = [];
@@ -2870,27 +2885,27 @@ function App() {
         for (let pageNum = 1; pageNum <= numPages; pageNum++) {
             const canvas = canvasRefsArray.current[pageNum - 1];
             if (canvas) {
-                const dims = await renderPage(pdf, pageNum, canvas, targetWidth);
+                const dims = await renderPage(pdf, pageNum, canvas);
                 dimensions.push(dims);
-                // Update scale state with the first page's scale (all pages use same scale)
-                if (pageNum === 1 && dims) {
-                    setCanvasScale(dims.scale);
-                }
             }
         }
+
+        // On initial load, layout can settle after canvas paint. Sync twice across frames.
+        requestAnimationFrame(() => {
+            syncCanvasScaleFromRenderedCanvas();
+            requestAnimationFrame(() => {
+                syncCanvasScaleFromRenderedCanvas();
+            });
+        });
     };
 
-    const renderPage = async (pdf, pageNumber, canvas, targetWidth) => {
+    const renderPage = async (pdf, pageNumber, canvas) => {
         if (!canvas) {
             console.error("Canvas not available for page", pageNumber);
             return null;
         }
 
         const page = await pdf.getPage(pageNumber);
-        const originalViewport = page.getViewport({ scale: 1.5 });
-
-        const pageWidth = originalViewport.width || A4_WIDTH;
-        const calculatedScale = targetWidth / pageWidth;
 
         const viewport = page.getViewport({ scale: 1.5 });
         const context = canvas.getContext("2d");
@@ -2909,7 +2924,6 @@ function App() {
         return {
             width: viewport.width,
             height: viewport.height,
-            scale: calculatedScale,
         };
     };
 
