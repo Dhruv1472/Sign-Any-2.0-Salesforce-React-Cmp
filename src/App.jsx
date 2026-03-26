@@ -531,13 +531,14 @@ function App() {
                                 return defaultValue;
                             };
 
-                            // Auto-fill fullname fields with signer name and make them readonly
+                            // Keep fullname visible for all signers, even if persisted data has empty value.
                             const fieldType = (field.fieldType || field.type || "").toLowerCase();
-                            if (fieldType === "fullname" && !field.filled) {
+                            if (fieldType === "fullname") {
+                                const resolvedName = field.value || sig.name || "";
                                 return {
                                     ...field,
-                                    value: sig.name || "",
-                                    filled: true,
+                                    value: resolvedName,
+                                    filled: Boolean(field.filled || resolvedName),
                                     readonly: true,
                                 };
                             }
@@ -2772,6 +2773,10 @@ function App() {
         setToast({ isVisible: false, message: "", type: "success" });
     };
 
+    const handleFieldError = (message) => {
+        setToast({ isVisible: true, message, type: "error" });
+    };
+
     // Check if all signatures for current priority are completed
     const areAllSignaturesCompleted = () => {
         if (isSubmitted) {
@@ -3295,7 +3300,7 @@ function App() {
                                                 {/* <div className="page-number">Page {pageNumber}</div> */}
                                                 <div className="canvas-wrapper">
                                                     <canvas ref={(el) => (canvasRefsArray.current[index] = el)}></canvas>
-                                                    {signatureData.length > 0 && <SignatureOverlay key={`sig-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedSignature={storedSignature} storedInitials={storedInitials} onReuseSignature={handleReuseSignature} sendEmailsSimultaneously={documentRecord?.MVSA2__Send_Emails_Simultaneously__c} highlightedFieldKey={highlightedFieldKey} />}
+                                                    {signatureData.length > 0 && <SignatureOverlay key={`sig-overlay-${pageNumber}-${canvasScale}`} pageNumber={pageNumber} priority={urlPriority} signatures={signatureData} onSign={handleSignatureClick} onFieldClick={handleFieldClick} onFieldSave={handleFieldSave} onDelete={handleSignatureDelete} onFieldDelete={handleFieldDelete} onFieldError={handleFieldError} isSubmitted={isSubmitted} sessionSignedKeys={sessionSignedKeys} sessionFilledKeys={sessionFilledKeys} canvasScale={canvasScale} storedSignature={storedSignature} storedInitials={storedInitials} onReuseSignature={handleReuseSignature} sendEmailsSimultaneously={documentRecord?.MVSA2__Send_Emails_Simultaneously__c} highlightedFieldKey={highlightedFieldKey} />}
                                                 </div>
                                             </div>
                                         </div>

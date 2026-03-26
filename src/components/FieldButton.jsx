@@ -14,7 +14,7 @@ import "./FieldButton.css";
  * @param {Object} storedInitials - Stored initials data for quick reuse
  * @param {Function} onReuseInitials - Callback when reusing stored initials
  */
-const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false, disabled = false, canvasScale = 1, storedInitials, onReuseInitials }) => {
+const FieldButton = ({ field, onFieldClick, onDelete, onSave, onError, canDelete = false, disabled = false, canvasScale = 1, storedInitials, onReuseInitials }) => {
     const { key, fieldName, fieldType, value, filled, disabled: fieldDisabled, required, readonly } = field;
     const isDisabled = Boolean(disabled || fieldDisabled || readonly);
     const [isEditing, setIsEditing] = useState(false);
@@ -42,6 +42,14 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
         };
     }, []);
 
+    const showValidationError = (message) => {
+        if (onError) {
+            onError(message);
+            return;
+        }
+        console.warn("Field validation error:", message);
+    };
+
     const handleFieldClick = () => {
         if (isDisabled) return;
 
@@ -63,7 +71,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
 
     const handleSaveInline = () => {
         if (required && (!editValue || editValue.trim() === "")) {
-            alert("This field is required");
+            showValidationError("This field is required");
             return;
         }
 
@@ -71,7 +79,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
         if (fieldType === "email" && editValue && editValue.trim() !== "") {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(editValue)) {
-                alert("Please enter a valid email address");
+                showValidationError("Please enter a valid email address");
                 return;
             }
         }
@@ -81,29 +89,29 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
             const raw = editValue.trim();
             // Disallow exponential notation if specified
             if (field.exponentialNotation === false && /e|E/.test(raw)) {
-                alert("Exponential notation is not allowed");
+                showValidationError("Exponential notation is not allowed");
                 return;
             }
 
             let num = Number(raw.replace(/,/g, ""));
             if (Number.isNaN(num)) {
-                alert("Please enter a valid number");
+                showValidationError("Please enter a valid number");
                 return;
             }
 
             // allowNegative check
             if (field.allowNegative === false && num < 0) {
-                alert("Negative numbers are not allowed");
+                showValidationError("Negative numbers are not allowed");
                 return;
             }
 
             // min/max
             if (field.min !== null && field.min !== undefined && num < Number(field.min)) {
-                alert(`Value must be ≥ ${field.min}`);
+                showValidationError(`Value must be >= ${field.min}`);
                 return;
             }
             if (field.max !== null && field.max !== undefined && num > Number(field.max)) {
-                alert(`Value must be ≤ ${field.max}`);
+                showValidationError(`Value must be <= ${field.max}`);
                 return;
             }
 
@@ -112,7 +120,7 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, canDelete = false,
                 const decimals = parseInt(field.decimals, 10);
                 const parts = String(raw).split(".");
                 if (parts[1] && parts[1].length > decimals) {
-                    alert(`Only ${decimals} decimal places allowed`);
+                    showValidationError(`Only ${decimals} decimal places allowed`);
                     return;
                 }
                 // Normalize decimals length when formatting
