@@ -82,7 +82,7 @@ const FieldOverlay = ({ pageNumber, priority, fields, onFieldClick, onFieldSave,
                 const isHighlighted = highlightedFieldKey === uniqueKey;
 
                 return (
-                    <div key={field.index} className={`field-position ${isHighlighted ? " field-highlighted" : ""}`} style={{ position: "absolute", minWidth: 'fit-content', left: `${field.xPercent}%`, top: `${field.yPercent}%`, width: `${field.widthPercent}%`, height: `${field.heightPercent}%`}} data-field-key={uniqueKey}>
+                    <div key={field.index} className={`field-position ${isHighlighted ? " field-highlighted" : ""}`} style={{ position: "absolute", left: `${field.xPercent}%`, top: `${field.yPercent}%`, width: `${field.widthPercent}%`, height: `${field.heightPercent}%` }} data-field-key={uniqueKey}>
                         <FieldButton field={field} onFieldClick={onFieldClick} onSave={onFieldSave} onDelete={onDelete} canDelete={canDelete} disabled={field.disabled} canvasScale={canvasScale} storedInitials={storedInitials} onReuseInitials={onReuseInitials} />
                     </div>
                 );

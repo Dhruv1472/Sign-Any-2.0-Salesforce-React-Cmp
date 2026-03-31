@@ -1884,21 +1884,62 @@ function App() {
                         if (isMultiline) {
                             // Split text into words and build lines that fit within maxWidth
                             const words = displayValue.split(" ");
-                            let currentLine = words[0] || "";
+                            let currentLine = "";
 
-                            for (let i = 1; i < words.length; i++) {
-                                const word = words[i];
-                                const testLine = currentLine + " " + word;
-                                const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+                            for (let i = 0; i < words.length; i++) {
+                                let word = words[i];
+                                let testLine = currentLine ? currentLine + " " + word : word;
+                                let testWidth = font.widthOfTextAtSize(testLine, fontSize);
 
                                 if (testWidth <= maxWidth) {
                                     currentLine = testLine;
                                 } else {
-                                    lines.push(currentLine);
+                                    // currentLine didn't fit with this word.
+                                    if (currentLine) {
+                                        lines.push(currentLine);
+                                        currentLine = "";
+                                    }
+
+                                    // Now handle the word itself (which might be too long for maxWidth)
+                                    while (font.widthOfTextAtSize(word, fontSize) > maxWidth) {
+                                        // Find how many characters fit
+                                        let subWord = "";
+                                        for (let j = 0; j < word.length; j++) {
+                                            if (font.widthOfTextAtSize(subWord + word[j], fontSize) <= maxWidth) {
+                                                subWord += word[j];
+                                            } else {
+                                                break;
+                                            }
+                                        }
+                                        if (subWord) {
+                                            lines.push(subWord);
+                                            word = word.substring(subWord.length);
+                                        } else {
+                                            // Safety: push at least one character if possible
+                                            if (word.length > 0) {
+                                                lines.push(word[0]);
+                                                word = word.substring(1);
+                                            } else {
+                                                break;
+                                            }
+                                        }
+                                    }
                                     currentLine = word;
                                 }
                             }
-                            lines.push(currentLine);
+                            if (currentLine) lines.push(currentLine);
+
+                            // Handle vertical truncation for multiline
+                            const maxPossibleLines = Math.floor((pdfHeight - padding - fontSize) / lineHeight) + 1;
+                            if (lines.length > maxPossibleLines && maxPossibleLines > 0) {
+                                lines = lines.slice(0, maxPossibleLines);
+                                let lastLine = lines[maxPossibleLines - 1];
+                                // Add ellipsis to last line
+                                while (font.widthOfTextAtSize(lastLine + "...", fontSize) > maxWidth && lastLine.length > 0) {
+                                    lastLine = lastLine.slice(0, -1);
+                                }
+                                lines[maxPossibleLines - 1] = lastLine + "...";
+                            }
                         } else {
                             // Single line - truncate with ellipsis if needed
                             let truncatedText = displayValue;
@@ -1912,6 +1953,12 @@ function App() {
                                 truncatedText += "...";
                             }
                             lines = [truncatedText];
+
+                            // Check if even a single line fits vertically
+                            const maxPossibleLines = Math.floor((pdfHeight - padding - fontSize) / lineHeight) + 1;
+                            if (maxPossibleLines <= 0) {
+                                lines = [];
+                            }
                         }
 
                         // Calculate starting Y position from top of field
@@ -3251,7 +3298,7 @@ function App() {
                                 <span className="document-header-text">Review & Sign Document : {documentRecord?.MVSA2__Document_Name__c || ""}</span>
                                 <img src={headerLogo} alt="Logo" className="document-header-logo" />
                             </h1>            
-                            { <div className={`reject-parent ${showInstructions ? "is-open" : "is-closed"}`}>
+                            {!isSubmitted && <div className={`reject-parent ${showInstructions ? "is-open" : "is-closed"}`}>
                                 <button type="button" className="slider" onClick={toggleInstructions} aria-expanded={showInstructions} aria-label={showInstructions ? "Hide reject controls" : "Show reject controls"}>
                                     <svg viewBox="0 0 24 24" aria-hidden="true">
                                         <path d={showInstructions ? "M19.1642 12L12.9571 5.79291L11.5429 7.20712L16.3358 12L11.5429 16.7929L12.9571 18.2071L19.1642 12ZM13.5143 12L7.30722 5.79291L5.89301 7.20712L10.6859 12L5.89301 16.7929L7.30722 18.2071L13.5143 12Z"
