@@ -141,6 +141,11 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, onError, canDelete
                 setIsEditing(false);
                 return;
             }
+
+            // For plain numbers without special formatting, save the expanded numeric value
+            if (onSave) onSave(String(num), field);
+            setIsEditing(false);
+            return;
         }
 
         if (onSave) {
@@ -244,6 +249,12 @@ const FieldButton = ({ field, onFieldClick, onDelete, onSave, onError, canDelete
         // Save on blur
         if (editValue.trim() !== "") {
             handleSaveInline();
+        } else if (field.filled) {
+            // If field was previously filled but now cleared, save empty value
+            if (onSave) {
+                onSave("", field);
+            }
+            setIsEditing(false);
         } else {
             handleCancelInline();
         }

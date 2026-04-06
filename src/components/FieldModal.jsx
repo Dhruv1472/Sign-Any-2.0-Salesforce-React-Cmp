@@ -14,6 +14,50 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
     const [value, setValue] = useState("");
     const [error, setError] = useState("");
 
+    const parseLocalDate = (str) => {
+        const [year, month, day] = str.split("-").map(Number);
+        return new Date(year, month - 1, day); // local midnight, no UTC shift
+    };
+
+    const toYyyyMmDd = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, "0");
+        const d = String(date.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+    };
+
+    const coerceBoolean = (v, fallback = true) => {
+        if (typeof v === "boolean") return v;
+        if (typeof v === "string") {
+            const s = v.trim().toLowerCase();
+            if (s === "true") return true;
+            if (s === "false") return false;
+        }
+        return fallback;
+    };
+
+    const getDateInputBounds = (f) => {
+        const today = new Date();
+        const todayStr = toYyyyMmDd(today);
+
+        // Default behavior keeps existing flow unchanged when flags are missing.
+        const allowPastDates = coerceBoolean(f?.allowPastDates, true);
+        const allowFutureDates = coerceBoolean(f?.allowFutureDates, true);
+
+        let minDate = f?.minDate || f?.min || undefined;
+        let maxDate = f?.maxDate || f?.max || undefined;
+
+        if (!allowPastDates) {
+            minDate = !minDate || minDate < todayStr ? todayStr : minDate;
+        }
+
+        if (!allowFutureDates) {
+            maxDate = !maxDate || maxDate > todayStr ? todayStr : maxDate;
+        }
+
+        return { minDate, maxDate, allowPastDates, allowFutureDates, todayStr };
+    };
+
     useEffect(() => {
         if (isOpen && field) {
             // Initialize with existing value, or default value, or empty
@@ -131,30 +175,35 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
             }
         }
 
-        const parseLocalDate = (str) => {
-            const [year, month, day] = str.split("-").map(Number);
-            return new Date(year, month - 1, day); // local midnight, no UTC shift
-        };
-
         // Date validation with min/max
         if (fieldType === "date" && value) {
             const selectedDate = parseLocalDate(value);
 
-            const minStr = field.minDate || field.min;
-            const maxStr = field.maxDate || field.max;
+            const { minDate, maxDate, allowPastDates, allowFutureDates, todayStr } = getDateInputBounds(field);
+            const todayDate = parseLocalDate(todayStr);
 
-            if (minStr) {
-                const minDate = parseLocalDate(minStr);
-                if (selectedDate < minDate) {
-                    setError(`Date must be on or after ${minStr}`);
+            if (!allowPastDates && selectedDate < todayDate) {
+                setError("Past dates are not allowed");
+                return;
+            }
+
+            if (!allowFutureDates && selectedDate > todayDate) {
+                setError("Future dates are not allowed");
+                return;
+            }
+
+            if (minDate) {
+                const minDateObj = parseLocalDate(minDate);
+                if (selectedDate < minDateObj) {
+                    setError(`Date must be on or after ${minDate}`);
                     return;
                 }
             }
 
-            if (maxStr) {
-                const maxDate = parseLocalDate(maxStr);
-                if (selectedDate > maxDate) {
-                    setError(`Date must be on or before ${maxStr}`);
+            if (maxDate) {
+                const maxDateObj = parseLocalDate(maxDate);
+                if (selectedDate > maxDateObj) {
+                    setError(`Date must be on or before ${maxDate}`);
                     return;
                 }
             }
@@ -256,8 +305,10 @@ const FieldModal = ({ isOpen, onClose, onSave, field }) => {
             case "initials":
                 return <input type="text" className="field-input" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Enter initials here" autoFocus maxLength={5} />;
 
-            case "date":
-                return <input type="date" className="field-input" value={value} onChange={(e) => setValue(e.target.value)} autoFocus={!isReadOnly} min={field.minDate || field.min || undefined} max={field.maxDate || field.max || undefined} readOnly={isReadOnly} disabled={isReadOnly} />;
+            case "date": {
+                const { minDate, maxDate } = getDateInputBounds(field);
+                return <input type="date" className="field-input" value={value} onChange={(e) => setValue(e.target.value)} autoFocus={!isReadOnly} min={minDate} max={maxDate} readOnly={isReadOnly} disabled={isReadOnly} />;
+            }
 
             case "number":
                 return <input type="number" className="field-input" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Enter number here" autoFocus={!isReadOnly} maxLength={field.maxLength ? parseInt(field.maxLength, 10) : undefined} step={field.decimals !== undefined && field.decimals !== null ? (1 / Math.pow(10, parseInt(field.decimals, 10))).toFixed(parseInt(field.decimals, 10)) : undefined} min={field.allowNegative === false ? Math.max(0, field.min || 0) : field.min ?? undefined} max={field.max ?? undefined} readOnly={isReadOnly} disabled={isReadOnly} />;
