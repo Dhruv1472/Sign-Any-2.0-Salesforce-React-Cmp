@@ -3329,6 +3329,36 @@ function App() {
                                         );
                                     })}
                                 </div>
+                                {/* Submit And Reject button section which display in desktop only when signature are not completed */}                                
+                                {shouldShowSaveButton() && !areAllSignaturesCompleted() && (
+                                    <div className="bottom-bar">
+                                        <div className="bottom-bar-left">
+                                            <input type="checkbox" id="accept-terms" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px", accentColor: "#806cf0" }} />
+                                            <span> I have accept the <a href="#" className="termAndConditionLink" onClick={(e) => {
+                                                e.preventDefault();
+                                                setShowTermsModal(true);
+                                                document.body.style.overflow = 'hidden';
+                                            }}> t & c ↗ </a>
+                                            </span>
+                                        </div>
+                                        <div className="bottom-bar-right">
+                                            <div className="action-btns">
+                                                <button className="reject-btn" onClick={handleReject}>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="#ffffff" height="12" width="12">
+                                                        <path d="M15.5092 13.9255375c0.61044375 0.61045 0.33114375 1.6528125 -0.50274375 1.87625 -0.38700625 0.1037 -0.7999375 -0.00694375 -1.08325 -0.29025625L8 9.58645625l-5.925075 5.92320625c-0.61045 0.61045 -1.65280625 0.33115 -1.87624375 -0.5027375 -0.1037 -0.38700625 0.00694375 -0.7999375 0.29025625 -1.08325l5.92506875 -5.92320625L0.4908 2.07539375c-0.61044375 -0.61045 -0.33115 -1.65280625 0.50274375 -1.87625 0.38700625 -0.10369375 0.7999375 0.00695 1.08325 0.29025625L8 6.414475l5.925075 -5.92600625c0.61044375 -0.61045 1.65280625 -0.33115 1.87624375 0.5027375 0.1037 0.3870125 -0.00694375 0.79994375 -0.29025625 1.08325625l-5.925075 5.92600625Z" stroke-width="0.0625"></path>
+                                                    </svg> 
+                                                    Void
+                                                </button>
+                                                <button className="save-submit-btn sidebar-submit" onClick={handleSaveAndSubmit} disabled={!initialAccepted}>
+                                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                        <path d="M17.8452 4.0874C19.1239 3.66152 20.3408 4.87805 19.9146 6.15674L15.6724 18.8823C15.2246 20.2247 13.3986 20.4032 12.6987 19.1733L10.1675 14.7222L12.6685 12.2222C12.9141 11.9765 12.9141 11.5782 12.6685 11.3325C12.4228 11.0868 12.0245 11.0868 11.7788 11.3325L9.27686 13.8335L4.82764 11.3032C3.59725 10.6034 3.77671 8.77723 5.11963 8.32959L17.8452 4.0874Z" fill="white"/>
+                                                    </svg>
+                                                    Submit
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             <div className="canvas-container">
                                 <div className="pdf-header">
@@ -3380,6 +3410,7 @@ function App() {
                             </button>
                         )}
 
+                        {/* Submit button section which display when all signature are completed and opened in desktop view */}
                         {shouldShowSaveButton() && areAllSignaturesCompleted() && (
                             <div className={`completion-footer ${areAllSignaturesCompleted() ? "show" : ""}`}>
                                 <div className="completion-content">
@@ -3416,7 +3447,8 @@ function App() {
                             </div>
                         )}
 
-                        {shouldShowSaveButton() && areAllSignaturesCompleted() && (
+                        {/* Submit And Reject button section which display in mobile and tab view even if signature are completed or not */}
+                        {shouldShowSaveButton() && (
                             <div className={`footer ${areAllSignaturesCompleted() ? "show" : ""}`}>
                                 <div className="bottom-bar-left">
                                     <input type="checkbox" checked={initialAccepted} onChange={(e) => setInitialAccepted(e.target.checked)} style={{ cursor: "pointer", width: "18px", height: "18px" }} />
