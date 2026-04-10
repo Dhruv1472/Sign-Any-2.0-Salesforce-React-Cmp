@@ -314,6 +314,7 @@
     width: 40px;
     overflow: hidden;
     transition: width 0.35s ease, box-shadow 0.35s ease;
+    display: none;
 }
 
 .reject-parent.is-open {
@@ -1309,6 +1310,10 @@
 
     .next-field-btn {
         bottom: 100px;
+    }
+
+    .reject-parent {
+        display: flex;
     }
 }
 
