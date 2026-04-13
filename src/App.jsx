@@ -2077,14 +2077,14 @@ function App() {
                     }
                 } else {
                     // Not all signers complete - upload as temporary document with priority number
-                    temporaryContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.MVSA2__Document_Name__c, `Temporary - ${urlPriority}`);
+                    temporaryContentVersionId = await uploadSignedPdfToSalesforce(pdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.MVSA2__Document_Name__c, `Signer - ${urlPriority}`);
                 }
 
                 // Upload separate audit report if configured
                 if (auditPdfBytes && auditBehavior === "separate") {
                     try {
                         // Determine audit report title based on completion
-                        const auditTitle = allSignersComplete ? "Audit Report" : `Temporary Audit Report - ${urlPriority}`;
+                        const auditTitle = allSignersComplete ? "Audit Report" : `Audit Report Signer- ${urlPriority}`;
                         await uploadSignedPdfToSalesforce(auditPdfBytes, firstPublishLocationId, salesforceConfig.accessToken, salesforceConfig.instanceUrl, salesforceConfig.clientId, salesforceConfig.clientSecret, documentRecord.MVSA2__Document_Name__c, auditTitle);
                     } catch (error) {
                         console.error("Failed to upload separate audit report:", error);
