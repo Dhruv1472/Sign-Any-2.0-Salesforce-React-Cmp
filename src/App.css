@@ -1082,11 +1082,13 @@
 
 .terms-modal-body {
     padding: 28px;
-    overflow-y: auto;
+    overflow-y: hidden;
     flex: 1;
     font-size: 15px;
     line-height: 1.7;
     color: #374151;
+    overflow-wrap: anywhere;
+    word-break: break-all;
 }
 
 .terms-modal-body p {
